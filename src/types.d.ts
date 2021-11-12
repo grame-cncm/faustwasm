@@ -40,7 +40,7 @@ export interface CompiledCode {
     helpers: string;
 }
 
-export type FaustDspMeta = {
+export interface FaustDspMeta {
     name: string;
     filename: string;
     compile_options: string;
@@ -52,7 +52,7 @@ export type FaustDspMeta = {
     library_list: string[];
     meta: { [key: string]: string }[];
     ui: FaustUIDescriptor;
-};
+}
 export type FaustUIDescriptor = IFaustUIGroup[];
 export type IFaustUIItem = IFaustUIInputItem | IFaustUIOutputItem | IFaustUIGroup;
 export interface IFaustUIInputItem {
@@ -93,3 +93,11 @@ export interface IFaustUIGroup {
     items: IFaustUIItem[];
 }
 export type FaustUIType = FaustUIGroupType | FaustUIOutputType | FaustUIInputType;
+
+export interface AudioParamDescriptor {
+    automationRate?: AutomationRate;
+    defaultValue?: number;
+    maxValue?: number;
+    minValue?: number;
+    name: string;
+}

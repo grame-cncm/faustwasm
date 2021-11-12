@@ -28,4 +28,26 @@ const {
         await fs.rm(wavPath);
     } catch (error) {}
     await fs.writeFile(wavPath, new Uint8Array(wav));
+
+    const dspModulePath = path.join(__dirname, "../web/dspModule.wasm");
+    const dspMetaPath = path.join(__dirname, "../web/dspMeta.json");
+    const effectModulePath = path.join(__dirname, "../web/effectModule.wasm");
+    const effectMetaPath = path.join(__dirname, "../web/effectMeta.json");
+    const { mainCode, mainMeta, effectCode, effectMeta } = dsp;
+
+    const { wasmCModule: dspModule } = mainCode;
+    const files = [dspModulePath, dspMetaPath, effectModulePath, effectMetaPath];
+    for (const filePath in files) {
+        try {
+            await fs.access(filePath);
+            await fs.rm(filePath);
+        } catch (error) {}
+    }
+    await fs.writeFile(dspModulePath, dspModule);
+    await fs.writeFile(dspMetaPath, JSON.stringify(mainMeta, null, 4));
+    if (effectCode) {
+        const { wasmCModule: effectModule } = effectCode;
+        await fs.writeFile(effectModulePath, effectModule);
+        await fs.writeFile(effectMetaPath, JSON.stringify(effectMeta, null, 4));
+    }
 })();
