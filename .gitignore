@@ -88,3 +88,5 @@ $RECYCLE.BIN/
 local/
 
 .vscode/
+
+*.wav
