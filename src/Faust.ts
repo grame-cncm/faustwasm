@@ -1,6 +1,6 @@
 import FaustDsp from "./FaustDsp";
 import { CompiledCode, FaustModule } from "./types";
-import { createHash } from "crypto";
+import * as CryptoJS from "crypto-js";
 
 class Faust {
     /**
@@ -58,7 +58,7 @@ class Faust {
         const nameSize = this.libFaust.lengthBytesUTF8(name) + 1;
         const $name = this.libFaust._malloc(nameSize);
         const $errorMsg = this.libFaust._malloc(4096);
-        const sha1 = createHash("sha256").update(code + argv.join("") + (internalMemory ? "i" : "e")).digest("hex");
+        const sha1 = CryptoJS.SHA256(code + argv.join("") + (internalMemory ? "i" : "e")).toString();
 
         this.libFaust.stringToUTF8(name, $name, nameSize);
         this.libFaust.stringToUTF8(code, $code, codeSize);

@@ -1,4 +1,5 @@
 import { FaustModuleFactory } from "./types";
+import fetchModule from "./fetchModule";
 
 const instantiateLibFaust = async (jsFile: string, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
     /*
@@ -15,7 +16,12 @@ const instantiateLibFaust = async (jsFile: string, dataFile = jsFile.replace(/c?
         LibFaust = (await import(jsFile)).default;
     }
     */
-    const LibFaust: FaustModuleFactory = require(jsFile);
+    let LibFaust: FaustModuleFactory;
+    try {
+        LibFaust = require(jsFile);
+    } catch (error) {
+        LibFaust = await fetchModule(jsFile);
+    }
     const locateFile = (url: string, scriptDirectory: string) => ({
         "libfaust-wasm.wasm": wasmFile,
         "libfaust-wasm.data": dataFile

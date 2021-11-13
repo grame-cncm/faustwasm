@@ -1,9 +1,9 @@
 {
     "compilerOptions": {
         "checkJs": true,
-        "module": "CommonJS",
+        "module": "ESNext",
         "moduleResolution": "Node",
-        "target": "ES2018",
+        "target": "ES2020",
         "sourceMap": true,
         "outDir": "dist"
     },
@@ -13,6 +13,8 @@
     "exclude": [
         "dist",
         "node_modules",
-        "libfaust-wasm"
+        "libfaust-wasm",
+        "test",
+        "assets"
     ]
 }
