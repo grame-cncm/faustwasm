@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/Fr0stbyteR/faustwasm#readme",
   "devDependencies": {
+    "@shren/faust-ui": "^1.0.5",
     "@types/crypto-js": "^4.0.2",
     "@types/emscripten": "^1.39.5",
     "@types/node": "^16.11.7",

@@ -709,7 +709,11 @@ const getFaustAudioWorkletProcessor = (processorId, voices, dspMeta, effectMeta)
 
     // Globals
     // Synchronously compile and instantiate the WASM module
-    registerProcessor(processorId, FaustProcessor);
+    try {
+        registerProcessor(processorId, FaustProcessor);
+    } catch (error) {
+        console.warn(error);
+    }
 };
 
 export default getFaustAudioWorkletProcessor;

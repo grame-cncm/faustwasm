@@ -22,7 +22,7 @@ class FaustDsp {
             throw new Error("Faust DSP factory cannot be compiled");
         }
         const time2 = Date.now();
-        console.log("WASM compilation duration : " + (time2 - time1));
+        console.log("WASM compilation duration: " + (time2 - time1));
         try {
             const json = this.mainCode.helpers.match(/getJSON\w+?\(\)[\s\n]*{[\s\n]*return[\s\n]*'(\{.+?)';}/)[1].replace(/\\'/g, "'");
             // const base64Code = codes.dsp.helpersCode.match(/getBase64Code\w+?\(\)[\s\n]*{[\s\n]*return[\s\n]*"([A-Za-z0-9+/=]+?)";[\s\n]+}/)[1];

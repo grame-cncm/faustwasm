@@ -241,6 +241,9 @@ class FaustNode extends AudioWorkletNode {
         }
         return JSON.stringify(this.dspMeta);
     }
+    /**
+     * @returns {FaustUIDescriptor}
+     */
     getUI() {
         if (this.voices) {
             const o = this.dspMeta;
@@ -264,4 +267,4 @@ class FaustNode extends AudioWorkletNode {
     }
 }
 
-export default FaustNode
+export default FaustNode;

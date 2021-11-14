@@ -1,17 +1,19 @@
 import { FaustUI } from './faust-ui/index.js';
 
 /**
+ * @typedef {import('./sdk-parammgr').ParamMgrNode} ParamMgrNode
  * @typedef {import('./sdk').WebAudioModule} WebAudioModule
+ * @typedef {import('./FaustNode').default} FaustNode
+ * @typedef {import('../../src/types').FaustUIDescriptor} FaustUIDescriptor
  */
 
 class FaustDefaultGui extends HTMLElement {
 	/**
-	 * @param {WebAudioModule['audioNode']} wamNode
-	 * @param {AudioWorkletNode} faustNode
-	 * @param {any} ui
+	 * @param {ParamMgrNode} wamNode
+	 * @param {FaustNode} faustNode
 	 * @param {string} style
 	 */
-	constructor(wamNode, faustNode, ui, style) {
+	constructor(wamNode, faustNode, style) {
 		super();
 		this.wamNode = wamNode;
 		this.faustNode = faustNode;
@@ -26,7 +28,7 @@ class FaustDefaultGui extends HTMLElement {
 		$container.style.display = 'flex';
 		$container.style.flexDirection = 'column';
 		this.faustUI = new FaustUI({
-			ui,
+			ui: faustNode.getUI(),
 			root: $container,
 			listenWindowMessage: false,
 			listenWindowResize: false,
@@ -34,7 +36,7 @@ class FaustDefaultGui extends HTMLElement {
 		this.faustUI.paramChangeByUI = (path, value) => {
 			wamNode.setParamValue(path, value);
 		};
-		faustNode.output_handler = (path, value) => this.faustUI.paramChangeByDSP(path, value);
+		faustNode.outputHandler = (path, value) => this.faustUI.paramChangeByDSP(path, value);
 		$container.style.width = `${this.faustUI.minWidth}px`;
 		$container.style.height = `${this.faustUI.minHeight}px`;
 		this.root.appendChild($container);
@@ -60,19 +62,21 @@ class FaustDefaultGui extends HTMLElement {
 /**
  * A mandatory method if you want a gui for your plugin
  * @param {WebAudioModule} plugin - the plugin instance
- * @returns {Node} - the plugin root node that is inserted in the DOM of the host
+ * @returns {Promise<Node>} - the plugin root node that is inserted in the DOM of the host
  */
 const createElement = async (plugin) => {
-	const elementId = `${plugin.moduleId.toLowerCase().replace(/[\._]/g, "-")}-ui`;
+	const elementId = `${plugin.moduleId.toLowerCase().replace(/\W/g, "")}-ui`;
 	try {
 		customElements.define(elementId, FaustDefaultGui);
-	// eslint-disable-next-line no-empty
-	} catch {}
+	} catch (e) {
+		console.warn(e);
+	}
+	/** @type {ParamMgrNode} */
 	const wamNode = plugin.audioNode;
 	const faustNode = wamNode._output;
 	const { ui } = faustNode.dspMeta;
-	const style = await (await fetch(new URL('./faust-ui/index.css', import.meta.url))).text();
+	const style = await (await fetch(new URL('./faust-ui/index.css', import.meta.url).href)).text();
 	/** @type {typeof FaustDefaultGui} */
-	return new FaustDefaultGui(wamNode, faustNode, ui, style);
+	return new FaustDefaultGui(wamNode, faustNode, style);
 };
 export default createElement;

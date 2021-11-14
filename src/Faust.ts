@@ -58,13 +58,15 @@ class Faust {
         const nameSize = this.libFaust.lengthBytesUTF8(name) + 1;
         const $name = this.libFaust._malloc(nameSize);
         const $errorMsg = this.libFaust._malloc(4096);
-        const sha1 = CryptoJS.SHA256(code + argv.join("") + (internalMemory ? "i" : "e")).toString();
 
         this.libFaust.stringToUTF8(name, $name, nameSize);
         this.libFaust.stringToUTF8(code, $code, codeSize);
 
         // Add 'cn' option with the factory name
-        argv.push("-cn", sha1);
+        if (!argv.find(a => a === "-cn")) {
+            const sha1 = CryptoJS.SHA256(code + argv.join("") + (internalMemory ? "i" : "e")).toString();
+            argv.push("-cn", sha1);
+        }
 
         // Prepare 'argv_aux' array for C side
         const ptrSize = 4;
