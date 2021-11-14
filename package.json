@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "build": "npm run build-cjs & npm run build-esm",
     "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist --format=cjs",
     "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm",
     "test": "node test/node/index.js"
