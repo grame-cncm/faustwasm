@@ -4282,6 +4282,7 @@ __export(exports, {
   FaustProcessor: () => FaustProcessor_default,
   WavDecoder: () => WavDecoder_default,
   WavEncoder: () => WavEncoder_default,
+  default: () => src_default,
   instantiateLibFaust: () => instantiateLibFaust_default
 });
 
@@ -4975,11 +4976,10 @@ var FaustProcessor = class {
 var FaustProcessor_default = FaustProcessor;
 
 // src/fetchModule.ts
-var import_meta = {};
 var global2 = globalThis;
 var cache = global2.fetchModuleCache || new Map();
 var fetchModule = async (url) => {
-  const absoluteUrl = new URL(url, import_meta.url).href;
+  const absoluteUrl = new URL(url, location.href).href;
   if (cache.has(absoluteUrl))
     return cache.get(absoluteUrl);
   let exported;
@@ -4988,7 +4988,7 @@ var fetchModule = async (url) => {
   global2.module = { exports: toExport };
   const esm = await import(
     /* webpackIgnore: true */
-    url
+    absoluteUrl
   );
   const esmKeys = Object.keys(esm);
   if (esmKeys.length)
@@ -5376,6 +5376,15 @@ var Reader = class {
   }
 };
 var WavDecoder_default = WavDecoder;
+
+// src/index.ts
+var src_default = {
+  Faust: Faust_default,
+  instantiateLibFaust: instantiateLibFaust_default,
+  FaustProcessor: FaustProcessor_default,
+  WavEncoder: WavEncoder_default,
+  WavDecoder: WavDecoder_default
+};
 /** @preserve
 	(c) 2012 by Cédric Mesnil. All rights reserved.
 

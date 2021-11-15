@@ -11,3 +11,11 @@ export {
     WavEncoder,
     WavDecoder
 };
+
+export default {
+    Faust,
+    instantiateLibFaust,
+    FaustProcessor,
+    WavEncoder,
+    WavDecoder
+};

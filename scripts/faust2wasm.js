@@ -7,7 +7,7 @@ const argv = process.argv.slice(2);
 
 if (argv[0] === "-help" || argv[0] === "-h") {
     console.log(`
-faust2wasm.js <file.dsp> <outputDir> [-poly]
+faust2wasm.js <file.dsp> <outputDir> [-poly] [-wam2]
 Generates WebAssembly and metadata JSON files of a given Faust DSP.
 `);
     process.exit();

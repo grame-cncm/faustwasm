@@ -41,13 +41,16 @@ class FaustNode extends AudioWorkletNode {
          * @param {MessageEvent} e
          */
         this.port.onmessage = (e) => {
-            if (e.data.type === "param" && this.outputHandler) {
-                this.outputHandler(e.data.path, e.data.value);
+            if (e.data.type === "param") {
+                this.outputHandler?.(e.data.path, e.data.value);
+            } else if (e.data.type === "plot") {
+                this.plotHandler?.(e.data.value, e.data.index, e.data.events);
             }
         };
         this.voices = voices;
         this.dspMeta = faustDsp.dspMeta;
         this.effectMeta = faustDsp.effectMeta;
+        /** @type {(address: string, value: number) => any} */
         this.outputHandler = null;
         /** @type {string[]} */
         this.inputsItems = [];
@@ -57,6 +60,8 @@ class FaustNode extends AudioWorkletNode {
         this.fPitchwheelLabel = [];
         /** @type {{ path: string; min: number; max: number }[][]} */
         this.fCtrlLabel = new Array(128).fill(null).map(() => []);
+        /** @type {(plotted: Float32Array[], index: number, events?: { type: string; data: any }[]) => any} */
+        this.plotHandler = null;
         this.parseUI(this.dspMeta.ui);
         if (this.effectMeta) this.parseUI(this.effectMeta.ui);
         try {
@@ -114,7 +119,6 @@ class FaustNode extends AudioWorkletNode {
      * @param {number} channel - the MIDI channel (0..15, not used for now)
      * @param {number} pitch - the MIDI pitch (0..127)
      * @param {number} velocity - the MIDI velocity (0..127)
-     * @memberof FaustAudioWorkletNode
      */
     keyOn(channel, pitch, velocity) {
         const e = { type: "keyOn", data: [channel, pitch, velocity] };
@@ -126,7 +130,6 @@ class FaustNode extends AudioWorkletNode {
      * @param {number} channel - the MIDI channel (0..15, not used for now)
      * @param {number} pitch - the MIDI pitch (0..127)
      * @param {number} velocity - the MIDI velocity (0..127)
-     * @memberof FaustAudioWorkletNode
      */
     keyOff(channel, pitch, velocity) {
         const e = { type: "keyOff", data: [channel, pitch, velocity] };
@@ -134,8 +137,6 @@ class FaustNode extends AudioWorkletNode {
     }
     /**
      * Gently terminates all the active voices.
-     *
-     * @memberof FaustAudioWorkletNode
      */
     allNotesOff() {
         const e = { type: "ctrlChange", data: [0, 123, 0] };
@@ -222,7 +223,7 @@ class FaustNode extends AudioWorkletNode {
     getParams() {
         return this.inputsItems;
     }
-    getJSON() {
+    getMeta() {
         if (this.voices) {
             const o = this.dspMeta;
             const e = this.effectMeta;
@@ -237,9 +238,12 @@ class FaustNode extends AudioWorkletNode {
                     { type: "vgroup", label: "Voices", items: o.ui }
                 ] }];
             }
-            return JSON.stringify(r);
+            return r;
         }
-        return JSON.stringify(this.dspMeta);
+        return this.dspMeta;
+    }
+    getJSON() {
+        return JSON.stringify(this.getMeta());
     }
     /**
      * @returns {FaustUIDescriptor}
@@ -263,6 +267,7 @@ class FaustNode extends AudioWorkletNode {
     destroy() {
         this.port.postMessage({ type: "destroy" });
         this.port.close();
+        delete this.plotHandler;
         delete this.outputHandler;
     }
 }

@@ -1,5 +1,3 @@
-const audioContext = new AudioContext();
-
 (async () => {
 	const {
 		instantiateLibFaust,
@@ -19,7 +17,7 @@ const audioContext = new AudioContext();
     const svgs = faust.getDiagram(code1, args);
     console.log(Object.keys(svgs));
     const processor1 = new FaustProcessor({ dsp: dsp1, sampleRate });
-	await processor1.initialize()
+	await processor1.initialize();
     const out1 = processor1.generate(null, 192000);
     const wav1 = WavEncoder.encode(out1, { sampleRate, bitDepth: 24 });
 	const blob1 = new Blob([wav1], { type: "audio/wav" });
@@ -32,7 +30,7 @@ const audioContext = new AudioContext();
     const code2 = await code2Fetch.text();
     const dsp2 = await faust.compile(code2, args);
     const processor2 = new FaustProcessor({ dsp: dsp2, sampleRate });
-	await processor2.initialize()
+	await processor2.initialize();
     const out2 = processor2.generate(out1, 192000);
     const wav2 = WavEncoder.encode(out2, { sampleRate, bitDepth: 24 });
 	const blob2 = new Blob([wav2], { type: "audio/wav" });

@@ -11,8 +11,8 @@ Generates audio file from a Faust DSP.
 \t -bs\t <num> to setup the rendering buffer size in frames (default: 64)
 \t -bd\t 16|24|32 to setup the output file bit-depth (default: 16)
 \t -c \t <samples> to setup the output file length in frames, when -ct is not used (default: SR*5)
-\t -in \t <inputWav.wav> specify an input file to process
-\t -sr\t <num>] to setup the output file sample rate (default: 44100)
+\t -in\t <inputWav.wav> specify an input file to process
+\t -sr\t <num> to setup the output file sample rate (default: 44100)
 `);
     process.exit();
 }

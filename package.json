@@ -1,15 +1,13 @@
 {
-  "name": "faustwasm",
-  "version": "1.0.0",
+  "name": "@shren/faustwasm",
+  "version": "0.0.2",
   "description": "WebAssembly version of Faust Compiler",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "npm run build-cjs & npm run build-esm",
     "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist --format=cjs",
-    "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm",
-    "test": "node test/node/index.js",
-    "test2": "node scripts/faust2sndfile.js test/mono.dsp test/out/o.wav -c 48000 -sr 48000 -bd 24"
+    "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm"
   },
   "repository": {
     "type": "git",

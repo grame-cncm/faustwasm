@@ -212,7 +212,6 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`;
      *
      * @param {string} code faust source code
      * @param {string[]} args - Paramaters to be given to the Faust compiler
-     * @returns {string} svg file as string
      */
     getDiagram(code: string, args: string[] = []) {
         try {

@@ -1,3 +1,4 @@
+//@ts-check
 /**
  * @typedef {import("./types").AudioParamDescriptor} AudioParamDescriptor
  * @typedef {import("./types").FaustDspDistribution} FaustDspDistribution
@@ -375,6 +376,8 @@ const getFaustAudioWorkletProcessor = (processorId, voices, dspMeta, effectMeta)
             this.pathTable$ = {};
 
             this.$buffer = 0;
+            /** @type {{ type: string; data: any }[]} */
+            this.cachedEvents = [];
 
             // Init resulting DSP
             this.setup();
@@ -621,7 +624,7 @@ const getFaustAudioWorkletProcessor = (processorId, voices, dspMeta, effectMeta)
             this.fCtrlLabel[ctrl].forEach((ctrl) => {
                 const { path } = ctrl;
                 this.setParamValue(path, remap(value, 0, 127, ctrl.min, ctrl.max));
-                if (this.outputHandler) this.outputHandler(path, this.getParamValue(path));
+                this.outputHandler?.(path, this.getParamValue(path));
             });
         }
         /**
@@ -631,7 +634,7 @@ const getFaustAudioWorkletProcessor = (processorId, voices, dspMeta, effectMeta)
         pitchWheel(channel, wheel) {
             this.fPitchwheelLabel.forEach((pw) => {
                 this.setParamValue(pw.path, remap(wheel, 0, 16383, pw.min, pw.max));
-                if (this.outputHandler) this.outputHandler(pw.path, this.getParamValue(pw.path));
+                this.outputHandler?.(pw.path, this.getParamValue(pw.path));
             });
         }
         /**
@@ -668,7 +671,7 @@ const getFaustAudioWorkletProcessor = (processorId, voices, dspMeta, effectMeta)
                 this.setParamValue(path, paramArray[0]);
             }
             // Possibly call an externally given callback (for instance to synchronize playing a MIDIFile...)
-            if (this.computeHandler) this.computeHandler(this.bufferSize);
+            this.computeHandler?.(this.bufferSize);
             if (this.voices) {
                 this.mixer.clearOutput(this.bufferSize, this.numOut, this.$outs); // First clear the outputs
                 for (let i = 0; i < this.voices; i++) { // Compute all running voices
@@ -687,6 +690,8 @@ const getFaustAudioWorkletProcessor = (processorId, voices, dspMeta, effectMeta)
                     const dspOutput = this.dspOutChannnels[i];
                     output[i].set(dspOutput);
                 }
+                this.port.postMessage({ type: "plot", value: output, index: this.$buffer++, events: this.cachedEvents });
+                this.cachedEvents = [];
             }
             return true;
         }
