@@ -13,7 +13,7 @@ interface Format {
 }
 
 class WavDecoder {
-    static encode(buffer: ArrayBuffer, options?: WavDecoderOptions) {
+    static decode(buffer: ArrayBuffer, options?: WavDecoderOptions) {
         const dataView = new DataView(buffer);
         const reader = new Reader(dataView);
         if (reader.string(4) !== "RIFF") {
@@ -24,7 +24,12 @@ class WavDecoder {
             throw new TypeError("Invalid WAV file");
         }
         let format: Format = null;
-        let audioData = null;
+        let audioData: {
+            numberOfChannels: number;
+            length: number;
+            sampleRate: number;
+            channelData: Float32Array[];
+        } = null;
         do {
             const chunkType = reader.string(4);
             const chunkSize = reader.uint32();
@@ -64,7 +69,7 @@ class WavDecoder {
         const length = Math.floor(chunkSize / format.blockSize);
         const numberOfChannels = format.numberOfChannels;
         const sampleRate = format.sampleRate;
-        const channelData = new Array(numberOfChannels);
+        const channelData: Float32Array[] = new Array(numberOfChannels);
         for (let ch = 0; ch < numberOfChannels; ch++) {
             const AB = options.shared ? (globalThis.SharedArrayBuffer || globalThis.ArrayBuffer) : globalThis.ArrayBuffer;
             const ab = new AB(length * Float32Array.BYTES_PER_ELEMENT);

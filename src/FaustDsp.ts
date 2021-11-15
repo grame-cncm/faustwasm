@@ -1,12 +1,12 @@
-import { CompiledCode } from "./types";
+import { CompiledCode, FaustDspMeta } from "./types";
 
 class FaustDsp {
     mainCode: CompiledCode;
     effectCode?: CompiledCode;
     mainModule: WebAssembly.Module;
-    mainMeta: any;
-    effectModule: WebAssembly.Module;
-    effectMeta: any;
+    mainMeta: FaustDspMeta;
+    effectModule?: WebAssembly.Module;
+    effectMeta?: FaustDspMeta;
     constructor(mainCode: CompiledCode, effectCode?: CompiledCode) {
         this.mainCode = mainCode;
         this.effectCode = effectCode;
@@ -15,7 +15,7 @@ class FaustDsp {
      * readDSPFactoryFromMachineAux
      * Compile wasm modules from dsp and effect Uint8Arrays
      */
-    async compileDsp() {
+    async compile() {
         const time1 = Date.now();
         this.mainModule = await WebAssembly.compile(this.mainCode.wasmCModule);
         if (!this.mainModule) {
@@ -34,7 +34,7 @@ class FaustDsp {
         }
         // Possibly compile effect
         if (!this.effectCode) return;
-        const effectModule = await WebAssembly.compile(this.effectCode.wasmCModule);
+        const effectModule = new WebAssembly.Module(this.effectCode.wasmCModule);
         this.effectModule = effectModule;
         // 'libfaust.js' wasm backend generates UI methods, then we compile the code
         // eval(helpers_code2);

@@ -3,6 +3,14 @@ import { FaustDspMeta, FaustUIDescriptor, FaustWebAssemblyExports, FaustWebAssem
 import { createWasmImport, createWasmMemory, findPath, midiToFreq, remap } from "./utils";
 
 class FaustProcessor {
+    private dsp: FaustDsp;
+    private dspModule: WebAssembly.Module;
+    private effectModule?: WebAssembly.Module;
+    private mixerModule?: WebAssembly.Module;
+
+    private dspMeta: FaustDspMeta;
+    private effectMeta?: FaustDspMeta;
+
     private dspInstance: WebAssembly.Instance;
     private effectInstance?: WebAssembly.Instance;
     private mixerInstance?: WebAssembly.Instance;
@@ -11,7 +19,6 @@ class FaustProcessor {
     private bufferSize: number;
     private sampleRate: number;
     private voices: number;
-    private dspMeta: FaustDspMeta;
     private $ins: number;
     private $outs: number;
     private dspInChannnels: Float32Array[];
@@ -37,7 +44,6 @@ class FaustProcessor {
     private HEAPF32: Float32Array;
     private output: Float32Array[];
 
-    private effectMeta?: FaustDspMeta;
     private $effect?: number;
     private $mixing?: number;
     private fFreqLabel$?: number[];
@@ -57,20 +63,28 @@ class FaustProcessor {
     private kReleaseVoice?: number;
     private kNoVoice?: number;
 
-    private $sample: number;
+    $sample: number;
 
     constructor(options: { dsp: FaustDsp; bufferSize?: number; sampleRate?: number; voices?: number, mixerModule?: WebAssembly.Module }) {
-        const { dsp } = options;
+        const { dsp, mixerModule, bufferSize, sampleRate, voices } = options;
         if (!dsp) throw new Error("No Dsp input");
         if (this.factory) throw new Error("Processor already initiated.");
 
-        this.bufferSize = options?.bufferSize || 1024;
-        this.sampleRate = options?.sampleRate || 48000;
-        this.voices = options.voices || 0;
+        this.dsp = dsp;
+        const { mainMeta, mainModule, effectMeta, effectModule } = dsp;
+        this.dspMeta = mainMeta;
+        this.dspModule = mainModule;
+        this.effectMeta = effectMeta;
+        this.effectModule = effectModule;
+        this.mixerModule = mixerModule
 
-        this.dspMeta = dsp.mainMeta;
-        this.effectMeta = dsp.effectMeta;
+        this.bufferSize = bufferSize || 1024;
+        this.sampleRate = sampleRate || 48000;
+        this.voices = voices || 0;
 
+    }
+
+    async initialize() {
         this.$ins = null;
         this.$outs = null;
 
@@ -88,7 +102,7 @@ class FaustProcessor {
         this.sampleSize = 4;
 
         // Create the WASM instance
-        this.instantiateWasm(options.dsp, options.mixerModule);
+        await this.instantiateWasm(this.dsp, this.mixerModule);
         this.factory = this.dspInstance.exports as FaustWebAssemblyExports;
         this.HEAP = this.voices ? this.memory.buffer : this.factory.memory.buffer;
         this.HEAP32 = new Int32Array(this.HEAP);
@@ -206,17 +220,17 @@ class FaustProcessor {
             this.factory.init(this.$dsp, this.sampleRate);
         }
     }
-    private instantiateWasm(dsp: FaustDsp, mixerModule?: WebAssembly.Module) {
+    private async instantiateWasm(dsp: FaustDsp, mixerModule?: WebAssembly.Module) {
         const memory = createWasmMemory(this.voices, this.dspMeta, this.effectMeta, this.bufferSize);
         this.memory = memory;
         const imports = createWasmImport(this.voices, memory);
-        this.dspInstance = new WebAssembly.Instance(dsp.mainModule, imports);
+        this.dspInstance = await WebAssembly.instantiate(dsp.mainModule, imports);
         if (dsp.effectModule) {
-            this.effectInstance = new WebAssembly.Instance(dsp.effectModule, imports);
+            this.effectInstance = await WebAssembly.instantiate(dsp.effectModule, imports);
         }
         if (this.voices) {
             const mixerImports = { imports: { print: console.log }, memory: { memory } };
-            this.mixerInstance = new WebAssembly.Instance(mixerModule, mixerImports);
+            this.mixerInstance = await new WebAssembly.Instance(mixerModule, mixerImports);
         }
     }
     private parseUI(ui: FaustUIDescriptor) {
@@ -400,7 +414,7 @@ class FaustProcessor {
         this.$sample += this.bufferSize;
         return this.output;
     }
-    generate(inputs: Float32Array[] = [], length = this.bufferSize) {
+    generate(inputs: Float32Array[] = [], length = this.bufferSize, onUpdate?: (sample: number) => any) {
         let l = 0;
         const outputs = new Array(this.numOut).fill(null).map(() => new Float32Array(length));
         while (l < length) {
@@ -409,7 +423,9 @@ class FaustProcessor {
             for (let i = 0; i < this.numIn; i++) {
                 let input: Float32Array;
                 if (inputs[i]) {
-                    if (inputs[i].length > l + sliceLength) {
+                    if (inputs[i].length <= l) {
+                        input = new Float32Array(sliceLength);
+                    } else if (inputs[i].length > l + sliceLength) {
                         input = inputs[i].subarray(l, l + sliceLength);
                     } else {
                         input = inputs[i].subarray(l, inputs[i].length);
@@ -427,6 +443,7 @@ class FaustProcessor {
                 }
             }
             l += this.bufferSize;
+            onUpdate?.(l);
         }
         return outputs;
     }

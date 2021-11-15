@@ -4279,7 +4279,8 @@ var require_crypto_js = __commonJS({
 // src/index.ts
 __export(exports, {
   Faust: () => Faust_default,
-  FaustOfflineProcessor: () => FaustOfflineProcessor_default,
+  FaustProcessor: () => FaustProcessor_default,
+  WavDecoder: () => WavDecoder_default,
   WavEncoder: () => WavEncoder_default,
   instantiateLibFaust: () => instantiateLibFaust_default
 });
@@ -4290,7 +4291,7 @@ var FaustDsp = class {
     this.mainCode = mainCode;
     this.effectCode = effectCode;
   }
-  async compileDsp() {
+  async compile() {
     const time1 = Date.now();
     this.mainModule = await WebAssembly.compile(this.mainCode.wasmCModule);
     if (!this.mainModule) {
@@ -4308,7 +4309,7 @@ var FaustDsp = class {
     }
     if (!this.effectCode)
       return;
-    const effectModule = await WebAssembly.compile(this.effectCode.wasmCModule);
+    const effectModule = new WebAssembly.Module(this.effectCode.wasmCModule);
     this.effectModule = effectModule;
     try {
       const json = this.effectCode.helpers.match(/getJSON\w+?\(\)[\s\n]*{[\s\n]*return[\s\n]*'(\{.+?)';}/)[1].replace(/\\'/g, "'");
@@ -4403,7 +4404,7 @@ var Faust = class {
       throw errorMsg ? new Error(errorMsg) : e;
     }
   }
-  compile(code, argv = [], internalMemory = true) {
+  async compile(code, argv = [], internalMemory = true) {
     console.log(`libfaust.js version: ${this.version}`);
     const effectCode = `adapt(1,1) = _; adapt(2,2) = _,_; adapt(1,2) = _ <: _,_; adapt(2,1) = _,_ :> _;
 adaptor(F,G) = adapt(outputs(F),inputs(G));
@@ -4415,8 +4416,9 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`;
       effectCompiledCode = this.compileCode(effectCode, argv, internalMemory);
     } catch (e) {
     }
-    const compiledCodes = new FaustDsp_default(mainCompiledCode, effectCompiledCode);
-    return compiledCodes;
+    const dsp = new FaustDsp_default(mainCompiledCode, effectCompiledCode);
+    await dsp.compile();
+    return dsp;
   }
   expandCode(code, args = []) {
     console.log(`libfaust.js version: ${this.version}`);
@@ -4509,104 +4511,186 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`;
 };
 var Faust_default = Faust;
 
-// src/FaustOfflineProcessor.ts
-var FaustOfflineProcessor = class {
-  static get importObject() {
-    return {
-      env: {
-        memory: void 0,
-        memoryBase: 0,
-        tableBase: 0,
-        _abs: Math.abs,
-        _acosf: Math.acos,
-        _asinf: Math.asin,
-        _atanf: Math.atan,
-        _atan2f: Math.atan2,
-        _ceilf: Math.ceil,
-        _cosf: Math.cos,
-        _expf: Math.exp,
-        _floorf: Math.floor,
-        _fmodf: (x, y) => x % y,
-        _logf: Math.log,
-        _log10f: Math.log10,
-        _max_f: Math.max,
-        _min_f: Math.min,
-        _remainderf: (x, y) => x - Math.round(x / y) * y,
-        _powf: Math.pow,
-        _roundf: Math.fround,
-        _sinf: Math.sin,
-        _sqrtf: Math.sqrt,
-        _tanf: Math.tan,
-        _acoshf: Math.acosh,
-        _asinhf: Math.asinh,
-        _atanhf: Math.atanh,
-        _coshf: Math.cosh,
-        _sinhf: Math.sinh,
-        _tanhf: Math.tanh,
-        _isnanf: Number.isNaN,
-        _isinff: (x) => !isFinite(x),
-        _copysignf: (x, y) => Math.sign(x) === Math.sign(y) ? x : -x,
-        _acos: Math.acos,
-        _asin: Math.asin,
-        _atan: Math.atan,
-        _atan2: Math.atan2,
-        _ceil: Math.ceil,
-        _cos: Math.cos,
-        _exp: Math.exp,
-        _floor: Math.floor,
-        _fmod: (x, y) => x % y,
-        _log: Math.log,
-        _log10: Math.log10,
-        _max_: Math.max,
-        _min_: Math.min,
-        _remainder: (x, y) => x - Math.round(x / y) * y,
-        _pow: Math.pow,
-        _round: Math.fround,
-        _sin: Math.sin,
-        _sqrt: Math.sqrt,
-        _tan: Math.tan,
-        _acosh: Math.acosh,
-        _asinh: Math.asinh,
-        _atanh: Math.atanh,
-        _cosh: Math.cosh,
-        _sinh: Math.sinh,
-        _tanh: Math.tanh,
-        _isnan: Number.isNaN,
-        _isinf: (x) => !isFinite(x),
-        _copysign: (x, y) => Math.sign(x) === Math.sign(y) ? x : -x,
-        table: new WebAssembly.Table({ initial: 0, element: "anyfunc" })
-      }
-    };
+// src/utils.ts
+var midiToFreq = (note) => 440 * 2 ** ((note - 69) / 12);
+var remap = (v, mn0, mx0, mn1, mx1) => (v - mn0) / (mx0 - mn0) * (mx1 - mn1) + mn1;
+var findPath = (o, p) => {
+  if (typeof o !== "object")
+    return false;
+  if (o.address) {
+    return o.address === p;
   }
-  async init(options) {
-    const { dsp } = options;
+  for (const k in o) {
+    if (findPath(o[k], p))
+      return true;
+  }
+  return false;
+};
+var createWasmImport = (voices, memory) => ({
+  env: {
+    memory: voices ? memory : void 0,
+    memoryBase: 0,
+    tableBase: 0,
+    _abs: Math.abs,
+    _acosf: Math.acos,
+    _asinf: Math.asin,
+    _atanf: Math.atan,
+    _atan2f: Math.atan2,
+    _ceilf: Math.ceil,
+    _cosf: Math.cos,
+    _expf: Math.exp,
+    _floorf: Math.floor,
+    _fmodf: (x, y) => x % y,
+    _logf: Math.log,
+    _log10f: Math.log10,
+    _max_f: Math.max,
+    _min_f: Math.min,
+    _remainderf: (x, y) => x - Math.round(x / y) * y,
+    _powf: Math.pow,
+    _roundf: Math.fround,
+    _sinf: Math.sin,
+    _sqrtf: Math.sqrt,
+    _tanf: Math.tan,
+    _acoshf: Math.acosh,
+    _asinhf: Math.asinh,
+    _atanhf: Math.atanh,
+    _coshf: Math.cosh,
+    _sinhf: Math.sinh,
+    _tanhf: Math.tanh,
+    _isnanf: Number.isNaN,
+    _isinff: (x) => !isFinite(x),
+    _copysignf: (x, y) => Math.sign(x) === Math.sign(y) ? x : -x,
+    _acos: Math.acos,
+    _asin: Math.asin,
+    _atan: Math.atan,
+    _atan2: Math.atan2,
+    _ceil: Math.ceil,
+    _cos: Math.cos,
+    _exp: Math.exp,
+    _floor: Math.floor,
+    _fmod: (x, y) => x % y,
+    _log: Math.log,
+    _log10: Math.log10,
+    _max_: Math.max,
+    _min_: Math.min,
+    _remainder: (x, y) => x - Math.round(x / y) * y,
+    _pow: Math.pow,
+    _round: Math.fround,
+    _sin: Math.sin,
+    _sqrt: Math.sqrt,
+    _tan: Math.tan,
+    _acosh: Math.acosh,
+    _asinh: Math.asinh,
+    _atanh: Math.atanh,
+    _cosh: Math.cosh,
+    _sinh: Math.sinh,
+    _tanh: Math.tanh,
+    _isnan: Number.isNaN,
+    _isinf: (x) => !isFinite(x),
+    _copysign: (x, y) => Math.sign(x) === Math.sign(y) ? x : -x,
+    table: new WebAssembly.Table({ initial: 0, element: "anyfunc" })
+  }
+});
+var createWasmMemory = (voicesIn, dspMeta, effectMeta, bufferSize) => {
+  const voices = Math.max(4, voicesIn);
+  const ptrSize = 4;
+  const sampleSize = 4;
+  const pow2limit = (x) => {
+    let n = 65536;
+    while (n < x) {
+      n *= 2;
+    }
+    return n;
+  };
+  const effectSize = effectMeta ? effectMeta.size : 0;
+  let memorySize = pow2limit(effectSize + dspMeta.size * voices + (dspMeta.inputs + dspMeta.outputs * 2) * (ptrSize + bufferSize * sampleSize)) / 65536;
+  memorySize = Math.max(2, memorySize);
+  return new WebAssembly.Memory({ initial: memorySize, maximum: memorySize });
+};
+
+// src/FaustProcessor.ts
+var FaustProcessor = class {
+  constructor(options) {
+    const { dsp, mixerModule, bufferSize, sampleRate, voices } = options;
     if (!dsp)
       throw new Error("No Dsp input");
     if (this.factory)
       throw new Error("Processor already initiated.");
-    this.dspMeta = dsp.mainMeta;
+    this.dsp = dsp;
+    const { mainMeta, mainModule, effectMeta, effectModule } = dsp;
+    this.dspMeta = mainMeta;
+    this.dspModule = mainModule;
+    this.effectMeta = effectMeta;
+    this.effectModule = effectModule;
+    this.mixerModule = mixerModule;
+    this.bufferSize = bufferSize || 1024;
+    this.sampleRate = sampleRate || 48e3;
+    this.voices = voices || 0;
+  }
+  async initialize() {
     this.$ins = null;
     this.$outs = null;
     this.dspInChannnels = [];
     this.dspOutChannnels = [];
+    this.fPitchwheelLabel = [];
+    this.fCtrlLabel = new Array(128).fill(null).map(() => []);
     this.numIn = this.dspMeta.inputs;
     this.numOut = this.dspMeta.outputs;
     this.ptrSize = 4;
     this.sampleSize = 4;
-    const dspInstance = await WebAssembly.instantiate(dsp.mainModule, FaustOfflineProcessor.importObject);
-    this.factory = dspInstance.exports;
-    this.HEAP = this.factory.memory.buffer;
+    await this.instantiateWasm(this.dsp, this.mixerModule);
+    this.factory = this.dspInstance.exports;
+    this.HEAP = this.voices ? this.memory.buffer : this.factory.memory.buffer;
     this.HEAP32 = new Int32Array(this.HEAP);
     this.HEAPF32 = new Float32Array(this.HEAP);
-    this.bufferSize = options?.bufferSize || 1024;
     this.output = new Array(this.numOut).fill(null).map(() => new Float32Array(this.bufferSize));
-    this.sampleRate = options?.sampleRate || 48e3;
+    this.inputsItems = [];
     this.$audioHeap = this.dspMeta.size;
     this.$$audioHeapInputs = this.$audioHeap;
     this.$$audioHeapOutputs = this.$$audioHeapInputs + this.numIn * this.ptrSize;
     this.$audioHeapInputs = this.$$audioHeapOutputs + this.numOut * this.ptrSize;
     this.$audioHeapOutputs = this.$audioHeapInputs + this.numIn * this.bufferSize * this.sampleSize;
-    this.$dsp = 0;
+    if (this.voices) {
+      this.$$audioHeapMixing = this.$$audioHeapOutputs + this.numOut * this.ptrSize;
+      this.$audioHeapInputs = this.$$audioHeapMixing + this.numOut * this.ptrSize;
+      this.$audioHeapOutputs = this.$audioHeapInputs + this.numIn * this.bufferSize * this.sampleSize;
+      this.$audioHeapMixing = this.$audioHeapOutputs + this.numOut * this.bufferSize * this.sampleSize;
+      this.$dsp = this.$audioHeapMixing + this.numOut * this.bufferSize * this.sampleSize;
+    } else {
+      this.$audioHeapInputs = this.$$audioHeapOutputs + this.numOut * this.ptrSize;
+      this.$audioHeapOutputs = this.$audioHeapInputs + this.numIn * this.bufferSize * this.sampleSize;
+      this.$dsp = 0;
+    }
+    if (this.voices) {
+      this.effectMeta = this.effectMeta;
+      this.$mixing = null;
+      this.fFreqLabel$ = [];
+      this.fGateLabel$ = [];
+      this.fGainLabel$ = [];
+      this.fDate = 0;
+      this.mixer = this.mixerInstance.exports;
+      this.effect = this.effectInstance ? this.effectInstance.exports : null;
+      this.dspVoices$ = [];
+      this.dspVoicesState = [];
+      this.dspVoicesLevel = [];
+      this.dspVoicesDate = [];
+      this.kActiveVoice = 0;
+      this.kFreeVoice = -1;
+      this.kReleaseVoice = -2;
+      this.kNoVoice = -3;
+      for (let i = 0; i < this.voices; i++) {
+        this.dspVoices$[i] = this.$dsp + i * this.dspMeta.size;
+        this.dspVoicesState[i] = this.kFreeVoice;
+        this.dspVoicesLevel[i] = 0;
+        this.dspVoicesDate[i] = 0;
+      }
+      this.$effect = this.dspVoices$[this.voices - 1] + this.dspMeta.size;
+    }
+    this.pathTable$ = {};
+    this.$sample = 0;
+    this.setup();
+  }
+  setup() {
     if (this.numIn > 0) {
       this.$ins = this.$$audioHeapInputs;
       for (let i = 0; i < this.numIn; i++) {
@@ -4619,15 +4703,213 @@ var FaustOfflineProcessor = class {
     }
     if (this.numOut > 0) {
       this.$outs = this.$$audioHeapOutputs;
+      if (this.voices)
+        this.$mixing = this.$$audioHeapMixing;
       for (let i = 0; i < this.numOut; i++) {
         this.HEAP32[(this.$outs >> 2) + i] = this.$audioHeapOutputs + this.bufferSize * this.sampleSize * i;
+        if (this.voices)
+          this.HEAP32[(this.$mixing >> 2) + i] = this.$audioHeapMixing + this.bufferSize * this.sampleSize * i;
       }
       const dspOutChans = this.HEAP32.subarray(this.$outs >> 2, this.$outs + this.numOut * this.ptrSize >> 2);
       for (let i = 0; i < this.numOut; i++) {
         this.dspOutChannnels[i] = this.HEAPF32.subarray(dspOutChans[i] >> 2, dspOutChans[i] + this.bufferSize * this.sampleSize >> 2);
       }
     }
-    this.factory.init(this.$dsp, this.sampleRate);
+    this.parseUI(this.dspMeta.ui);
+    if (this.effect)
+      this.parseUI(this.effectMeta.ui);
+    if (this.voices) {
+      this.inputsItems.forEach((item) => {
+        if (item.endsWith("/gate"))
+          this.fGateLabel$.push(this.pathTable$[item]);
+        else if (item.endsWith("/freq"))
+          this.fFreqLabel$.push(this.pathTable$[item]);
+        else if (item.endsWith("/gain"))
+          this.fGainLabel$.push(this.pathTable$[item]);
+      });
+      this.dspVoices$.forEach(($voice) => this.factory.init($voice, this.sampleRate));
+      if (this.effect)
+        this.effect.init(this.$effect, this.sampleRate);
+    } else {
+      this.factory.init(this.$dsp, this.sampleRate);
+    }
+  }
+  async instantiateWasm(dsp, mixerModule) {
+    const memory = createWasmMemory(this.voices, this.dspMeta, this.effectMeta, this.bufferSize);
+    this.memory = memory;
+    const imports = createWasmImport(this.voices, memory);
+    this.dspInstance = await WebAssembly.instantiate(dsp.mainModule, imports);
+    if (dsp.effectModule) {
+      this.effectInstance = await WebAssembly.instantiate(dsp.effectModule, imports);
+    }
+    if (this.voices) {
+      const mixerImports = { imports: { print: console.log }, memory: { memory } };
+      this.mixerInstance = await new WebAssembly.Instance(mixerModule, mixerImports);
+    }
+  }
+  parseUI(ui) {
+    ui.forEach((group) => this.parseGroup(group));
+  }
+  parseGroup(group) {
+    if (group.items)
+      this.parseItems(group.items);
+  }
+  parseItems(items) {
+    items.forEach((item) => this.parseItem(item));
+  }
+  parseItem(item) {
+    if (item.type === "vgroup" || item.type === "hgroup" || item.type === "tgroup") {
+      this.parseItems(item.items);
+    } else if (item.type === "hbargraph" || item.type === "vbargraph") {
+      this.outputsItems.push(item.address);
+    } else if (item.type === "vslider" || item.type === "hslider" || item.type === "button" || item.type === "checkbox" || item.type === "nentry") {
+      this.inputsItems.push(item.address);
+      if (!item.meta)
+        return;
+      item.meta.forEach((meta) => {
+        const { midi } = meta;
+        if (!midi)
+          return;
+        const strMidi = midi.trim();
+        if (strMidi === "pitchwheel") {
+          this.fPitchwheelLabel.push({ path: item.address, min: item.min, max: item.max });
+        } else {
+          const matched = strMidi.match(/^ctrl\s(\d+)/);
+          if (!matched)
+            return;
+          this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min, max: item.max });
+        }
+      });
+    }
+  }
+  setParamValue(path, val) {
+    if (this.voices) {
+      if (this.effect && findPath(this.effectMeta.ui, path))
+        this.effect.setParamValue(this.$effect, this.pathTable$[path], val);
+      else
+        this.dspVoices$.forEach(($voice) => this.factory.setParamValue($voice, this.pathTable$[path], val));
+    } else {
+      this.factory.setParamValue(this.$dsp, this.pathTable$[path], val);
+    }
+  }
+  getParamValue(path) {
+    if (this.voices) {
+      if (this.effect && findPath(this.effectMeta.ui, path))
+        return this.effect.getParamValue(this.$effect, this.pathTable$[path]);
+      return this.factory.getParamValue(this.dspVoices$[0], this.pathTable$[path]);
+    }
+    return this.factory.getParamValue(this.$dsp, this.pathTable$[path]);
+  }
+  getPlayingVoice(pitch) {
+    if (!this.voices)
+      return null;
+    let voice = this.kNoVoice;
+    let oldestDatePlaying = Number.MAX_VALUE;
+    for (let i = 0; i < this.voices; i++) {
+      if (this.dspVoicesState[i] === pitch) {
+        if (this.dspVoicesDate[i] < oldestDatePlaying) {
+          oldestDatePlaying = this.dspVoicesDate[i];
+          voice = i;
+        }
+      }
+    }
+    return voice;
+  }
+  allocVoice(voice) {
+    if (!this.voices)
+      return null;
+    this.factory.instanceClear(this.dspVoices$[voice]);
+    this.dspVoicesDate[voice] = this.fDate++;
+    this.dspVoicesState[voice] = this.kActiveVoice;
+    return voice;
+  }
+  getFreeVoice() {
+    if (!this.voices)
+      return null;
+    for (let i = 0; i < this.voices; i++) {
+      if (this.dspVoicesState[i] === this.kFreeVoice)
+        return this.allocVoice(i);
+    }
+    let voiceRelease = this.kNoVoice;
+    let voicePlaying = this.kNoVoice;
+    let oldestDateRelease = Number.MAX_VALUE;
+    let oldestDatePlaying = Number.MAX_VALUE;
+    for (let i = 0; i < this.voices; i++) {
+      if (this.dspVoicesState[i] === this.kReleaseVoice) {
+        if (this.dspVoicesDate[i] < oldestDateRelease) {
+          oldestDateRelease = this.dspVoicesDate[i];
+          voiceRelease = i;
+        }
+      } else if (this.dspVoicesDate[i] < oldestDatePlaying) {
+        oldestDatePlaying = this.dspVoicesDate[i];
+        voicePlaying = i;
+      }
+    }
+    if (oldestDateRelease !== Number.MAX_VALUE) {
+      return this.allocVoice(voiceRelease);
+    }
+    if (oldestDatePlaying !== Number.MAX_VALUE) {
+      return this.allocVoice(voicePlaying);
+    }
+    return this.kNoVoice;
+  }
+  keyOn(channel, pitch, velocity) {
+    if (!this.voices)
+      return;
+    const voice = this.getFreeVoice();
+    this.fFreqLabel$.forEach(($) => this.factory.setParamValue(this.dspVoices$[voice], $, midiToFreq(pitch)));
+    this.fGateLabel$.forEach(($) => this.factory.setParamValue(this.dspVoices$[voice], $, 1));
+    this.fGainLabel$.forEach(($) => this.factory.setParamValue(this.dspVoices$[voice], $, velocity / 127));
+    this.dspVoicesState[voice] = pitch;
+  }
+  keyOff(channel, pitch, velocity) {
+    if (!this.voices)
+      return;
+    const voice = this.getPlayingVoice(pitch);
+    if (voice === this.kNoVoice)
+      return;
+    this.fGateLabel$.forEach(($) => this.factory.setParamValue(this.dspVoices$[voice], $, 0));
+    this.dspVoicesState[voice] = this.kReleaseVoice;
+  }
+  allNotesOff() {
+    if (!this.voices)
+      return;
+    for (let i = 0; i < this.voices; i++) {
+      this.fGateLabel$.forEach(($gate) => this.factory.setParamValue(this.dspVoices$[i], $gate, 0));
+      this.dspVoicesState[i] = this.kReleaseVoice;
+    }
+  }
+  midiMessage(data) {
+    const cmd = data[0] >> 4;
+    const channel = data[0] & 15;
+    const data1 = data[1];
+    const data2 = data[2];
+    if (channel === 9)
+      return;
+    if (cmd === 8 || cmd === 9 && data2 === 0)
+      this.keyOff(channel, data1, data2);
+    else if (cmd === 9)
+      this.keyOn(channel, data1, data2);
+    else if (cmd === 11)
+      this.ctrlChange(channel, data1, data2);
+    else if (cmd === 14)
+      this.pitchWheel(channel, data2 * 128 + data1);
+  }
+  ctrlChange(channel, ctrl, value) {
+    if (ctrl === 123 || ctrl === 120) {
+      this.allNotesOff();
+    }
+    if (!this.fCtrlLabel[ctrl].length)
+      return;
+    this.fCtrlLabel[ctrl].forEach((ctrl2) => {
+      const { path } = ctrl2;
+      this.setParamValue(path, remap(value, 0, 127, ctrl2.min, ctrl2.max));
+    });
+  }
+  pitchWheel(channel, wheel) {
+    this.fPitchwheelLabel.forEach((pw) => {
+      this.setParamValue(pw.path, remap(wheel, 0, 16383, pw.min, pw.max));
+    });
   }
   compute(inputs = []) {
     if (!this.factory)
@@ -4637,15 +4919,26 @@ var FaustOfflineProcessor = class {
       if (inputs[i])
         this.dspInChannnels[i].set(inputs[i]);
     }
-    this.factory.compute(this.$dsp, this.bufferSize, this.$ins, this.$outs);
+    if (this.voices) {
+      this.mixer.clearOutput(this.bufferSize, this.numOut, this.$outs);
+      for (let i = 0; i < this.voices; i++) {
+        this.factory.compute(this.dspVoices$[i], this.bufferSize, this.$ins, this.$mixing);
+        this.mixer.mixVoice(this.bufferSize, this.numOut, this.$mixing, this.$outs);
+      }
+      if (this.effect)
+        this.effect.compute(this.$effect, this.bufferSize, this.$outs, this.$outs);
+    } else {
+      this.factory.compute(this.$dsp, this.bufferSize, this.$ins, this.$outs);
+    }
     if (this.output !== void 0) {
       for (let i = 0; i < this.numOut; i++) {
         this.output[i].set(this.dspOutChannnels[i]);
       }
     }
+    this.$sample += this.bufferSize;
     return this.output;
   }
-  generate(inputs = [], length = this.bufferSize) {
+  generate(inputs = [], length = this.bufferSize, onUpdate) {
     let l = 0;
     const outputs = new Array(this.numOut).fill(null).map(() => new Float32Array(length));
     while (l < length) {
@@ -4654,7 +4947,9 @@ var FaustOfflineProcessor = class {
       for (let i = 0; i < this.numIn; i++) {
         let input;
         if (inputs[i]) {
-          if (inputs[i].length > l + sliceLength) {
+          if (inputs[i].length <= l) {
+            input = new Float32Array(sliceLength);
+          } else if (inputs[i].length > l + sliceLength) {
             input = inputs[i].subarray(l, l + sliceLength);
           } else {
             input = inputs[i].subarray(l, inputs[i].length);
@@ -4672,11 +4967,12 @@ var FaustOfflineProcessor = class {
         }
       }
       l += this.bufferSize;
+      onUpdate?.(l);
     }
     return outputs;
   }
 };
-var FaustOfflineProcessor_default = FaustOfflineProcessor;
+var FaustProcessor_default = FaustProcessor;
 
 // src/fetchModule.ts
 var import_meta = {};
@@ -4898,6 +5194,188 @@ var Writer = class {
   }
 };
 var WavEncoder_default = WavEncoder;
+
+// src/WavDecoder.ts
+var WavDecoder = class {
+  static decode(buffer, options) {
+    const dataView = new DataView(buffer);
+    const reader = new Reader(dataView);
+    if (reader.string(4) !== "RIFF") {
+      throw new TypeError("Invalid WAV file");
+    }
+    reader.uint32();
+    if (reader.string(4) !== "WAVE") {
+      throw new TypeError("Invalid WAV file");
+    }
+    let format = null;
+    let audioData = null;
+    do {
+      const chunkType = reader.string(4);
+      const chunkSize = reader.uint32();
+      if (chunkType === "fmt ") {
+        format = this.decodeFormat(reader, chunkSize);
+      } else if (chunkType === "data") {
+        audioData = this.decodeData(reader, chunkSize, format, options || {});
+      } else {
+        reader.skip(chunkSize);
+      }
+    } while (audioData === null);
+    return audioData;
+  }
+  static decodeFormat(reader, chunkSize) {
+    const formats = {
+      1: "lpcm",
+      3: "lpcm"
+    };
+    const formatId = reader.uint16();
+    if (!formats.hasOwnProperty(formatId)) {
+      throw new TypeError("Unsupported format in WAV file: 0x" + formatId.toString(16));
+    }
+    const format = {
+      formatId,
+      float: formatId === 3,
+      numberOfChannels: reader.uint16(),
+      sampleRate: reader.uint32(),
+      byteRate: reader.uint32(),
+      blockSize: reader.uint16(),
+      bitDepth: reader.uint16()
+    };
+    reader.skip(chunkSize - 16);
+    return format;
+  }
+  static decodeData(reader, chunkSizeIn, format, options) {
+    const chunkSize = Math.min(chunkSizeIn, reader.remain());
+    const length = Math.floor(chunkSize / format.blockSize);
+    const numberOfChannels = format.numberOfChannels;
+    const sampleRate = format.sampleRate;
+    const channelData = new Array(numberOfChannels);
+    for (let ch = 0; ch < numberOfChannels; ch++) {
+      const AB = options.shared ? globalThis.SharedArrayBuffer || globalThis.ArrayBuffer : globalThis.ArrayBuffer;
+      const ab = new AB(length * Float32Array.BYTES_PER_ELEMENT);
+      channelData[ch] = new Float32Array(ab);
+    }
+    this.readPCM(reader, channelData, length, format, options);
+    return {
+      numberOfChannels,
+      length,
+      sampleRate,
+      channelData
+    };
+  }
+  static readPCM(reader, channelData, length, format, options) {
+    const bitDepth = format.bitDepth;
+    const decoderOption = format.float ? "f" : options.symmetric ? "s" : "";
+    const methodName = "pcm" + bitDepth + decoderOption;
+    if (!reader[methodName]) {
+      throw new TypeError("Not supported bit depth: " + format.bitDepth);
+    }
+    const read = reader[methodName].bind(reader);
+    const numberOfChannels = format.numberOfChannels;
+    for (let i = 0; i < length; i++) {
+      for (let ch = 0; ch < numberOfChannels; ch++) {
+        channelData[ch][i] = read();
+      }
+    }
+  }
+};
+var Reader = class {
+  constructor(dataView) {
+    this.pos = 0;
+    this.dataView = dataView;
+  }
+  remain() {
+    return this.dataView.byteLength - this.pos;
+  }
+  skip(n) {
+    this.pos += n;
+  }
+  uint8() {
+    const data = this.dataView.getUint8(this.pos);
+    this.pos += 1;
+    return data;
+  }
+  int16() {
+    const data = this.dataView.getInt16(this.pos, true);
+    this.pos += 2;
+    return data;
+  }
+  uint16() {
+    const data = this.dataView.getUint16(this.pos, true);
+    this.pos += 2;
+    return data;
+  }
+  uint32() {
+    const data = this.dataView.getUint32(this.pos, true);
+    this.pos += 4;
+    return data;
+  }
+  string(n) {
+    let data = "";
+    for (let i = 0; i < n; i++) {
+      data += String.fromCharCode(this.uint8());
+    }
+    return data;
+  }
+  pcm8() {
+    const data = this.dataView.getUint8(this.pos) - 128;
+    this.pos += 1;
+    return data < 0 ? data / 128 : data / 127;
+  }
+  pcm8s() {
+    const data = this.dataView.getUint8(this.pos) - 127.5;
+    this.pos += 1;
+    return data / 127.5;
+  }
+  pcm16() {
+    const data = this.dataView.getInt16(this.pos, true);
+    this.pos += 2;
+    return data < 0 ? data / 32768 : data / 32767;
+  }
+  pcm16s() {
+    const data = this.dataView.getInt16(this.pos, true);
+    this.pos += 2;
+    return data / 32768;
+  }
+  pcm24() {
+    const x0 = this.dataView.getUint8(this.pos + 0);
+    const x1 = this.dataView.getUint8(this.pos + 1);
+    const x2 = this.dataView.getUint8(this.pos + 2);
+    const xx = x0 + (x1 << 8) + (x2 << 16);
+    const data = xx > 8388608 ? xx - 16777216 : xx;
+    this.pos += 3;
+    return data < 0 ? data / 8388608 : data / 8388607;
+  }
+  pcm24s() {
+    const x0 = this.dataView.getUint8(this.pos + 0);
+    const x1 = this.dataView.getUint8(this.pos + 1);
+    const x2 = this.dataView.getUint8(this.pos + 2);
+    const xx = x0 + (x1 << 8) + (x2 << 16);
+    const data = xx > 8388608 ? xx - 16777216 : xx;
+    this.pos += 3;
+    return data / 8388608;
+  }
+  pcm32() {
+    const data = this.dataView.getInt32(this.pos, true);
+    this.pos += 4;
+    return data < 0 ? data / 2147483648 : data / 2147483647;
+  }
+  pcm32s() {
+    const data = this.dataView.getInt32(this.pos, true);
+    this.pos += 4;
+    return data / 2147483648;
+  }
+  pcm32f() {
+    const data = this.dataView.getFloat32(this.pos, true);
+    this.pos += 4;
+    return data;
+  }
+  pcm64f() {
+    const data = this.dataView.getFloat64(this.pos, true);
+    this.pos += 8;
+    return data;
+  }
+};
+var WavDecoder_default = WavDecoder;
 /** @preserve
 	(c) 2012 by Cédric Mesnil. All rights reserved.
 

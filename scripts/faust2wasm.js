@@ -21,10 +21,9 @@ const $wam2 = argv.indexOf("-wam2");
 const wam2 = $wam2 !== -1;
 if (wam2) argv.splice($wam2, 1);
 
-
 const [inputFile, outputDir, ...argvFaust] = argv;
 
 (async () => {
     const dsp = await faust2wasmFiles(inputFile, outputDir, argvFaust, poly);
-    if (wam2) await faustDsp2wam2Files(dsp.mainMeta, outputDir, poly);
+    if (wam2) await faustDsp2wam2Files(dsp, outputDir, poly);
 })();

@@ -8,7 +8,8 @@
     "build": "npm run build-cjs & npm run build-esm",
     "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist --format=cjs",
     "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm",
-    "test": "node test/node/index.js"
+    "test": "node test/node/index.js",
+    "test2": "node scripts/faust2sndfile.js test/mono.dsp test/out/o.wav -c 48000 -sr 48000 -bd 24"
   },
   "repository": {
     "type": "git",

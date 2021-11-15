@@ -77,11 +77,13 @@ export default class FaustPingPongDelayPlugin extends WebAudioModule {
 		const dspModule = await WebAssembly.compileStreaming(await fetch(`${this._baseURL}/dspModule.wasm`));
 		/** @type {FaustDspDistribution} */
 		const faustDsp = { dspMeta, dspModule };
-		try {
+		if (this.descriptor.faustMeta?.effect) {
 			faustDsp.effectMeta = await (await fetch(`${this._baseURL}/effectMeta.json`)).json();
 			faustDsp.effectModule = await WebAssembly.compileStreaming(await fetch(`${this._baseURL}/effectModule.wasm`));
+		}
+		if (this.descriptor.faustMeta?.poly) {
 			faustDsp.mixerModule = await WebAssembly.compileStreaming(await fetch(`${this._baseURL}/mixerModule.wasm`));
-		} catch (error) {}
+		}
 		const voices = faustDsp.mixerModule ? 64 : 0;
 		await addFunctionModule(this.audioContext.audioWorklet, getFaustProcessor, this.moduleId + "Faust", voices, dspMeta, faustDsp.effectMeta);
 		const faustNode = new FaustNode(this.audioContext, this.moduleId + "Faust", faustDsp, voices);

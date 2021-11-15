@@ -4,7 +4,7 @@ import { FaustUI } from './faust-ui/index.js';
  * @typedef {import('./sdk-parammgr').ParamMgrNode} ParamMgrNode
  * @typedef {import('./sdk').WebAudioModule} WebAudioModule
  * @typedef {import('./FaustNode').default} FaustNode
- * @typedef {import('../../src/types').FaustUIDescriptor} FaustUIDescriptor
+ * @typedef {import('./types').FaustUIDescriptor} FaustUIDescriptor
  */
 
 class FaustDefaultGui extends HTMLElement {

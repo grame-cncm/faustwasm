@@ -128,7 +128,7 @@ class Faust {
      * @param {string[]} argv - Array of paramaters to be given to the Faust compiler
      * @param {boolean} internalMemory - Use internal Memory flag, false for poly, true for mono
      */
-    compile(code: string, argv: string[] = [], internalMemory: boolean = true) {
+    async compile(code: string, argv: string[] = [], internalMemory: boolean = true) {
         console.log(`libfaust.js version: ${this.version}`);
         // Create 'effect' expression
         const effectCode = `adapt(1,1) = _; adapt(2,2) = _,_; adapt(1,2) = _ <: _,_; adapt(2,1) = _,_ :> _;
@@ -140,8 +140,9 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`;
         try {
             effectCompiledCode = this.compileCode(effectCode, argv, internalMemory);
         } catch (e) {} // eslint-disable-line no-empty
-        const compiledCodes = new FaustDsp(mainCompiledCode, effectCompiledCode);
-        return compiledCodes;
+        const dsp = new FaustDsp(mainCompiledCode, effectCompiledCode);
+        await dsp.compile();
+        return dsp;
     }
 
     /**

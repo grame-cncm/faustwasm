@@ -22,8 +22,7 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     const code = fs.readFileSync(inputFile, { encoding: "utf8" });
 
     if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
-    const dsp = faust.compile(code, argv, !poly);
-    await dsp.compileDsp();
+    const dsp = await faust.compile(code, argv, !poly);
 
     const dspModulePath = path.join(outputDir, "dspModule.wasm");
     const dspMetaPath = path.join(outputDir, "dspMeta.json");
