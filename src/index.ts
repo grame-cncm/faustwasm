@@ -1,11 +1,11 @@
 import Faust from "./Faust";
-import FaustOfflineProcessor from "./FaustOfflineProcessor";
+import FaustProcessor from "./FaustProcessor";
 import instantiateLibFaust from "./instantiateLibFaust";
 import WavEncoder from "./WavEncoder";
 
 export {
     Faust,
     instantiateLibFaust,
-    FaustOfflineProcessor,
+    FaustProcessor,
     WavEncoder
 };

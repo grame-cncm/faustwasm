@@ -85,7 +85,7 @@ class WavEncoder {
             throw new TypeError("Not supported bit depth: " + bitDepth);
         }
 
-        const write = (writer as any)[methodName].bind(writer);
+        const write: (value: number) => void = (writer as any)[methodName].bind(writer);
 
         for (let i = 0; i < length; i++) {
             for (let j = 0; j < numberOfChannels; j++) {
