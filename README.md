@@ -89,7 +89,10 @@ const __dirname = path.dirname(__filename);
 
 (async () => {
     const libFaustPath = path.join(__dirname, "../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
+
+    // initialize the libfaust wasm
     const libFaust = await instantiateLibFaust(libFaustPath);
+    // Get the Faust compiler
     const faust = new Faust(libFaust);
     console.log(`Faust Compiler version: ${faust.version}`);
     const code = `
@@ -97,15 +100,22 @@ import("stdfaust.lib");
 process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 `;
     const args = ["-I", "libraries/"];
+
+    // Compile the DSP
     const dsp = await faust.compile(code, args);
 
+    // To generate SVG diagrams use `getDiagram` method.
     const svgs = faust.getDiagram(code, args);
     console.log(Object.keys(svgs));
 
     const sampleRate = 48000;
+
+    // To generate audio using FaustProcessor
     const processor = new FaustProcessor({ dsp, sampleRate });
-	await processor.initialize();
+    await processor.initialize();
     const out = processor.generate(null, 192000);
+
+    // The wav file is generated
     const wav = WavEncoder.encode(out, { sampleRate, bitDepth: 24 });
     fs.writeFileSync(`${__dirname}/out.wav`, new Uint8Array(wav));
 })();
@@ -115,15 +125,17 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 ```JavaScript
 
 (async () => {
-	const {
-		instantiateLibFaust,
-		Faust,
-		FaustProcessor,
-		WavEncoder
-	} = await import("../node_modules/@shren/faustwasm/dist/esm/index.js");
+    const {
+        instantiateLibFaust,
+        Faust,
+        FaustProcessor,
+        WavEncoder
+    } = await import("../node_modules/@shren/faustwasm/dist/esm/index.js");
+    // initialize the libfaust wasm
     const libFaust = await instantiateLibFaust("../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
+    // Get the Faust compiler
     const faust = new Faust(libFaust);
-	window.faust = faust;
+    window.faust = faust;
     console.log(faust.version);
     const sampleRate = 48000;
     const args = ["-I", "libraries/"];
@@ -131,20 +143,25 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 import("stdfaust.lib");
 process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 `;
+    // Compile the DSP
     const dsp = await faust.compile(code, args);
 
+    // To generate SVG diagrams use `getDiagram` method.
     const svgs = faust.getDiagram(code, args);
     console.log(Object.keys(svgs));
 
+    // To generate audio using FaustProcessor
     const processor = new FaustProcessor({ dsp, sampleRate });
-	await processor.initialize();
+    await processor.initialize();
     const out = processor.generate(null, 192000);
     const wav = WavEncoder.encode(out, { sampleRate, bitDepth: 24 });
-	const blob = new Blob([wav], { type: "audio/wav" });
-	const player = document.createElement("audio");
-	player.controls = true;
-	player.src = URL.createObjectURL(blob);
-	document.body.appendChild(player);
+
+    // The wav file is generated
+    const blob = new Blob([wav], { type: "audio/wav" });
+    const player = document.createElement("audio");
+    player.controls = true;
+    player.src = URL.createObjectURL(blob);
+    document.body.appendChild(player);
 })();
 ```
 
