@@ -45,7 +45,7 @@ Options:
 - `-bd     16|24|32` to setup the output file bit-depth (default: 16)
 - `-c      <samples>` to setup the output file length in frames, when -ct is not used (default: SR*5)
 - `-in     <inputWav.wav>` specify an input file to process
-- -`sr     <num>` to setup the output file sample rate (default: 44100)
+- `-sr     <num>` to setup the output file sample rate (default: 44100)
 See this help:
 
 ```bash
