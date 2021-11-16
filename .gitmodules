@@ -1,9 +1,0 @@
-[submodule "test/web/sdk"]
-	path = test/web/sdk
-	url = https://github.com/webaudiomodules/sdk
-[submodule "test/web/sdk-parammgr"]
-	path = test/web/sdk-parammgr
-	url = https://github.com/webaudiomodules/sdk-parammgr
-[submodule "test/web/api"]
-	path = test/web/api
-	url = https://github.com/webaudiomodules/api
