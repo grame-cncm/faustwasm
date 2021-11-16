@@ -1,6 +1,6 @@
 import FaustDsp from "./FaustDsp";
 import { CompiledCode, FaustModule } from "./types";
-import * as CryptoJS from "crypto-js";
+import { sha256 } from "js-sha256";
 
 class Faust {
     /**
@@ -64,7 +64,7 @@ class Faust {
 
         // Add 'cn' option with the factory name
         if (!argv.find(a => a === "-cn")) {
-            const sha1 = CryptoJS.SHA256(code + argv.join("") + (internalMemory ? "i" : "e")).toString();
+            const sha1 = sha256(code + argv.join("") + (internalMemory ? "i" : "e"));
             argv.push("-cn", sha1);
         }
 
