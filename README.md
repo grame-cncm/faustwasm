@@ -41,11 +41,11 @@ The main diagram should be in `test/out/process.svg`.
 
 #### Generate or process audio files
 Options:
-- -bs     <num> to setup the rendering buffer size in frames (default: 64)
-- -bd     16|24|32 to setup the output file bit-depth (default: 16)
-- -c      <samples> to setup the output file length in frames, when -ct is not used (default: SR*5)
-- -in     <inputWav.wav> specify an input file to process
-- -sr     <num>] to setup the output file sample rate (default: 44100)
+- `-bs     <num>` to setup the rendering buffer size in frames (default: 64)
+- `-bd     16|24|32` to setup the output file bit-depth (default: 16)
+- `-c      <samples>` to setup the output file length in frames, when -ct is not used (default: SR*5)
+- `-in     <inputWav.wav>` specify an input file to process
+- -`sr     <num>` to setup the output file sample rate (default: 44100)
 See this help:
 
 ```bash
