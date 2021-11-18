@@ -536,702 +536,28 @@ var require_sha256 = __commonJS({
 
 // src/index.ts
 __export(exports, {
-  Faust: () => Faust_default,
-  FaustProcessor: () => FaustProcessor_default,
+  FaustAudioWorkletNode: () => FaustAudioWorkletNode,
+  FaustBaseWebAudioDsp: () => FaustBaseWebAudioDsp,
+  FaustCompiler: () => FaustCompiler_default,
+  FaustDspInstance: () => FaustDspInstance_default,
+  FaustGenerator: () => FaustGenerator_default,
+  FaustMonoAudioWorkletNode: () => FaustMonoAudioWorkletNode,
+  FaustMonoDspFactory: () => FaustMonoDspFactory,
+  FaustMonoScriptProcessorNode: () => FaustMonoScriptProcessorNode,
+  FaustMonoWebAudioDsp: () => FaustMonoWebAudioDsp,
+  FaustOfflineProcessor: () => FaustOfflineProcessor_default,
+  FaustPolyAudioWorkletNodeImp: () => FaustPolyAudioWorkletNodeImp,
+  FaustPolyScriptProcessorNode: () => FaustPolyScriptProcessorNode,
+  FaustPolyWebAudioDsp: () => FaustPolyWebAudioDsp,
+  FaustScriptProcessorNode: () => FaustScriptProcessorNode,
+  FaustWebAudioDspVoice: () => FaustWebAudioDspVoice,
+  LibFaust: () => LibFaust_default,
   WavDecoder: () => WavDecoder_default,
   WavEncoder: () => WavEncoder_default,
   default: () => src_default,
+  getFaustAudioWorkletProcessor: () => FaustAudioWorkletProcessor_default,
   instantiateLibFaust: () => instantiateLibFaust_default
 });
-
-// src/FaustDsp.ts
-var FaustDsp = class {
-  constructor(mainCode, effectCode) {
-    this.mainCode = mainCode;
-    this.effectCode = effectCode;
-  }
-  async compile() {
-    const time1 = Date.now();
-    this.mainModule = await WebAssembly.compile(this.mainCode.wasmCModule);
-    if (!this.mainModule) {
-      throw new Error("Faust DSP factory cannot be compiled");
-    }
-    const time2 = Date.now();
-    console.log("WASM compilation duration: " + (time2 - time1));
-    try {
-      const json = this.mainCode.helpers.match(/getJSON\w+?\(\)[\s\n]*{[\s\n]*return[\s\n]*'(\{.+?)';}/)[1].replace(/\\'/g, "'");
-      const meta = JSON.parse(json);
-      this.mainMeta = meta;
-    } catch (e) {
-      console.error("Error in JSON.parse: " + e.message);
-      throw e;
-    }
-    if (!this.effectCode)
-      return;
-    const effectModule = new WebAssembly.Module(this.effectCode.wasmCModule);
-    this.effectModule = effectModule;
-    try {
-      const json = this.effectCode.helpers.match(/getJSON\w+?\(\)[\s\n]*{[\s\n]*return[\s\n]*'(\{.+?)';}/)[1].replace(/\\'/g, "'");
-      const meta = JSON.parse(json);
-      this.effectMeta = meta;
-    } catch (e) {
-      console.error("Error in JSON.parse: " + e.message);
-      throw e;
-    }
-  }
-};
-var FaustDsp_default = FaustDsp;
-
-// src/Faust.ts
-var import_js_sha256 = __toModule(require_sha256());
-var Faust = class {
-  constructor(libFaust) {
-    this.libFaust = libFaust;
-    this.importLibFaustFunctions();
-    this.version = this.getLibFaustVersion();
-  }
-  importLibFaustFunctions() {
-    if (!this.libFaust)
-      return;
-    this.createWasmCDSPFactoryFromString = this.libFaust.cwrap("createWasmCDSPFactoryFromString", "number", ["number", "number", "number", "number", "number", "number"]);
-    this.deleteAllWasmCDSPFactories = this.libFaust.cwrap("deleteAllWasmCDSPFactories", null, []);
-    this.expandCDSPFromString = this.libFaust.cwrap("expandCDSPFromString", "number", ["number", "number", "number", "number", "number", "number"]);
-    this.getCLibFaustVersion = this.libFaust.cwrap("getCLibFaustVersion", "number", []);
-    this.getWasmCModule = this.libFaust.cwrap("getWasmCModule", "number", ["number"]);
-    this.getWasmCModuleSize = this.libFaust.cwrap("getWasmCModuleSize", "number", ["number"]);
-    this.getWasmCHelpers = this.libFaust.cwrap("getWasmCHelpers", "number", ["number"]);
-    this.freeWasmCModule = this.libFaust.cwrap("freeWasmCModule", null, ["number"]);
-    this.freeCMemory = this.libFaust.cwrap("freeCMemory", null, ["number"]);
-    this.cleanupAfterException = this.libFaust.cwrap("cleanupAfterException", null, []);
-    this.getErrorAfterException = this.libFaust.cwrap("getErrorAfterException", "number", []);
-    this.generateCAuxFilesFromString = this.libFaust.cwrap("generateCAuxFilesFromString", "number", ["number", "number", "number", "number", "number"]);
-    this.getLibFaustVersion = () => this.libFaust.UTF8ToString(this.getCLibFaustVersion());
-  }
-  compileCode(code, argv = [], internalMemory = true) {
-    const codeSize = this.libFaust.lengthBytesUTF8(code) + 1;
-    const $code = this.libFaust._malloc(codeSize);
-    const name = "FaustDSP";
-    const nameSize = this.libFaust.lengthBytesUTF8(name) + 1;
-    const $name = this.libFaust._malloc(nameSize);
-    const $errorMsg = this.libFaust._malloc(4096);
-    this.libFaust.stringToUTF8(name, $name, nameSize);
-    this.libFaust.stringToUTF8(code, $code, codeSize);
-    if (!argv.find((a) => a === "-cn")) {
-      const sha1 = (0, import_js_sha256.sha256)(code + argv.join("") + (internalMemory ? "i" : "e"));
-      argv.push("-cn", sha1);
-    }
-    const ptrSize = 4;
-    const $argv = this.libFaust._malloc(argv.length * ptrSize);
-    let argvBuffer$ = new Int32Array(this.libFaust.HEAP32.buffer, $argv, argv.length);
-    for (let i = 0; i < argv.length; i++) {
-      const size$arg = this.libFaust.lengthBytesUTF8(argv[i]) + 1;
-      const $arg = this.libFaust._malloc(size$arg);
-      this.libFaust.stringToUTF8(argv[i], $arg, size$arg);
-      argvBuffer$[i] = $arg;
-    }
-    try {
-      const time1 = Date.now();
-      const $moduleCode = this.createWasmCDSPFactoryFromString($name, $code, argv.length, $argv, $errorMsg, internalMemory);
-      const time2 = Date.now();
-      console.log("Faust compilation duration: " + (time2 - time1));
-      const errorMsg = this.libFaust.UTF8ToString($errorMsg);
-      if (errorMsg)
-        throw new Error(errorMsg);
-      if ($moduleCode === 0)
-        return null;
-      const $wasmCModule = this.getWasmCModule($moduleCode);
-      const wasmCModuleSize = this.getWasmCModuleSize($moduleCode);
-      const wasmCModule = new Uint8Array(wasmCModuleSize);
-      for (let i = 0; i < wasmCModuleSize; i++) {
-        wasmCModule[i] = this.libFaust.HEAP8[$wasmCModule + i];
-      }
-      const $helpers = this.getWasmCHelpers($moduleCode);
-      const helpers = this.libFaust.UTF8ToString($helpers);
-      this.libFaust._free($code);
-      this.libFaust._free($name);
-      this.libFaust._free($errorMsg);
-      this.freeWasmCModule($moduleCode);
-      argvBuffer$ = new Int32Array(this.libFaust.HEAP32.buffer, $argv, argv.length);
-      for (let i = 0; i < argv.length; i++) {
-        this.libFaust._free(argvBuffer$[i]);
-      }
-      this.libFaust._free($argv);
-      return { wasmCModule, code, helpers };
-    } catch (e) {
-      const errorMsg = this.libFaust.UTF8ToString(this.getErrorAfterException());
-      this.cleanupAfterException();
-      throw errorMsg ? new Error(errorMsg) : e;
-    }
-  }
-  async compile(code, argv = [], internalMemory = true) {
-    console.log(`libfaust.js version: ${this.version}`);
-    const effectCode = `adapt(1,1) = _; adapt(2,2) = _,_; adapt(1,2) = _ <: _,_; adapt(2,1) = _,_ :> _;
-adaptor(F,G) = adapt(outputs(F),inputs(G));
-dsp_code = environment{${code}};
-process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`;
-    const mainCompiledCode = this.compileCode(code, argv, internalMemory);
-    let effectCompiledCode;
-    try {
-      effectCompiledCode = this.compileCode(effectCode, argv, internalMemory);
-    } catch (e) {
-    }
-    const dsp = new FaustDsp_default(mainCompiledCode, effectCompiledCode);
-    await dsp.compile();
-    return dsp;
-  }
-  expandCode(code, args = []) {
-    console.log(`libfaust.js version: ${this.version}`);
-    const codeSize = this.libFaust.lengthBytesUTF8(code) + 1;
-    const $code = this.libFaust._malloc(codeSize);
-    const name = "FaustDSP";
-    const nameSize = this.libFaust.lengthBytesUTF8(name) + 1;
-    const $name = this.libFaust._malloc(nameSize);
-    const $shaKey = this.libFaust._malloc(64);
-    const $errorMsg = this.libFaust._malloc(4096);
-    this.libFaust.stringToUTF8(name, $name, nameSize);
-    this.libFaust.stringToUTF8(code, $code, codeSize);
-    const argv = [...args, "-lang", "wasm"];
-    const ptrSize = 4;
-    const $argv = this.libFaust._malloc(argv.length * ptrSize);
-    let argvBuffer$ = new Int32Array(this.libFaust.HEAP32.buffer, $argv, argv.length);
-    for (let i = 0; i < argv.length; i++) {
-      const size$arg = this.libFaust.lengthBytesUTF8(argv[i]) + 1;
-      const $arg = this.libFaust._malloc(size$arg);
-      this.libFaust.stringToUTF8(argv[i], $arg, size$arg);
-      argvBuffer$[i] = $arg;
-    }
-    try {
-      const $expandedCode = this.expandCDSPFromString($name, $code, argv.length, $argv, $shaKey, $errorMsg);
-      const expandedCode = this.libFaust.UTF8ToString($expandedCode);
-      const errorMsg = this.libFaust.UTF8ToString($errorMsg);
-      if (errorMsg)
-        console.error(errorMsg);
-      this.libFaust._free($code);
-      this.libFaust._free($name);
-      this.libFaust._free($shaKey);
-      this.libFaust._free($errorMsg);
-      this.freeCMemory($expandedCode);
-      argvBuffer$ = new Int32Array(this.libFaust.HEAP32.buffer, $argv, argv.length);
-      for (let i = 0; i < argv.length; i++) {
-        this.libFaust._free(argvBuffer$[i]);
-      }
-      this.libFaust._free($argv);
-      return expandedCode;
-    } catch (e) {
-      const errorMsg = this.libFaust.UTF8ToString(this.getErrorAfterException());
-      this.cleanupAfterException();
-      throw errorMsg ? new Error(errorMsg) : e;
-    }
-  }
-  getDiagram(code, args = []) {
-    try {
-      const files2 = this.libFaust.FS.readdir("/FaustDSP-svg/");
-      files2.filter((file) => file !== "." && file !== "..").forEach((file) => this.libFaust.FS.unlink(`/FaustDSP-svg/${file}`));
-    } catch (error) {
-    }
-    const codeSize = this.libFaust.lengthBytesUTF8(code) + 1;
-    const $code = this.libFaust._malloc(codeSize);
-    const name = "FaustDSP";
-    const nameSize = this.libFaust.lengthBytesUTF8(name) + 1;
-    const $name = this.libFaust._malloc(nameSize);
-    const $errorMsg = this.libFaust._malloc(4096);
-    this.libFaust.stringToUTF8(name, $name, nameSize);
-    this.libFaust.stringToUTF8(code, $code, codeSize);
-    const argv = [...args, "-lang", "wast", "-o", "/dev/null", "-svg"];
-    const ptrSize = 4;
-    const $argv = this.libFaust._malloc(argv.length * ptrSize);
-    let argvBuffer$ = new Int32Array(this.libFaust.HEAP32.buffer, $argv, argv.length);
-    for (let i = 0; i < argv.length; i++) {
-      const size$arg = this.libFaust.lengthBytesUTF8(argv[i]) + 1;
-      const $arg = this.libFaust._malloc(size$arg);
-      this.libFaust.stringToUTF8(argv[i], $arg, size$arg);
-      argvBuffer$[i] = $arg;
-    }
-    try {
-      this.generateCAuxFilesFromString($name, $code, argv.length, $argv, $errorMsg);
-      this.libFaust._free($code);
-      this.libFaust._free($name);
-      this.libFaust._free($errorMsg);
-      argvBuffer$ = new Int32Array(this.libFaust.HEAP32.buffer, $argv, argv.length);
-      for (let i = 0; i < argv.length; i++) {
-        this.libFaust._free(argvBuffer$[i]);
-      }
-      this.libFaust._free($argv);
-    } catch (e) {
-      const errorMsg = this.libFaust.UTF8ToString(this.getErrorAfterException());
-      this.cleanupAfterException();
-      throw errorMsg ? new Error(errorMsg) : e;
-    }
-    const svg = {};
-    const files = this.libFaust.FS.readdir("/FaustDSP-svg/");
-    files.filter((file) => file !== "." && file !== "..").forEach((file) => svg[file] = this.libFaust.FS.readFile(`/FaustDSP-svg/${file}`, { encoding: "utf8" }));
-    return svg;
-  }
-};
-var Faust_default = Faust;
-
-// src/utils.ts
-var midiToFreq = (note) => 440 * 2 ** ((note - 69) / 12);
-var remap = (v, mn0, mx0, mn1, mx1) => (v - mn0) / (mx0 - mn0) * (mx1 - mn1) + mn1;
-var findPath = (o, p) => {
-  if (typeof o !== "object")
-    return false;
-  if (o.address) {
-    return o.address === p;
-  }
-  for (const k in o) {
-    if (findPath(o[k], p))
-      return true;
-  }
-  return false;
-};
-var createWasmImport = (voices, memory) => ({
-  env: {
-    memory: voices ? memory : void 0,
-    memoryBase: 0,
-    tableBase: 0,
-    _abs: Math.abs,
-    _acosf: Math.acos,
-    _asinf: Math.asin,
-    _atanf: Math.atan,
-    _atan2f: Math.atan2,
-    _ceilf: Math.ceil,
-    _cosf: Math.cos,
-    _expf: Math.exp,
-    _floorf: Math.floor,
-    _fmodf: (x, y) => x % y,
-    _logf: Math.log,
-    _log10f: Math.log10,
-    _max_f: Math.max,
-    _min_f: Math.min,
-    _remainderf: (x, y) => x - Math.round(x / y) * y,
-    _powf: Math.pow,
-    _roundf: Math.fround,
-    _sinf: Math.sin,
-    _sqrtf: Math.sqrt,
-    _tanf: Math.tan,
-    _acoshf: Math.acosh,
-    _asinhf: Math.asinh,
-    _atanhf: Math.atanh,
-    _coshf: Math.cosh,
-    _sinhf: Math.sinh,
-    _tanhf: Math.tanh,
-    _isnanf: Number.isNaN,
-    _isinff: (x) => !isFinite(x),
-    _copysignf: (x, y) => Math.sign(x) === Math.sign(y) ? x : -x,
-    _acos: Math.acos,
-    _asin: Math.asin,
-    _atan: Math.atan,
-    _atan2: Math.atan2,
-    _ceil: Math.ceil,
-    _cos: Math.cos,
-    _exp: Math.exp,
-    _floor: Math.floor,
-    _fmod: (x, y) => x % y,
-    _log: Math.log,
-    _log10: Math.log10,
-    _max_: Math.max,
-    _min_: Math.min,
-    _remainder: (x, y) => x - Math.round(x / y) * y,
-    _pow: Math.pow,
-    _round: Math.fround,
-    _sin: Math.sin,
-    _sqrt: Math.sqrt,
-    _tan: Math.tan,
-    _acosh: Math.acosh,
-    _asinh: Math.asinh,
-    _atanh: Math.atanh,
-    _cosh: Math.cosh,
-    _sinh: Math.sinh,
-    _tanh: Math.tanh,
-    _isnan: Number.isNaN,
-    _isinf: (x) => !isFinite(x),
-    _copysign: (x, y) => Math.sign(x) === Math.sign(y) ? x : -x,
-    table: new WebAssembly.Table({ initial: 0, element: "anyfunc" })
-  }
-});
-var createWasmMemory = (voicesIn, dspMeta, effectMeta, bufferSize) => {
-  const voices = Math.max(4, voicesIn);
-  const ptrSize = 4;
-  const sampleSize = 4;
-  const pow2limit = (x) => {
-    let n = 65536;
-    while (n < x) {
-      n *= 2;
-    }
-    return n;
-  };
-  const effectSize = effectMeta ? effectMeta.size : 0;
-  let memorySize = pow2limit(effectSize + dspMeta.size * voices + (dspMeta.inputs + dspMeta.outputs * 2) * (ptrSize + bufferSize * sampleSize)) / 65536;
-  memorySize = Math.max(2, memorySize);
-  return new WebAssembly.Memory({ initial: memorySize, maximum: memorySize });
-};
-
-// src/FaustProcessor.ts
-var FaustProcessor = class {
-  constructor(options) {
-    const { dsp, mixerModule, bufferSize, sampleRate, voices } = options;
-    if (!dsp)
-      throw new Error("No Dsp input");
-    if (this.factory)
-      throw new Error("Processor already initiated.");
-    this.dsp = dsp;
-    const { mainMeta, mainModule, effectMeta, effectModule } = dsp;
-    this.dspMeta = mainMeta;
-    this.dspModule = mainModule;
-    this.effectMeta = effectMeta;
-    this.effectModule = effectModule;
-    this.mixerModule = mixerModule;
-    this.bufferSize = bufferSize || 1024;
-    this.sampleRate = sampleRate || 48e3;
-    this.voices = voices || 0;
-  }
-  async initialize() {
-    this.$ins = null;
-    this.$outs = null;
-    this.dspInChannnels = [];
-    this.dspOutChannnels = [];
-    this.fPitchwheelLabel = [];
-    this.fCtrlLabel = new Array(128).fill(null).map(() => []);
-    this.numIn = this.dspMeta.inputs;
-    this.numOut = this.dspMeta.outputs;
-    this.ptrSize = 4;
-    this.sampleSize = 4;
-    await this.instantiateWasm(this.dsp, this.mixerModule);
-    this.factory = this.dspInstance.exports;
-    this.HEAP = this.voices ? this.memory.buffer : this.factory.memory.buffer;
-    this.HEAP32 = new Int32Array(this.HEAP);
-    this.HEAPF32 = new Float32Array(this.HEAP);
-    this.output = new Array(this.numOut).fill(null).map(() => new Float32Array(this.bufferSize));
-    this.inputsItems = [];
-    this.$audioHeap = this.dspMeta.size;
-    this.$$audioHeapInputs = this.$audioHeap;
-    this.$$audioHeapOutputs = this.$$audioHeapInputs + this.numIn * this.ptrSize;
-    this.$audioHeapInputs = this.$$audioHeapOutputs + this.numOut * this.ptrSize;
-    this.$audioHeapOutputs = this.$audioHeapInputs + this.numIn * this.bufferSize * this.sampleSize;
-    if (this.voices) {
-      this.$$audioHeapMixing = this.$$audioHeapOutputs + this.numOut * this.ptrSize;
-      this.$audioHeapInputs = this.$$audioHeapMixing + this.numOut * this.ptrSize;
-      this.$audioHeapOutputs = this.$audioHeapInputs + this.numIn * this.bufferSize * this.sampleSize;
-      this.$audioHeapMixing = this.$audioHeapOutputs + this.numOut * this.bufferSize * this.sampleSize;
-      this.$dsp = this.$audioHeapMixing + this.numOut * this.bufferSize * this.sampleSize;
-    } else {
-      this.$audioHeapInputs = this.$$audioHeapOutputs + this.numOut * this.ptrSize;
-      this.$audioHeapOutputs = this.$audioHeapInputs + this.numIn * this.bufferSize * this.sampleSize;
-      this.$dsp = 0;
-    }
-    if (this.voices) {
-      this.effectMeta = this.effectMeta;
-      this.$mixing = null;
-      this.fFreqLabel$ = [];
-      this.fGateLabel$ = [];
-      this.fGainLabel$ = [];
-      this.fDate = 0;
-      this.mixer = this.mixerInstance.exports;
-      this.effect = this.effectInstance ? this.effectInstance.exports : null;
-      this.dspVoices$ = [];
-      this.dspVoicesState = [];
-      this.dspVoicesLevel = [];
-      this.dspVoicesDate = [];
-      this.kActiveVoice = 0;
-      this.kFreeVoice = -1;
-      this.kReleaseVoice = -2;
-      this.kNoVoice = -3;
-      for (let i = 0; i < this.voices; i++) {
-        this.dspVoices$[i] = this.$dsp + i * this.dspMeta.size;
-        this.dspVoicesState[i] = this.kFreeVoice;
-        this.dspVoicesLevel[i] = 0;
-        this.dspVoicesDate[i] = 0;
-      }
-      this.$effect = this.dspVoices$[this.voices - 1] + this.dspMeta.size;
-    }
-    this.pathTable$ = {};
-    this.$sample = 0;
-    this.setup();
-  }
-  setup() {
-    if (this.numIn > 0) {
-      this.$ins = this.$$audioHeapInputs;
-      for (let i = 0; i < this.numIn; i++) {
-        this.HEAP32[(this.$ins >> 2) + i] = this.$audioHeapInputs + this.bufferSize * this.sampleSize * i;
-      }
-      const dspInChans = this.HEAP32.subarray(this.$ins >> 2, this.$ins + this.numIn * this.ptrSize >> 2);
-      for (let i = 0; i < this.numIn; i++) {
-        this.dspInChannnels[i] = this.HEAPF32.subarray(dspInChans[i] >> 2, dspInChans[i] + this.bufferSize * this.sampleSize >> 2);
-      }
-    }
-    if (this.numOut > 0) {
-      this.$outs = this.$$audioHeapOutputs;
-      if (this.voices)
-        this.$mixing = this.$$audioHeapMixing;
-      for (let i = 0; i < this.numOut; i++) {
-        this.HEAP32[(this.$outs >> 2) + i] = this.$audioHeapOutputs + this.bufferSize * this.sampleSize * i;
-        if (this.voices)
-          this.HEAP32[(this.$mixing >> 2) + i] = this.$audioHeapMixing + this.bufferSize * this.sampleSize * i;
-      }
-      const dspOutChans = this.HEAP32.subarray(this.$outs >> 2, this.$outs + this.numOut * this.ptrSize >> 2);
-      for (let i = 0; i < this.numOut; i++) {
-        this.dspOutChannnels[i] = this.HEAPF32.subarray(dspOutChans[i] >> 2, dspOutChans[i] + this.bufferSize * this.sampleSize >> 2);
-      }
-    }
-    this.parseUI(this.dspMeta.ui);
-    if (this.effect)
-      this.parseUI(this.effectMeta.ui);
-    if (this.voices) {
-      this.inputsItems.forEach((item) => {
-        if (item.endsWith("/gate"))
-          this.fGateLabel$.push(this.pathTable$[item]);
-        else if (item.endsWith("/freq"))
-          this.fFreqLabel$.push(this.pathTable$[item]);
-        else if (item.endsWith("/gain"))
-          this.fGainLabel$.push(this.pathTable$[item]);
-      });
-      this.dspVoices$.forEach(($voice) => this.factory.init($voice, this.sampleRate));
-      if (this.effect)
-        this.effect.init(this.$effect, this.sampleRate);
-    } else {
-      this.factory.init(this.$dsp, this.sampleRate);
-    }
-  }
-  async instantiateWasm(dsp, mixerModule) {
-    const memory = createWasmMemory(this.voices, this.dspMeta, this.effectMeta, this.bufferSize);
-    this.memory = memory;
-    const imports = createWasmImport(this.voices, memory);
-    this.dspInstance = await WebAssembly.instantiate(dsp.mainModule, imports);
-    if (dsp.effectModule) {
-      this.effectInstance = await WebAssembly.instantiate(dsp.effectModule, imports);
-    }
-    if (this.voices) {
-      const mixerImports = { imports: { print: console.log }, memory: { memory } };
-      this.mixerInstance = await new WebAssembly.Instance(mixerModule, mixerImports);
-    }
-  }
-  parseUI(ui) {
-    ui.forEach((group) => this.parseGroup(group));
-  }
-  parseGroup(group) {
-    if (group.items)
-      this.parseItems(group.items);
-  }
-  parseItems(items) {
-    items.forEach((item) => this.parseItem(item));
-  }
-  parseItem(item) {
-    if (item.type === "vgroup" || item.type === "hgroup" || item.type === "tgroup") {
-      this.parseItems(item.items);
-    } else if (item.type === "hbargraph" || item.type === "vbargraph") {
-      this.outputsItems.push(item.address);
-    } else if (item.type === "vslider" || item.type === "hslider" || item.type === "button" || item.type === "checkbox" || item.type === "nentry") {
-      this.inputsItems.push(item.address);
-      if (!item.meta)
-        return;
-      item.meta.forEach((meta) => {
-        const { midi } = meta;
-        if (!midi)
-          return;
-        const strMidi = midi.trim();
-        if (strMidi === "pitchwheel") {
-          this.fPitchwheelLabel.push({ path: item.address, min: item.min, max: item.max });
-        } else {
-          const matched = strMidi.match(/^ctrl\s(\d+)/);
-          if (!matched)
-            return;
-          this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min, max: item.max });
-        }
-      });
-    }
-  }
-  setParamValue(path, val) {
-    if (this.voices) {
-      if (this.effect && findPath(this.effectMeta.ui, path))
-        this.effect.setParamValue(this.$effect, this.pathTable$[path], val);
-      else
-        this.dspVoices$.forEach(($voice) => this.factory.setParamValue($voice, this.pathTable$[path], val));
-    } else {
-      this.factory.setParamValue(this.$dsp, this.pathTable$[path], val);
-    }
-  }
-  getParamValue(path) {
-    if (this.voices) {
-      if (this.effect && findPath(this.effectMeta.ui, path))
-        return this.effect.getParamValue(this.$effect, this.pathTable$[path]);
-      return this.factory.getParamValue(this.dspVoices$[0], this.pathTable$[path]);
-    }
-    return this.factory.getParamValue(this.$dsp, this.pathTable$[path]);
-  }
-  getPlayingVoice(pitch) {
-    if (!this.voices)
-      return null;
-    let voice = this.kNoVoice;
-    let oldestDatePlaying = Number.MAX_VALUE;
-    for (let i = 0; i < this.voices; i++) {
-      if (this.dspVoicesState[i] === pitch) {
-        if (this.dspVoicesDate[i] < oldestDatePlaying) {
-          oldestDatePlaying = this.dspVoicesDate[i];
-          voice = i;
-        }
-      }
-    }
-    return voice;
-  }
-  allocVoice(voice) {
-    if (!this.voices)
-      return null;
-    this.factory.instanceClear(this.dspVoices$[voice]);
-    this.dspVoicesDate[voice] = this.fDate++;
-    this.dspVoicesState[voice] = this.kActiveVoice;
-    return voice;
-  }
-  getFreeVoice() {
-    if (!this.voices)
-      return null;
-    for (let i = 0; i < this.voices; i++) {
-      if (this.dspVoicesState[i] === this.kFreeVoice)
-        return this.allocVoice(i);
-    }
-    let voiceRelease = this.kNoVoice;
-    let voicePlaying = this.kNoVoice;
-    let oldestDateRelease = Number.MAX_VALUE;
-    let oldestDatePlaying = Number.MAX_VALUE;
-    for (let i = 0; i < this.voices; i++) {
-      if (this.dspVoicesState[i] === this.kReleaseVoice) {
-        if (this.dspVoicesDate[i] < oldestDateRelease) {
-          oldestDateRelease = this.dspVoicesDate[i];
-          voiceRelease = i;
-        }
-      } else if (this.dspVoicesDate[i] < oldestDatePlaying) {
-        oldestDatePlaying = this.dspVoicesDate[i];
-        voicePlaying = i;
-      }
-    }
-    if (oldestDateRelease !== Number.MAX_VALUE) {
-      return this.allocVoice(voiceRelease);
-    }
-    if (oldestDatePlaying !== Number.MAX_VALUE) {
-      return this.allocVoice(voicePlaying);
-    }
-    return this.kNoVoice;
-  }
-  keyOn(channel, pitch, velocity) {
-    if (!this.voices)
-      return;
-    const voice = this.getFreeVoice();
-    this.fFreqLabel$.forEach(($) => this.factory.setParamValue(this.dspVoices$[voice], $, midiToFreq(pitch)));
-    this.fGateLabel$.forEach(($) => this.factory.setParamValue(this.dspVoices$[voice], $, 1));
-    this.fGainLabel$.forEach(($) => this.factory.setParamValue(this.dspVoices$[voice], $, velocity / 127));
-    this.dspVoicesState[voice] = pitch;
-  }
-  keyOff(channel, pitch, velocity) {
-    if (!this.voices)
-      return;
-    const voice = this.getPlayingVoice(pitch);
-    if (voice === this.kNoVoice)
-      return;
-    this.fGateLabel$.forEach(($) => this.factory.setParamValue(this.dspVoices$[voice], $, 0));
-    this.dspVoicesState[voice] = this.kReleaseVoice;
-  }
-  allNotesOff() {
-    if (!this.voices)
-      return;
-    for (let i = 0; i < this.voices; i++) {
-      this.fGateLabel$.forEach(($gate) => this.factory.setParamValue(this.dspVoices$[i], $gate, 0));
-      this.dspVoicesState[i] = this.kReleaseVoice;
-    }
-  }
-  midiMessage(data) {
-    const cmd = data[0] >> 4;
-    const channel = data[0] & 15;
-    const data1 = data[1];
-    const data2 = data[2];
-    if (channel === 9)
-      return;
-    if (cmd === 8 || cmd === 9 && data2 === 0)
-      this.keyOff(channel, data1, data2);
-    else if (cmd === 9)
-      this.keyOn(channel, data1, data2);
-    else if (cmd === 11)
-      this.ctrlChange(channel, data1, data2);
-    else if (cmd === 14)
-      this.pitchWheel(channel, data2 * 128 + data1);
-  }
-  ctrlChange(channel, ctrl, value) {
-    if (ctrl === 123 || ctrl === 120) {
-      this.allNotesOff();
-    }
-    if (!this.fCtrlLabel[ctrl].length)
-      return;
-    this.fCtrlLabel[ctrl].forEach((ctrl2) => {
-      const { path } = ctrl2;
-      this.setParamValue(path, remap(value, 0, 127, ctrl2.min, ctrl2.max));
-    });
-  }
-  pitchWheel(channel, wheel) {
-    this.fPitchwheelLabel.forEach((pw) => {
-      this.setParamValue(pw.path, remap(wheel, 0, 16383, pw.min, pw.max));
-    });
-  }
-  compute(inputs = []) {
-    if (!this.factory)
-      return this.output;
-    for (let i = 0; i < this.numIn; i++) {
-      this.dspInChannnels[i].fill(0);
-      if (inputs[i])
-        this.dspInChannnels[i].set(inputs[i]);
-    }
-    if (this.voices) {
-      this.mixer.clearOutput(this.bufferSize, this.numOut, this.$outs);
-      for (let i = 0; i < this.voices; i++) {
-        this.factory.compute(this.dspVoices$[i], this.bufferSize, this.$ins, this.$mixing);
-        this.mixer.mixVoice(this.bufferSize, this.numOut, this.$mixing, this.$outs);
-      }
-      if (this.effect)
-        this.effect.compute(this.$effect, this.bufferSize, this.$outs, this.$outs);
-    } else {
-      this.factory.compute(this.$dsp, this.bufferSize, this.$ins, this.$outs);
-    }
-    if (this.output !== void 0) {
-      for (let i = 0; i < this.numOut; i++) {
-        this.output[i].set(this.dspOutChannnels[i]);
-      }
-    }
-    this.$sample += this.bufferSize;
-    return this.output;
-  }
-  generate(inputs = [], length = this.bufferSize, onUpdate) {
-    let l = 0;
-    const outputs = new Array(this.numOut).fill(null).map(() => new Float32Array(length));
-    while (l < length) {
-      const sliceLength = Math.min(length - l, this.bufferSize);
-      const inputsCompute = [];
-      for (let i = 0; i < this.numIn; i++) {
-        let input;
-        if (inputs[i]) {
-          if (inputs[i].length <= l) {
-            input = new Float32Array(sliceLength);
-          } else if (inputs[i].length > l + sliceLength) {
-            input = inputs[i].subarray(l, l + sliceLength);
-          } else {
-            input = inputs[i].subarray(l, inputs[i].length);
-          }
-        }
-        inputsCompute[i] = input;
-      }
-      const outputsComputed = this.compute(inputsCompute);
-      for (let i = 0; i < this.numOut; i++) {
-        const output = outputsComputed[i];
-        if (sliceLength < this.bufferSize) {
-          outputs[i].set(output.subarray(0, sliceLength), l);
-        } else {
-          outputs[i].set(output, l);
-        }
-      }
-      l += this.bufferSize;
-      onUpdate?.(l);
-    }
-    return outputs;
-  }
-};
-var FaustProcessor_default = FaustProcessor;
 
 // src/fetchModule.ts
 var global2 = globalThis;
@@ -1264,20 +590,610 @@ var fetchModule_default = fetchModule;
 
 // src/instantiateLibFaust.ts
 var instantiateLibFaust = async (jsFile, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
-  let LibFaust;
+  let LibFaust2;
   try {
-    LibFaust = require(jsFile);
+    LibFaust2 = require(jsFile);
   } catch (error) {
-    LibFaust = await fetchModule_default(jsFile);
+    LibFaust2 = await fetchModule_default(jsFile);
   }
   const locateFile = (url, scriptDirectory) => ({
     "libfaust-wasm.wasm": wasmFile,
     "libfaust-wasm.data": dataFile
   })[url] || scriptDirectory + url;
-  const libFaust = await LibFaust({ locateFile });
+  const libFaust = await LibFaust2({ locateFile });
   return libFaust;
 };
 var instantiateLibFaust_default = instantiateLibFaust;
+
+// src/FaustAudioWorkletProcessor.ts
+var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
+  const { registerProcessor, AudioWorkletProcessor, sampleRate } = globalThis;
+  const {
+    FaustBaseWebAudioDsp: FaustWebAudioBaseDSP,
+    FaustGenerator: FaustGenerator2
+  } = dependencies;
+  const {
+    dspName,
+    dspMeta,
+    effectMeta
+  } = faustData;
+  class FaustAudioWorkletProcessor extends AudioWorkletProcessor {
+    constructor(options) {
+      super(options);
+      this.port.onmessage = (e) => {
+        this.handleMessageAux(e);
+      };
+    }
+    static get parameterDescriptors() {
+      const params = [];
+      const callback = (item) => {
+        if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
+          params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
+        } else if (item.type === "button" || item.type === "checkbox") {
+          params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
+        }
+      };
+      FaustWebAudioBaseDSP.parseUI(dspMeta.ui, callback);
+      if (effectMeta)
+        FaustWebAudioBaseDSP.parseUI(effectMeta.ui, callback);
+      return params;
+    }
+    process(inputs, outputs, parameters) {
+      return this.fDSPCode.compute(inputs[0], outputs[0]);
+    }
+    handleMessageAux(e) {
+      const msg = e.data;
+      switch (msg.type) {
+        case "midi":
+          this.midiMessage(msg.data);
+          break;
+        case "ctrlChange":
+          this.ctrlChange(msg.data[0], msg.data[1], msg.data[2]);
+          break;
+        case "pitchWheel":
+          this.pitchWheel(msg.data[0], msg.data[1]);
+          break;
+        case "param":
+          this.setParamValue(msg.data.path, msg.data.value);
+          break;
+        case "setPlotHandler": {
+          if (msg.data) {
+            this.fDSPCode.setPlotHandler((output, index, events) => this.port.postMessage({ type: "plot", value: output, index, events }));
+          } else {
+            this.fDSPCode.setPlotHandler(null);
+          }
+          break;
+        }
+        case "start": {
+          this.fDSPCode.start();
+          break;
+        }
+        case "stop": {
+          this.fDSPCode.stop();
+          break;
+        }
+        case "destroy": {
+          this.port.close();
+          this.fDSPCode.destroy();
+          break;
+        }
+        default:
+          break;
+      }
+    }
+    setParamValue(path, value) {
+      this.fDSPCode.setParamValue(path, value);
+    }
+    midiMessage(data) {
+      this.fDSPCode.midiMessage(data);
+    }
+    ctrlChange(channel, ctrl, value) {
+      this.fDSPCode.ctrlChange(channel, ctrl, value);
+    }
+    pitchWheel(channel, wheel) {
+      this.fDSPCode.pitchWheel(channel, wheel);
+    }
+  }
+  class FaustMonoAudioWorkletProcessor extends FaustAudioWorkletProcessor {
+    constructor(options) {
+      super(options);
+      const { FaustMonoWebAudioDsp: FaustWebAudioMonoDSP } = dependencies;
+      const { factory, sampleSize } = options.processorOptions;
+      const instance = FaustGenerator2.createSyncMonoDSPInstance(factory);
+      this.fDSPCode = new FaustWebAudioMonoDSP(instance, sampleRate, sampleSize, 128);
+      this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+    }
+  }
+  class FaustPolyAudioWorkletProcessor extends FaustAudioWorkletProcessor {
+    constructor(options) {
+      super(options);
+      this.handleMessageAux = (e) => {
+        const msg = e.data;
+        switch (msg.type) {
+          case "keyOn":
+            this.keyOn(msg.data[0], msg.data[1], msg.data[2]);
+            break;
+          case "keyOff":
+            this.keyOff(msg.data[0], msg.data[1], msg.data[2]);
+            break;
+          default:
+            super.handleMessageAux(e);
+            break;
+        }
+      };
+      const { FaustPolyWebAudioDsp: FaustWebAudioPolyDSP } = dependencies;
+      const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
+      const instance = FaustGenerator2.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
+      this.fDSPCode = new FaustWebAudioPolyDSP(instance, sampleRate, sampleSize, 128);
+      this.port.onmessage = (e) => {
+        this.handleMessageAux(e);
+      };
+      this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+    }
+    midiMessage(data) {
+      const cmd = data[0] >> 4;
+      const channel = data[0] & 15;
+      const data1 = data[1];
+      const data2 = data[2];
+      if (cmd === 8 || cmd === 9 && data2 === 0)
+        this.keyOff(channel, data1, data2);
+      else if (cmd === 9)
+        this.keyOn(channel, data1, data2);
+      else
+        super.midiMessage(data);
+    }
+    keyOn(channel, pitch, velocity) {
+      this.fDSPCode.keyOn(channel, pitch, velocity);
+    }
+    keyOff(channel, pitch, velocity) {
+      this.fDSPCode.keyOff(channel, pitch, velocity);
+    }
+    allNotesOff(hard) {
+      this.fDSPCode.allNotesOff(hard);
+    }
+  }
+  try {
+    if (dspName.endsWith("_poly")) {
+      registerProcessor(dspName || "mydsp_poly", FaustPolyAudioWorkletProcessor);
+    } else {
+      registerProcessor(dspName || "mydsp", FaustMonoAudioWorkletProcessor);
+    }
+  } catch (error) {
+    console.warn(error);
+  }
+};
+var FaustAudioWorkletProcessor_default = getFaustAudioWorkletProcessor;
+
+// src/FaustCompiler.ts
+var import_js_sha256 = __toModule(require_sha256());
+var _FaustCompiler = class {
+  constructor(libFaust) {
+    this.fLibFaust = libFaust;
+    this.fErrorMessage = "";
+  }
+  intVec2intArray(vec) {
+    const size = vec.size();
+    const ui8Code = new Uint8Array(size);
+    for (let i = 0; i < size; i++) {
+      ui8Code[i] = vec.get(i);
+    }
+    return ui8Code;
+  }
+  async createDSPFactory(name, code, args, poly) {
+    if (_FaustCompiler.gFactories.size > 10) {
+      _FaustCompiler.gFactories.clear();
+    }
+    let shaKey = (0, import_js_sha256.sha256)(name + code + args + (poly ? "poly" : "mono"));
+    if (_FaustCompiler.gFactories.has(shaKey)) {
+      return _FaustCompiler.gFactories.get(shaKey) || null;
+    } else {
+      try {
+        const faustWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
+        try {
+          const code2 = this.intVec2intArray(faustWasm.data);
+          const module2 = await WebAssembly.compile(code2);
+          const factory = { cfactory: faustWasm.cfactory, code: code2, module: module2, json: faustWasm.json, poly };
+          this.deleteDSPFactory(factory);
+          _FaustCompiler.gFactories.set(shaKey, factory);
+          return factory;
+        } catch (e) {
+          console.error(e);
+          return null;
+        }
+      } catch {
+        this.fErrorMessage = this.fLibFaust.getErrorAfterException();
+        console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`);
+        this.fLibFaust.cleanupAfterException();
+        return null;
+      }
+    }
+  }
+  version() {
+    return this.fLibFaust.version();
+  }
+  getErrorMessage() {
+    return this.fErrorMessage;
+  }
+  async createMonoDSPFactory(name, code, args) {
+    return this.createDSPFactory(name, code, args, false);
+  }
+  async createPolyDSPFactory(name, code, args) {
+    return this.createDSPFactory(name, code, args, true);
+  }
+  deleteDSPFactory(factory) {
+    this.fLibFaust.deleteDSPFactory(factory.cfactory);
+    factory.cfactory = 0;
+  }
+  expandDSP(code, args) {
+    try {
+      return this.fLibFaust.expandDSP("FaustDSP", code, args);
+    } catch {
+      this.fErrorMessage = this.fLibFaust.getErrorAfterException();
+      console.error(`=> exception raised while running expandDSP: ${this.fErrorMessage}`);
+      this.fLibFaust.cleanupAfterException();
+      return null;
+    }
+  }
+  generateAuxFiles(name, code, args) {
+    try {
+      return this.fLibFaust.generateAuxFiles(name, code, args);
+    } catch {
+      this.fErrorMessage = this.fLibFaust.getErrorAfterException();
+      console.error(`=> exception raised while running generateAuxFiles: ${this.fErrorMessage}`);
+      this.fLibFaust.cleanupAfterException();
+      return false;
+    }
+  }
+  deleteAllDSPFactories() {
+    this.fLibFaust.deleteAllDSPFactories();
+  }
+};
+var FaustCompiler = _FaustCompiler;
+FaustCompiler.gFactories = new Map();
+var FaustCompiler_default = FaustCompiler;
+
+// src/FaustDspInstance.ts
+var FaustDspInstance = class {
+  constructor(exports2) {
+    this.fExports = exports2;
+  }
+  compute($dsp, count, $input, $output) {
+    this.fExports.compute($dsp, count, $input, $output);
+  }
+  getNumInputs($dsp) {
+    return this.fExports.getNumInputs($dsp);
+  }
+  getNumOutputs($dsp) {
+    return this.fExports.getNumOutputs($dsp);
+  }
+  getParamValue($dsp, index) {
+    return this.fExports.getParamValue($dsp, index);
+  }
+  getSampleRate($dsp) {
+    return this.fExports.getSampleRate($dsp);
+  }
+  init($dsp, sampleRate) {
+    this.fExports.init($dsp, sampleRate);
+  }
+  instanceClear($dsp) {
+    this.fExports.instanceClear($dsp);
+  }
+  instanceConstants($dsp, sampleRate) {
+    this.fExports.instanceConstants($dsp, sampleRate);
+  }
+  instanceInit($dsp, sampleRate) {
+    this.fExports.instanceInit($dsp, sampleRate);
+  }
+  instanceResetUserInterface($dsp) {
+    this.fExports.instanceResetUserInterface($dsp);
+  }
+  setParamValue($dsp, index, value) {
+    this.fExports.setParamValue($dsp, index, value);
+  }
+};
+var FaustDspInstance_default = FaustDspInstance;
+
+// src/FaustGenerator.ts
+var FaustGenerator = class {
+  static createWasmImport(memory) {
+    return {
+      env: {
+        memory: memory || new WebAssembly.Memory({ initial: 100 }),
+        memoryBase: 0,
+        tableBase: 0,
+        _abs: Math.abs,
+        _acosf: Math.acos,
+        _asinf: Math.asin,
+        _atanf: Math.atan,
+        _atan2f: Math.atan2,
+        _ceilf: Math.ceil,
+        _cosf: Math.cos,
+        _expf: Math.exp,
+        _floorf: Math.floor,
+        _fmodf: (x, y) => x % y,
+        _logf: Math.log,
+        _log10f: Math.log10,
+        _max_f: Math.max,
+        _min_f: Math.min,
+        _remainderf: (x, y) => x - Math.round(x / y) * y,
+        _powf: Math.pow,
+        _roundf: Math.fround,
+        _sinf: Math.sin,
+        _sqrtf: Math.sqrt,
+        _tanf: Math.tan,
+        _acoshf: Math.acosh,
+        _asinhf: Math.asinh,
+        _atanhf: Math.atanh,
+        _coshf: Math.cosh,
+        _sinhf: Math.sinh,
+        _tanhf: Math.tanh,
+        _isnanf: Number.isNaN,
+        _isinff: (x) => !isFinite(x),
+        _copysignf: (x, y) => Math.sign(x) === Math.sign(y) ? x : -x,
+        _acos: Math.acos,
+        _asin: Math.asin,
+        _atan: Math.atan,
+        _atan2: Math.atan2,
+        _ceil: Math.ceil,
+        _cos: Math.cos,
+        _exp: Math.exp,
+        _floor: Math.floor,
+        _fmod: (x, y) => x % y,
+        _log: Math.log,
+        _log10: Math.log10,
+        _max_: Math.max,
+        _min_: Math.min,
+        _remainder: (x, y) => x - Math.round(x / y) * y,
+        _pow: Math.pow,
+        _round: Math.fround,
+        _sin: Math.sin,
+        _sqrt: Math.sqrt,
+        _tan: Math.tan,
+        _acosh: Math.acosh,
+        _asinh: Math.asinh,
+        _atanh: Math.atanh,
+        _cosh: Math.cosh,
+        _sinh: Math.sinh,
+        _tanh: Math.tanh,
+        _isnan: Number.isNaN,
+        _isinf: (x) => !isFinite(x),
+        _copysign: (x, y) => Math.sign(x) === Math.sign(y) ? x : -x,
+        table: new WebAssembly.Table({ initial: 0, element: "anyfunc" })
+      }
+    };
+  }
+  static createWasmMemory(voicesIn, sampleSize, dspMeta, effectMeta, bufferSize) {
+    const voices = Math.max(4, voicesIn);
+    const ptrSize = sampleSize;
+    const pow2limit = (x) => {
+      let n = 65536;
+      while (n < x) {
+        n *= 2;
+      }
+      return n;
+    };
+    const effectSize = effectMeta ? effectMeta.size : 0;
+    let memorySize = pow2limit(effectSize + dspMeta.size * voices + (dspMeta.inputs + dspMeta.outputs * 2) * (ptrSize + bufferSize * sampleSize)) / 65536;
+    memorySize = Math.max(2, memorySize);
+    return new WebAssembly.Memory({ initial: memorySize, maximum: memorySize });
+  }
+  static createMonoDSPInstanceAux(instance, factory) {
+    const functions = instance.exports;
+    const api = new FaustDspInstance_default(functions);
+    const memory = instance.exports.memory;
+    return { memory, api, json: factory.json };
+  }
+  static createMemoryAux(voices, voiceFactory, effectFactory) {
+    const voiceMeta = JSON.parse(voiceFactory.json);
+    const effectMeta = effectFactory && effectFactory.json ? JSON.parse(effectFactory.json) : null;
+    const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
+    return this.createWasmMemory(voices, sampleSize, voiceMeta, effectMeta, 8192);
+  }
+  static createMixerAux(mixerModule, memory) {
+    const mixerImport = {
+      imports: { print: console.log },
+      memory: { memory }
+    };
+    const mixerInstance = new WebAssembly.Instance(mixerModule, mixerImport);
+    const mixerFunctions = mixerInstance.exports;
+    return mixerFunctions;
+  }
+  static async loadDSPFactory(wasmPath, jsonPath) {
+    const wasmFile = await fetch(wasmPath);
+    if (!wasmFile.ok) {
+      console.error(`=> exception raised while running loadDSPFactory, file not found: ${wasmPath}`);
+      return null;
+    }
+    try {
+      const wasmBuffer = await wasmFile.arrayBuffer();
+      const module2 = await WebAssembly.compile(wasmBuffer);
+      const jsonFile = await fetch(jsonPath);
+      const json = await jsonFile.text();
+      const meta = JSON.parse(json);
+      const cOptions = meta.compile_options;
+      const poly = cOptions.indexOf("wasm-e") !== -1;
+      return { cfactory: 0, code: new Uint8Array(wasmBuffer), module: module2, json, poly };
+    } catch (e) {
+      console.error(`=> exception raised while running loadDSPFactory: ${e}`);
+      return null;
+    }
+  }
+  static async loadDSPMixer(mixerPath, fs) {
+    try {
+      let mixerBuffer = null;
+      if (fs) {
+        mixerBuffer = fs.readFile(mixerPath, { encoding: "binary" });
+      } else {
+        const mixerFile = await fetch(mixerPath);
+        mixerBuffer = await mixerFile.arrayBuffer();
+      }
+      return WebAssembly.compile(mixerBuffer);
+    } catch (e) {
+      console.error(`=> exception raised while running loadMixer: ${e}`);
+      return null;
+    }
+  }
+  static async createAsyncMonoDSPInstance(factory) {
+    const instance = await WebAssembly.instantiate(factory.module, this.createWasmImport());
+    return this.createMonoDSPInstanceAux(instance, factory);
+  }
+  static createSyncMonoDSPInstance(factory) {
+    const instance = new WebAssembly.Instance(factory.module, this.createWasmImport());
+    return this.createMonoDSPInstanceAux(instance, factory);
+  }
+  static async createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory) {
+    const memory = this.createMemoryAux(voices, voiceFactory, effectFactory);
+    const voiceInstance = await WebAssembly.instantiate(voiceFactory.module, this.createWasmImport(memory));
+    const voiceFunctions = voiceInstance.exports;
+    const voiceAPI = new FaustDspInstance_default(voiceFunctions);
+    const mixerAPI = this.createMixerAux(mixerModule, memory);
+    if (effectFactory) {
+      const effectInstance = await WebAssembly.instantiate(effectFactory.module, this.createWasmImport(memory));
+      const effectFunctions = effectInstance.exports;
+      const effectAPI = new FaustDspInstance_default(effectFunctions);
+      return {
+        memory,
+        voices,
+        voiceAPI,
+        effectAPI,
+        mixerAPI,
+        voiceJSON: voiceFactory.json,
+        effectJSON: effectFactory.json
+      };
+    } else {
+      return {
+        memory,
+        voices,
+        voiceAPI,
+        mixerAPI,
+        voiceJSON: voiceFactory.json
+      };
+    }
+  }
+  static createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory) {
+    const memory = this.createMemoryAux(voices, voiceFactory, effectFactory);
+    const voiceInstance = new WebAssembly.Instance(voiceFactory.module, this.createWasmImport(memory));
+    const voiceFunctions = voiceInstance.exports;
+    const voiceAPI = new FaustDspInstance_default(voiceFunctions);
+    const mixerAPI = this.createMixerAux(mixerModule, memory);
+    if (effectFactory) {
+      const effectInstance = new WebAssembly.Instance(effectFactory.module, this.createWasmImport(memory));
+      const effectFunctions = effectInstance.exports;
+      const effectAPI = new FaustDspInstance_default(effectFunctions);
+      return {
+        memory,
+        voices,
+        voiceAPI,
+        effectAPI,
+        mixerAPI,
+        voiceJSON: voiceFactory.json,
+        effectJSON: effectFactory.json
+      };
+    } else {
+      return {
+        memory,
+        voices,
+        voiceAPI,
+        mixerAPI,
+        voiceJSON: voiceFactory.json
+      };
+    }
+  }
+};
+var FaustGenerator_default = FaustGenerator;
+
+// src/FaustOfflineProcessor.ts
+var FaustOfflineProcessor = class {
+  constructor(instance, bufferSize) {
+    this.fDSPCode = instance;
+    this.fBufferSize = bufferSize;
+    this.fInputs = new Array(this.fDSPCode.getNumInputs()).fill(null).map(() => new Float32Array(bufferSize));
+    this.fOutputs = new Array(this.fDSPCode.getNumOutputs()).fill(null).map(() => new Float32Array(bufferSize));
+  }
+  render(inputs = [], length = this.fBufferSize, onUpdate) {
+    let l = 0;
+    const outputs = new Array(this.fDSPCode.getNumOutputs()).fill(null).map(() => new Float32Array(length));
+    this.fDSPCode.start();
+    while (l < length) {
+      const sliceLength = Math.min(length - l, this.fBufferSize);
+      for (let i = 0; i < this.fDSPCode.getNumInputs(); i++) {
+        let input;
+        if (inputs[i]) {
+          if (inputs[i].length <= l) {
+            input = new Float32Array(sliceLength);
+          } else if (inputs[i].length > l + sliceLength) {
+            input = inputs[i].subarray(l, l + sliceLength);
+          } else {
+            input = inputs[i].subarray(l, inputs[i].length);
+          }
+        } else {
+          input = new Float32Array(sliceLength);
+        }
+        this.fInputs[i] = input;
+      }
+      this.fDSPCode.compute(this.fInputs, this.fOutputs);
+      for (let i = 0; i < this.fDSPCode.getNumOutputs(); i++) {
+        const output = this.fOutputs[i];
+        if (sliceLength < this.fBufferSize) {
+          outputs[i].set(output.subarray(0, sliceLength), l);
+        } else {
+          outputs[i].set(output, l);
+        }
+      }
+      l += this.fBufferSize;
+      onUpdate?.(l);
+    }
+    this.fDSPCode.stop();
+    return outputs;
+  }
+};
+var FaustOfflineProcessor_default = FaustOfflineProcessor;
+
+// src/LibFaust.ts
+var LibFaust = class {
+  constructor(module2) {
+    this.fModule = module2;
+    this.fCompiler = new module2.libFaustWasm();
+    this.fFileSystem = this.fModule.FS;
+  }
+  module() {
+    return this.fModule;
+  }
+  fs() {
+    return this.fFileSystem;
+  }
+  version() {
+    return this.fCompiler.version();
+  }
+  createDSPFactory(name, code, args, useInternalMemory) {
+    return this.fCompiler.createDSPFactory(name, code, args, useInternalMemory);
+  }
+  deleteDSPFactory(cFactory) {
+    return this.fCompiler.deleteDSPFactory(cFactory);
+  }
+  expandDSP(name, code, args) {
+    return this.fCompiler.expandDSP(name, code, args);
+  }
+  generateAuxFiles(name, code, args) {
+    return this.fCompiler.generateAuxFiles(name, code, args);
+  }
+  deleteAllDSPFactories() {
+    return this.fCompiler.deleteAllDSPFactories();
+  }
+  getErrorAfterException() {
+    return this.fCompiler.getErrorAfterException();
+  }
+  cleanupAfterException() {
+    return this.fCompiler.cleanupAfterException();
+  }
+  getInfos(what) {
+    return this.fCompiler.getInfos(what);
+  }
+  toString() {
+    return `LibFaust module: ${this.fModule}, compiler: ${this.fCompiler}`;
+  }
+};
+var LibFaust_default = LibFaust;
 
 // src/WavEncoder.ts
 var WavEncoder = class {
@@ -1635,11 +1551,1027 @@ var Reader = class {
 };
 var WavDecoder_default = WavDecoder;
 
+// src/FaustWebAudioDsp.ts
+var FaustBaseWebAudioDsp = class {
+  constructor(sampleSize, bufferSize) {
+    this.fOutputHandler = null;
+    this.fComputeHandler = null;
+    this.fCachedEvents = [];
+    this.fBufferNum = 0;
+    this.fPlotHandler = null;
+    this.fBufferSize = bufferSize;
+    this.fInChannels = [];
+    this.fOutChannels = [];
+    this.gPtrSize = sampleSize;
+    this.gSampleSize = sampleSize;
+    this.fOutputsTimer = 5;
+    this.fInputsItems = [];
+    this.fOutputsItems = [];
+    this.fDescriptor = [];
+    this.fPitchwheelLabel = [];
+    this.fCtrlLabel = new Array(128).fill(null).map(() => []);
+    this.fPathTable = {};
+    this.fProcessing = false;
+    this.fDestroyed = false;
+    this.fUICallback = (item) => {
+      if (item.type === "hbargraph" || item.type === "vbargraph") {
+        this.fOutputsItems.push(item.address);
+        this.fPathTable[item.address] = item.index;
+      } else if (item.type === "vslider" || item.type === "hslider" || item.type === "button" || item.type === "checkbox" || item.type === "nentry") {
+        this.fInputsItems.push(item.address);
+        this.fPathTable[item.address] = item.index;
+        this.fDescriptor.push(item);
+        if (!item.meta)
+          return;
+        item.meta.forEach((meta) => {
+          const { midi } = meta;
+          if (!midi)
+            return;
+          const strMidi = midi.trim();
+          if (strMidi === "pitchwheel") {
+            this.fPitchwheelLabel.push({ path: item.address, min: item.min, max: item.max });
+          } else {
+            const matched = strMidi.match(/^ctrl\s(\d+)/);
+            if (!matched)
+              return;
+            this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min, max: item.max });
+          }
+        });
+      }
+    };
+  }
+  static remap(v, mn0, mx0, mn1, mx1) {
+    return (v - mn0) / (mx0 - mn0) * (mx1 - mn1) + mn1;
+  }
+  static parseUI(ui, callback) {
+    ui.forEach((group) => this.parseGroup(group, callback));
+  }
+  static parseGroup(group, callback) {
+    if (group.items) {
+      this.parseItems(group.items, callback);
+    }
+  }
+  static parseItems(items, callback) {
+    items.forEach((item) => this.parseItem(item, callback));
+  }
+  static parseItem(item, callback) {
+    if (item.type === "vgroup" || item.type === "hgroup" || item.type === "tgroup") {
+      this.parseItems(item.items, callback);
+    } else {
+      callback(item);
+    }
+  }
+  updateOutputs() {
+    if (this.fOutputsItems.length > 0 && this.fOutputHandler && this.fOutputsTimer-- === 0) {
+      this.fOutputsTimer = 5;
+      this.fOutputsItems.forEach((item) => {
+        if (this.fOutputHandler)
+          this.fOutputHandler(item, this.getParamValue(item));
+      });
+    }
+  }
+  metadata(handler) {
+    if (this.fJSONDsp.meta) {
+      this.fJSONDsp.meta.forEach((meta) => handler(Object.keys(meta)[0], meta[Object.keys(meta)[0]]));
+    }
+  }
+  compute(input, output) {
+    return false;
+  }
+  setOutputParamHandler(handler) {
+    this.fOutputHandler = handler;
+  }
+  getOutputParamHandler() {
+    return this.fOutputHandler;
+  }
+  setComputeHandler(handler) {
+    this.fComputeHandler = handler;
+  }
+  getComputeHandler() {
+    return this.fComputeHandler;
+  }
+  setPlotHandler(handler) {
+    this.fPlotHandler = handler;
+  }
+  getPlotHandler() {
+    return this.fPlotHandler;
+  }
+  getNumInputs() {
+    return -1;
+  }
+  getNumOutputs() {
+    return -1;
+  }
+  midiMessage(data) {
+    if (this.fPlotHandler)
+      this.fCachedEvents.push({ data, type: "midi" });
+    const cmd = data[0] >> 4;
+    const channel = data[0] & 15;
+    const data1 = data[1];
+    const data2 = data[2];
+    if (cmd === 11)
+      return this.ctrlChange(channel, data1, data2);
+    if (cmd === 14)
+      return this.pitchWheel(channel, data2 * 128 + data1);
+  }
+  ctrlChange(channel, ctrl, value) {
+    if (this.fPlotHandler)
+      this.fCachedEvents.push({ type: "ctrlChange", data: [channel, ctrl, value] });
+    if (this.fCtrlLabel[ctrl].length) {
+      this.fCtrlLabel[ctrl].forEach((ctrl2) => {
+        const { path } = ctrl2;
+        this.setParamValue(path, FaustBaseWebAudioDsp.remap(value, 0, 127, ctrl2.min, ctrl2.max));
+        if (this.fOutputHandler)
+          this.fOutputHandler(path, this.getParamValue(path));
+      });
+    }
+  }
+  pitchWheel(channel, wheel) {
+    if (this.fPlotHandler)
+      this.fCachedEvents.push({ type: "pitchWheel", data: [channel, wheel] });
+    this.fPitchwheelLabel.forEach((pw) => {
+      this.setParamValue(pw.path, FaustBaseWebAudioDsp.remap(wheel, 0, 16383, pw.min, pw.max));
+      if (this.fOutputHandler)
+        this.fOutputHandler(pw.path, this.getParamValue(pw.path));
+    });
+  }
+  setParamValue(path, value) {
+  }
+  getParamValue(path) {
+    return 0;
+  }
+  getParams() {
+    return this.fInputsItems;
+  }
+  getMeta() {
+    return this.fJSONDsp;
+  }
+  getJSON() {
+    return JSON.stringify(this.getMeta());
+  }
+  getUI() {
+    return this.fJSONDsp.ui;
+  }
+  getDescriptors() {
+    return this.fDescriptor;
+  }
+  start() {
+    this.fProcessing = true;
+  }
+  stop() {
+    this.fProcessing = false;
+  }
+  destroy() {
+    this.fDestroyed = true;
+    this.fOutputHandler = null;
+    this.fComputeHandler = null;
+    this.fPlotHandler = null;
+  }
+};
+var FaustMonoWebAudioDsp = class extends FaustBaseWebAudioDsp {
+  constructor(instance, sampleRate, sampleSize, bufferSize) {
+    super(sampleSize, bufferSize);
+    this.fInstance = instance;
+    this.fJSONDsp = JSON.parse(this.fInstance.json);
+    FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
+    this.initMemory();
+    this.fInstance.api.init(this.fDSP, sampleRate);
+  }
+  initMemory() {
+    this.fDSP = 0;
+    const audio_ptr = this.fJSONDsp.size;
+    this.fAudioInputs = audio_ptr;
+    this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.gPtrSize;
+    const $audioInputs = this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize;
+    const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
+    const HEAP = this.fInstance.memory.buffer;
+    const HEAP32 = new Int32Array(HEAP);
+    const HEAPF = this.gSampleSize === 4 ? new Float32Array(HEAP) : new Float64Array(HEAP);
+    if (this.getNumInputs() > 0) {
+      for (let chan = 0; chan < this.getNumInputs(); chan++) {
+        HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.gSampleSize * chan;
+      }
+      const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, this.fAudioInputs + this.getNumInputs() * this.gPtrSize >> 2);
+      for (let chan = 0; chan < this.getNumInputs(); chan++) {
+        this.fInChannels[chan] = HEAPF.subarray(dspInChans[chan] >> Math.log2(this.gSampleSize), dspInChans[chan] + this.fBufferSize * this.gSampleSize >> Math.log2(this.gSampleSize));
+      }
+    }
+    if (this.getNumOutputs() > 0) {
+      for (let chan = 0; chan < this.getNumOutputs(); chan++) {
+        HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.gSampleSize * chan;
+      }
+      const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize >> 2);
+      for (let chan = 0; chan < this.getNumOutputs(); chan++) {
+        this.fOutChannels[chan] = HEAPF.subarray(dspOutChans[chan] >> Math.log2(this.gSampleSize), dspOutChans[chan] + this.fBufferSize * this.gSampleSize >> Math.log2(this.gSampleSize));
+      }
+    }
+  }
+  toString() {
+    return `============== Mono Memory layout ==============
+this.fBufferSize: ${this.fBufferSize}
+this.fJSONDsp.size: ${this.fJSONDsp.size}
+this.fAudioInputs: ${this.fAudioInputs}
+this.fAudioOutputs: ${this.fAudioOutputs}
+this.fDSP: ${this.fDSP}`;
+  }
+  compute(input, output) {
+    if (this.fDestroyed)
+      return false;
+    if (!this.fProcessing)
+      return true;
+    if (this.getNumInputs() > 0 && (!input || !input[0] || input[0].length === 0)) {
+      return true;
+    }
+    if (this.getNumOutputs() > 0 && (!output || !output[0] || output[0].length === 0)) {
+      return true;
+    }
+    if (input !== void 0) {
+      for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); ++chan) {
+        const dspInput = this.fInChannels[chan];
+        dspInput.set(input[chan]);
+      }
+    }
+    if (this.fComputeHandler)
+      this.fComputeHandler(this.fBufferSize);
+    this.fInstance.api.compute(this.fDSP, this.fBufferSize, this.fAudioInputs, this.fAudioOutputs);
+    this.updateOutputs();
+    if (output !== void 0) {
+      for (let chan = 0; chan < Math.min(this.getNumOutputs(), output.length); chan++) {
+        const dspOutput = this.fOutChannels[chan];
+        output[chan].set(dspOutput);
+      }
+      if (this.fPlotHandler) {
+        this.fPlotHandler(output, this.fBufferNum++, this.fCachedEvents.length ? this.fCachedEvents : void 0);
+        this.fCachedEvents = [];
+      }
+    }
+    return true;
+  }
+  metadata(handler) {
+    super.metadata(handler);
+  }
+  getNumInputs() {
+    return this.fInstance.api.getNumInputs(this.fDSP);
+  }
+  getNumOutputs() {
+    return this.fInstance.api.getNumOutputs(this.fDSP);
+  }
+  setParamValue(path, value) {
+    if (this.fPlotHandler)
+      this.fCachedEvents.push({ type: "param", data: { path, value } });
+    this.fInstance.api.setParamValue(this.fDSP, this.fPathTable[path], value);
+  }
+  getParamValue(path) {
+    return this.fInstance.api.getParamValue(this.fDSP, this.fPathTable[path]);
+  }
+  getMeta() {
+    return this.fJSONDsp;
+  }
+  getJSON() {
+    return this.fInstance.json;
+  }
+  getDescriptors() {
+    return this.fDescriptor;
+  }
+  getUI() {
+    return this.fJSONDsp.ui;
+  }
+};
+var FaustWebAudioDspVoice = class {
+  constructor($dsp, api, inputItems, pathTable, sampleRate) {
+    FaustWebAudioDspVoice.kActiveVoice = 0;
+    FaustWebAudioDspVoice.kFreeVoice = -1;
+    FaustWebAudioDspVoice.kReleaseVoice = -2;
+    FaustWebAudioDspVoice.kLegatoVoice = -3;
+    FaustWebAudioDspVoice.kNoVoice = -4;
+    FaustWebAudioDspVoice.VOICE_STOP_LEVEL = 5e-4;
+    this.fKeyFun = (pitch) => {
+      return FaustWebAudioDspVoice.midiToFreq(pitch);
+    };
+    this.fVelFun = (velocity) => {
+      return velocity / 127;
+    };
+    this.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
+    this.fNextNote = this.fNextVel = -1;
+    this.fLevel = 0;
+    this.fDate = this.fRelease = 0;
+    this.fDSP = $dsp;
+    this.fAPI = api;
+    this.fGateLabel = [];
+    this.fGainLabel = [];
+    this.fFreqLabel = [];
+    this.fAPI.init(this.fDSP, sampleRate);
+    this.extractPaths(inputItems, pathTable);
+  }
+  static midiToFreq(note) {
+    return 440 * 2 ** ((note - 69) / 12);
+  }
+  extractPaths(inputItems, pathTable) {
+    inputItems.forEach((item) => {
+      if (item.endsWith("/gate")) {
+        this.fGateLabel.push(pathTable[item]);
+      } else if (item.endsWith("/freq")) {
+        this.fKeyFun = (pitch) => {
+          return FaustWebAudioDspVoice.midiToFreq(pitch);
+        };
+        this.fFreqLabel.push(pathTable[item]);
+      } else if (item.endsWith("/key")) {
+        this.fKeyFun = (pitch) => {
+          return pitch;
+        };
+        this.fFreqLabel.push(pathTable[item]);
+      } else if (item.endsWith("/gain")) {
+        this.fVelFun = (velocity) => {
+          return velocity / 127;
+        };
+        this.fGainLabel.push(pathTable[item]);
+      } else if (item.endsWith("/vel") && item.endsWith("/velocity")) {
+        this.fVelFun = (velocity) => {
+          return velocity;
+        };
+        this.fGainLabel.push(pathTable[item]);
+      }
+    });
+  }
+  keyOn(pitch, velocity, legato = false) {
+    if (legato) {
+      this.fNextNote = pitch;
+      this.fNextVel = velocity;
+    } else {
+      this.fFreqLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, this.fKeyFun(pitch)));
+      this.fGateLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, 1));
+      this.fGainLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, this.fVelFun(velocity)));
+      this.fCurNote = pitch;
+    }
+  }
+  keyOff(hard = false) {
+    this.fGateLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, 0));
+    if (hard) {
+      this.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
+    } else {
+      this.fRelease = this.fAPI.getSampleRate(this.fDSP) / 2;
+      this.fCurNote = FaustWebAudioDspVoice.kReleaseVoice;
+    }
+  }
+  computeLegato(bufferSize, $inputs, $outputZero, $outputsHalf) {
+    let size = bufferSize / 2;
+    this.fGateLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, 0));
+    this.fAPI.compute(this.fDSP, size, $inputs, $outputZero);
+    this.keyOn(this.fNextNote, this.fNextVel);
+    this.fAPI.compute(this.fDSP, size, $inputs, $outputsHalf);
+  }
+  compute(bufferSize, $inputs, $outputs) {
+    this.fAPI.compute(this.fDSP, bufferSize, $inputs, $outputs);
+  }
+  setParamValue(index, value) {
+    this.fAPI.setParamValue(this.fDSP, index, value);
+  }
+  getParamValue(index) {
+    return this.fAPI.getParamValue(this.fDSP, index);
+  }
+};
+var FaustPolyWebAudioDsp = class extends FaustBaseWebAudioDsp {
+  constructor(instance, sampleRate, sampleSize, bufferSize) {
+    super(sampleSize, bufferSize);
+    this.fInstance = instance;
+    this.fJSONDsp = JSON.parse(this.fInstance.voiceJSON);
+    this.fJSONEffect = this.fInstance.effectAPI && this.fInstance.effectJSON ? JSON.parse(this.fInstance.effectJSON) : null;
+    FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
+    if (this.fJSONEffect)
+      FaustBaseWebAudioDsp.parseUI(this.fJSONEffect.ui, this.fUICallback);
+    this.initMemory();
+    this.fVoiceTable = [];
+    for (let voice = 0; voice < this.fInstance.voices; voice++) {
+      this.fVoiceTable.push(new FaustWebAudioDspVoice(this.fJSONDsp.size * voice, this.fInstance.voiceAPI, this.fInputsItems, this.fPathTable, sampleRate));
+    }
+    if (this.fInstance.effectAPI)
+      this.fInstance.effectAPI.init(this.fEffect, sampleRate);
+  }
+  initMemory() {
+    this.fEffect = this.fJSONDsp.size * this.fInstance.voices;
+    const audio_ptr = this.fEffect + (this.fJSONEffect ? this.fJSONEffect.size : 0);
+    this.fAudioInputs = audio_ptr;
+    this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.gPtrSize;
+    this.fAudioMixing = this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize;
+    this.fAudioMixingHalf = this.fAudioMixing + this.getNumOutputs() * this.gPtrSize;
+    const audio_inputs_ptr = this.fAudioMixingHalf + this.getNumOutputs() * this.gPtrSize;
+    const audio_outputs_ptr = audio_inputs_ptr + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
+    const audio_mixing_ptr = audio_outputs_ptr + this.getNumOutputs() * this.fBufferSize * this.gSampleSize;
+    const HEAP = this.fInstance.memory.buffer;
+    const HEAP32 = new Int32Array(HEAP);
+    const HEAPF = this.gSampleSize === 4 ? new Float32Array(HEAP) : new Float64Array(HEAP);
+    if (this.getNumInputs() > 0) {
+      for (let chan = 0; chan < this.getNumInputs(); chan++) {
+        HEAP32[(this.fAudioInputs >> 2) + chan] = audio_inputs_ptr + this.fBufferSize * this.gSampleSize * chan;
+      }
+      const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, this.fAudioInputs + this.getNumInputs() * this.gPtrSize >> 2);
+      for (let chan = 0; chan < this.getNumInputs(); chan++) {
+        this.fInChannels[chan] = HEAPF.subarray(dspInChans[chan] >> Math.log2(this.gSampleSize), dspInChans[chan] + this.fBufferSize * this.gSampleSize >> Math.log2(this.gSampleSize));
+      }
+    }
+    if (this.getNumOutputs() > 0) {
+      for (let chan = 0; chan < this.getNumOutputs(); chan++) {
+        HEAP32[(this.fAudioOutputs >> 2) + chan] = audio_outputs_ptr + this.fBufferSize * this.gSampleSize * chan;
+        HEAP32[(this.fAudioMixing >> 2) + chan] = audio_mixing_ptr + this.fBufferSize * this.gSampleSize * chan;
+        HEAP32[(this.fAudioMixingHalf >> 2) + chan] = audio_mixing_ptr + this.fBufferSize * this.gSampleSize * chan + this.fBufferSize / 2 * this.gSampleSize;
+      }
+      const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize >> 2);
+      for (let chan = 0; chan < this.getNumOutputs(); chan++) {
+        this.fOutChannels[chan] = HEAPF.subarray(dspOutChans[chan] >> Math.log2(this.gSampleSize), dspOutChans[chan] + this.fBufferSize * this.gSampleSize >> Math.log2(this.gSampleSize));
+      }
+    }
+  }
+  toString() {
+    return `============== Poly Memory layout ==============
+this.fBufferSize: ${this.fBufferSize}
+this.fJSONDsp.size: ${this.fJSONDsp.size}
+this.fAudioInputs: ${this.fAudioInputs}
+this.fAudioOutputs: ${this.fAudioOutputs}
+this.fAudioMixing: ${this.fAudioMixing}
+this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
+  }
+  allocVoice(voice, type) {
+    this.fVoiceTable[voice].fDate++;
+    this.fVoiceTable[voice].fCurNote = type;
+    return voice;
+  }
+  getPlayingVoice(pitch) {
+    let voicePlaying = FaustWebAudioDspVoice.kNoVoice;
+    let oldestDatePlaying = Number.MAX_VALUE;
+    for (let voice = 0; voice < this.fInstance.voices; voice++) {
+      if (this.fVoiceTable[voice].fCurNote === pitch) {
+        if (this.fVoiceTable[voice].fDate < oldestDatePlaying) {
+          oldestDatePlaying = this.fVoiceTable[voice].fDate;
+          voicePlaying = voice;
+        }
+      }
+    }
+    return voicePlaying;
+  }
+  getFreeVoice() {
+    for (let voice = 0; voice < this.fInstance.voices; voice++) {
+      if (this.fVoiceTable[voice].fCurNote === FaustWebAudioDspVoice.kFreeVoice) {
+        return this.allocVoice(voice, FaustWebAudioDspVoice.kActiveVoice);
+      }
+    }
+    let voiceRelease = FaustWebAudioDspVoice.kNoVoice;
+    let voicePlaying = FaustWebAudioDspVoice.kNoVoice;
+    let oldestDateRelease = Number.MAX_VALUE;
+    let oldestDatePlaying = Number.MAX_VALUE;
+    for (let voice = 0; voice < this.fInstance.voices; voice++) {
+      if (this.fVoiceTable[voice].fCurNote === FaustWebAudioDspVoice.kReleaseVoice) {
+        if (this.fVoiceTable[voice].fDate < oldestDateRelease) {
+          oldestDateRelease = this.fVoiceTable[voice].fDate;
+          voiceRelease = voice;
+        }
+      } else if (this.fVoiceTable[voice].fDate < oldestDatePlaying) {
+        oldestDatePlaying = this.fVoiceTable[voice].fDate;
+        voicePlaying = voice;
+      }
+    }
+    if (oldestDateRelease !== Number.MAX_VALUE) {
+      console.log(`Steal release voice : voice_date = ${this.fVoiceTable[voiceRelease].fDate} voice = ${voiceRelease}`);
+      return this.allocVoice(voiceRelease, FaustWebAudioDspVoice.kLegatoVoice);
+    }
+    if (oldestDatePlaying !== Number.MAX_VALUE) {
+      console.log(`Steal playing voice : voice_date = ${this.fVoiceTable[voicePlaying].fDate} voice = ${voicePlaying}`);
+      return this.allocVoice(voicePlaying, FaustWebAudioDspVoice.kLegatoVoice);
+    }
+    return FaustWebAudioDspVoice.kNoVoice;
+  }
+  compute(input, output) {
+    if (this.fDestroyed)
+      return false;
+    if (!this.fProcessing)
+      return true;
+    if (this.getNumInputs() > 0 && (!input || !input[0] || input[0].length === 0)) {
+      return true;
+    }
+    if (this.getNumOutputs() > 0 && (!output || !output[0] || output[0].length === 0)) {
+      return true;
+    }
+    if (input !== void 0) {
+      for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); ++chan) {
+        const dspInput = this.fInChannels[chan];
+        dspInput.set(input[chan]);
+      }
+    }
+    if (this.fComputeHandler)
+      this.fComputeHandler(this.fBufferSize);
+    this.fInstance.mixerAPI.clearOutput(this.fBufferSize, this.getNumOutputs(), this.fAudioOutputs);
+    this.fVoiceTable.forEach((voice) => {
+      if (voice.fCurNote === FaustWebAudioDspVoice.kLegatoVoice) {
+        voice.computeLegato(this.fBufferSize, this.fAudioInputs, this.fAudioMixing, this.fAudioMixingHalf);
+        this.fInstance.mixerAPI.fadeOut(this.fBufferSize / 2, this.getNumOutputs(), this.fAudioMixing);
+        voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(this.fBufferSize, this.getNumOutputs(), this.fAudioMixing, this.fAudioOutputs);
+      } else if (voice.fCurNote !== FaustWebAudioDspVoice.kFreeVoice) {
+        voice.compute(this.fBufferSize, this.fAudioInputs, this.fAudioMixing);
+        voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(this.fBufferSize, this.getNumOutputs(), this.fAudioMixing, this.fAudioOutputs);
+        voice.fRelease -= this.fBufferSize;
+        if (voice.fCurNote == FaustWebAudioDspVoice.kReleaseVoice && (voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL && voice.fRelease < 0)) {
+          voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
+        }
+      }
+    });
+    if (this.fInstance.effectAPI)
+      this.fInstance.effectAPI.compute(this.fEffect, this.fBufferSize, this.fAudioOutputs, this.fAudioOutputs);
+    this.updateOutputs();
+    if (output !== void 0) {
+      for (let chan = 0; chan < Math.min(this.getNumOutputs(), output.length); chan++) {
+        const dspOutput = this.fOutChannels[chan];
+        output[chan].set(dspOutput);
+      }
+      if (this.fPlotHandler) {
+        this.fPlotHandler(output, this.fBufferNum++, this.fCachedEvents.length ? this.fCachedEvents : void 0);
+        this.fCachedEvents = [];
+      }
+    }
+    return true;
+  }
+  getNumInputs() {
+    return this.fInstance.voiceAPI.getNumInputs(0);
+  }
+  getNumOutputs() {
+    return this.fInstance.voiceAPI.getNumOutputs(0);
+  }
+  static findPath(o, p) {
+    if (typeof o !== "object") {
+      return false;
+    } else if (o.address) {
+      return o.address === p;
+    } else {
+      for (const k in o) {
+        if (FaustPolyWebAudioDsp.findPath(o[k], p))
+          return true;
+      }
+      return false;
+    }
+  }
+  setParamValue(path, value) {
+    if (this.fPlotHandler)
+      this.fCachedEvents.push({ type: "param", data: { path, value } });
+    if (this.fJSONEffect && FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) && this.fInstance.effectAPI) {
+      this.fInstance.effectAPI.setParamValue(this.fEffect, this.fPathTable[path], value);
+    } else {
+      this.fVoiceTable.forEach((voice) => {
+        voice.setParamValue(this.fPathTable[path], value);
+      });
+    }
+  }
+  getParamValue(path) {
+    if (this.fJSONEffect && FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) && this.fInstance.effectAPI) {
+      return this.fInstance.effectAPI.getParamValue(this.fEffect, this.fPathTable[path]);
+    } else {
+      return this.fVoiceTable[0].getParamValue(this.fPathTable[path]);
+    }
+  }
+  getMeta() {
+    const o = this.fJSONDsp;
+    const e = this.fJSONEffect;
+    const r = { ...o };
+    if (e) {
+      r.ui = [{
+        type: "tgroup",
+        label: "Sequencer",
+        items: [
+          { type: "vgroup", label: "Instrument", items: o.ui },
+          { type: "vgroup", label: "Effect", items: e.ui }
+        ]
+      }];
+    } else {
+      r.ui = [{
+        type: "tgroup",
+        label: "Polyphonic",
+        items: [
+          { type: "vgroup", label: "Voices", items: o.ui }
+        ]
+      }];
+    }
+    return r;
+  }
+  getJSON() {
+    return JSON.stringify(this.getMeta());
+  }
+  getUI() {
+    return this.getMeta().ui;
+  }
+  getDescriptors() {
+    return this.fDescriptor;
+  }
+  midiMessage(data) {
+    const cmd = data[0] >> 4;
+    const channel = data[0] & 15;
+    const data1 = data[1];
+    const data2 = data[2];
+    if (cmd === 8 || cmd === 9 && data2 === 0)
+      return this.keyOff(channel, data1, data2);
+    else if (cmd === 9)
+      return this.keyOn(channel, data1, data2);
+    else
+      super.midiMessage(data);
+  }
+  ctrlChange(channel, ctrl, value) {
+    if (ctrl === 123 || ctrl === 120) {
+      this.allNotesOff(true);
+    } else {
+      super.ctrlChange(channel, ctrl, value);
+    }
+  }
+  keyOn(channel, pitch, velocity) {
+    const voice = this.getFreeVoice();
+    this.fVoiceTable[voice].keyOn(pitch, velocity, this.fVoiceTable[voice].fCurNote == FaustWebAudioDspVoice.kLegatoVoice);
+  }
+  keyOff(channel, pitch, velocity) {
+    const voice = this.getPlayingVoice(pitch);
+    if (voice !== FaustWebAudioDspVoice.kNoVoice) {
+      this.fVoiceTable[voice].keyOff();
+    } else {
+      console.log("Playing pitch = %d not found\n", pitch);
+    }
+  }
+  allNotesOff(hard = true) {
+    this.fCachedEvents.push({ type: "ctrlChange", data: [0, 123, 0] });
+    this.fVoiceTable.forEach((voice) => voice.keyOff(hard));
+  }
+};
+
+// src/FaustAudioWorkletNode.ts
+var FaustAudioWorkletNode = class extends (window.AudioWorkletNode || null) {
+  constructor(context, name, factory, options) {
+    const JSONObj = JSON.parse(factory.json);
+    super(context, name, {
+      numberOfInputs: JSONObj.inputs > 0 ? 1 : 0,
+      numberOfOutputs: JSONObj.outputs > 0 ? 1 : 0,
+      channelCount: Math.max(1, JSONObj.inputs),
+      outputChannelCount: [JSONObj.outputs],
+      channelCountMode: "explicit",
+      channelInterpretation: "speakers",
+      processorOptions: options
+    });
+    this.fJSONDsp = JSONObj;
+    this.fJSON = factory.json;
+    this.fOutputHandler = null;
+    this.fComputeHandler = null;
+    this.fPlotHandler = null;
+    this.fDescriptor = [];
+    this.fInputsItems = [];
+    this.fUICallback = (item) => {
+      if (item.type === "vslider" || item.type === "hslider" || item.type === "button" || item.type === "checkbox" || item.type === "nentry") {
+        this.fInputsItems.push(item.address);
+        this.fDescriptor.push(item);
+      }
+    };
+    FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
+    this.port.onmessage = (e) => {
+      if (e.data.type === "param" && this.fOutputHandler) {
+        this.fOutputHandler(e.data.path, e.data.value);
+      } else if (e.data.type === "plot" && this.fPlotHandler) {
+        this.fPlotHandler(e.data.value, e.data.index, e.data.events);
+      }
+    };
+  }
+  setOutputParamHandler(handler) {
+    this.fOutputHandler = handler;
+  }
+  getOutputParamHandler() {
+    return this.fOutputHandler;
+  }
+  setComputeHandler(handler) {
+    this.fComputeHandler = handler;
+  }
+  getComputeHandler() {
+    return this.fComputeHandler;
+  }
+  setPlotHandler(handler) {
+    this.fPlotHandler = handler;
+    if (this.fPlotHandler) {
+      this.port.postMessage({ type: "setPlotHandler", data: true });
+    } else {
+      this.port.postMessage({ type: "setPlotHandler", data: false });
+    }
+  }
+  getPlotHandler() {
+    return this.fPlotHandler;
+  }
+  getNumInputs() {
+    return this.fJSONDsp.inputs;
+  }
+  getNumOutputs() {
+    return this.fJSONDsp.outputs;
+  }
+  compute(inputs, outputs) {
+    return false;
+  }
+  metadata(handler) {
+    if (this.fJSONDsp.meta) {
+      this.fJSONDsp.meta.forEach((meta) => handler(Object.keys(meta)[0], meta[Object.keys(meta)[0]]));
+    }
+  }
+  midiMessage(data) {
+    const cmd = data[0] >> 4;
+    const channel = data[0] & 15;
+    const data1 = data[1];
+    const data2 = data[2];
+    if (cmd === 11)
+      this.ctrlChange(channel, data1, data2);
+    else if (cmd === 14)
+      this.pitchWheel(channel, data2 * 128 + data1);
+    else
+      this.port.postMessage({ type: "midi", data });
+  }
+  ctrlChange(channel, ctrl, value) {
+    const e = { type: "ctrlChange", data: [channel, ctrl, value] };
+    this.port.postMessage(e);
+  }
+  pitchWheel(channel, wheel) {
+    const e = { type: "pitchWheel", data: [channel, wheel] };
+    this.port.postMessage(e);
+  }
+  setParamValue(path, value) {
+    const e = { type: "param", data: { path, value } };
+    this.port.postMessage(e);
+    const param = this.parameters.get(path);
+    if (param)
+      param.setValueAtTime(value, this.context.currentTime);
+  }
+  getParamValue(path) {
+    const param = this.parameters.get(path);
+    return param ? param.value : 0;
+  }
+  getParams() {
+    return this.fInputsItems;
+  }
+  getMeta() {
+    return this.fJSONDsp;
+  }
+  getJSON() {
+    return JSON.stringify(this.getMeta());
+  }
+  getUI() {
+    return this.fJSONDsp.ui;
+  }
+  getDescriptors() {
+    return this.fDescriptor;
+  }
+  start() {
+    this.port.postMessage({ type: "start" });
+  }
+  stop() {
+    this.port.postMessage({ type: "stop" });
+  }
+  destroy() {
+    this.port.postMessage({ type: "destroy" });
+    this.port.close();
+  }
+};
+var FaustMonoAudioWorkletNode = class extends FaustAudioWorkletNode {
+  constructor(context, name, factory, sampleSize) {
+    super(context, name, factory, { name, factory, sampleSize });
+    this.onprocessorerror = (e) => {
+      console.error("Error from " + this.fJSONDsp.name + " FaustMonoAudioWorkletNode");
+      throw e;
+    };
+  }
+};
+var FaustPolyAudioWorkletNodeImp = class extends FaustAudioWorkletNode {
+  constructor(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory) {
+    super(context, name, voiceFactory, {
+      name,
+      voiceFactory,
+      mixerModule,
+      voices,
+      sampleSize,
+      effectFactory
+    });
+    this.onprocessorerror = (e) => {
+      console.error("Error from " + this.fJSONDsp.name + " FaustPolyAudioWorkletNode");
+      throw e;
+    };
+    this.fJSONEffect = effectFactory ? JSON.parse(effectFactory.json) : null;
+    if (this.fJSONEffect) {
+      FaustBaseWebAudioDsp.parseUI(this.fJSONEffect.ui, this.fUICallback);
+    }
+  }
+  keyOn(channel, pitch, velocity) {
+    const e = { type: "keyOn", data: [channel, pitch, velocity] };
+    this.port.postMessage(e);
+  }
+  keyOff(channel, pitch, velocity) {
+    const e = { type: "keyOff", data: [channel, pitch, velocity] };
+    this.port.postMessage(e);
+  }
+  allNotesOff(hard) {
+    const e = { type: "ctrlChange", data: [0, 123, 0] };
+    this.port.postMessage(e);
+  }
+  getMeta() {
+    const o = this.fJSONDsp;
+    const e = this.fJSONEffect;
+    const r = { ...o };
+    if (e) {
+      r.ui = [{
+        type: "tgroup",
+        label: "Sequencer",
+        items: [
+          { type: "vgroup", label: "Instrument", items: o.ui },
+          { type: "vgroup", label: "Effect", items: e.ui }
+        ]
+      }];
+    } else {
+      r.ui = [{
+        type: "tgroup",
+        label: "Polyphonic",
+        items: [
+          { type: "vgroup", label: "Voices", items: o.ui }
+        ]
+      }];
+    }
+    return r;
+  }
+  getJSON() {
+    return JSON.stringify(this.getMeta());
+  }
+  getUI() {
+    return this.getMeta().ui;
+  }
+};
+
+// src/FaustScriptProcessorNode.ts
+var FaustScriptProcessorNode = class extends (window.ScriptProcessorNode || null) {
+  init(instance) {
+    this.fDSPCode = instance;
+    this.fInputs = new Array(this.fDSPCode.getNumInputs());
+    this.fOutputs = new Array(this.fDSPCode.getNumOutputs());
+    this.onaudioprocess = (e) => {
+      for (let chan = 0; chan < this.fDSPCode.getNumInputs(); chan++) {
+        this.fInputs[chan] = e.inputBuffer.getChannelData(chan);
+      }
+      for (let chan = 0; chan < this.fDSPCode.getNumOutputs(); chan++) {
+        this.fOutputs[chan] = e.outputBuffer.getChannelData(chan);
+      }
+      return this.fDSPCode.compute(this.fInputs, this.fOutputs);
+    };
+  }
+  compute(input, output) {
+    return this.fDSPCode.compute(input, output);
+  }
+  setOutputParamHandler(handler) {
+    this.fDSPCode.setOutputParamHandler(handler);
+  }
+  getOutputParamHandler() {
+    return this.fDSPCode.getOutputParamHandler();
+  }
+  setComputeHandler(handler) {
+    this.fDSPCode.setComputeHandler(handler);
+  }
+  getComputeHandler() {
+    return this.fDSPCode.getComputeHandler();
+  }
+  setPlotHandler(handler) {
+    this.fDSPCode.setPlotHandler(handler);
+  }
+  getPlotHandler() {
+    return this.fDSPCode.getPlotHandler();
+  }
+  getNumInputs() {
+    return this.fDSPCode.getNumInputs();
+  }
+  getNumOutputs() {
+    return this.fDSPCode.getNumOutputs();
+  }
+  metadata(handler) {
+  }
+  midiMessage(data) {
+    this.fDSPCode.midiMessage(data);
+  }
+  ctrlChange(chan, ctrl, value) {
+    this.fDSPCode.ctrlChange(chan, ctrl, value);
+  }
+  pitchWheel(chan, value) {
+    this.fDSPCode.pitchWheel(chan, value);
+  }
+  setParamValue(path, value) {
+    this.fDSPCode.setParamValue(path, value);
+  }
+  getParamValue(path) {
+    return this.fDSPCode.getParamValue(path);
+  }
+  getParams() {
+    return this.fDSPCode.getParams();
+  }
+  getMeta() {
+    return this.fDSPCode.getMeta();
+  }
+  getJSON() {
+    return this.fDSPCode.getJSON();
+  }
+  getDescriptors() {
+    return this.fDSPCode.getDescriptors();
+  }
+  getUI() {
+    return this.fDSPCode.getUI();
+  }
+  start() {
+    this.fDSPCode.start();
+  }
+  stop() {
+    this.fDSPCode.stop();
+  }
+  destroy() {
+    this.fDSPCode.destroy();
+  }
+};
+var FaustMonoScriptProcessorNode = class extends FaustScriptProcessorNode {
+};
+var FaustPolyScriptProcessorNode = class extends FaustScriptProcessorNode {
+  keyOn(channel, pitch, velocity) {
+    this.fDSPCode.keyOn(channel, pitch, velocity);
+  }
+  keyOff(channel, pitch, velocity) {
+    this.fDSPCode.keyOff(channel, pitch, velocity);
+  }
+  allNotesOff(hard) {
+    this.fDSPCode.allNotesOff(hard);
+  }
+};
+
+// src/FaustWebAudioFactory.ts
+var _FaustMonoDspFactory = class {
+  constructor() {
+    this.fFactory = null;
+  }
+  async compileNode(context, name, compiler, code, args, sp, bufferSize) {
+    this.fFactory = await compiler.createMonoDSPFactory(name, code, args);
+    return this.fFactory ? this.createNode(context, name, this.fFactory, sp, bufferSize) : null;
+  }
+  async createNode(context, nameIn, factory, sp = false, bufferSize = 1024) {
+    const JSONObj = JSON.parse(factory.json);
+    const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
+    if (sp) {
+      const instance = await FaustGenerator_default.createAsyncMonoDSPInstance(factory);
+      const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
+      const sp2 = context.createScriptProcessor(bufferSize, monoDsp.getNumInputs(), monoDsp.getNumOutputs());
+      Object.setPrototypeOf(sp2, FaustMonoScriptProcessorNode.prototype);
+      sp2.init(monoDsp);
+      return sp2;
+    } else {
+      const name = nameIn + factory.cfactory.toString();
+      if (!_FaustMonoDspFactory.gWorkletProcessors.has(name)) {
+        try {
+          const processorCode = `
+// DSP name and JSON string for DSP are generated
+const faustData = {
+    dspName: ${JSON.stringify(name)},
+    dspMeta: ${factory.json}
+};
+// Implementation needed classes of functions
+const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
+const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
+const ${FaustGenerator_default.name} = ${FaustGenerator_default.toString()}
+// Put them in dependencies
+const dependencies = {
+    ${FaustBaseWebAudioDsp.name},
+    ${FaustMonoWebAudioDsp.name},
+    ${FaustGenerator_default.name}
+};
+// Generate the actual AudioWorkletProcessor code
+(${FaustAudioWorkletProcessor_default.toString()})(dependencies, faustData);
+`;
+          const url = window.URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
+          await context.audioWorklet.addModule(url);
+          _FaustMonoDspFactory.gWorkletProcessors.add(name);
+        } catch (e) {
+          console.error(`=> exception raised while running createMonoNode: ${e}`);
+          console.error(`=> check that your page is served using https.${e}`);
+          return null;
+        }
+      }
+      return new FaustMonoAudioWorkletNode(context, name, factory, sampleSize);
+    }
+  }
+  getFactory() {
+    return this.fFactory;
+  }
+  async createOfflineProcessor(factory, sampleRate, bufferSize) {
+    const instance = await FaustGenerator_default.createAsyncMonoDSPInstance(factory);
+    const JSONObj = JSON.parse(factory.json);
+    const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
+    const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
+    return new FaustOfflineProcessor_default(monoDsp, bufferSize);
+  }
+};
+var FaustMonoDspFactory = _FaustMonoDspFactory;
+FaustMonoDspFactory.gWorkletProcessors = new Set();
+
 // src/index.ts
 var src_default = {
-  Faust: Faust_default,
   instantiateLibFaust: instantiateLibFaust_default,
-  FaustProcessor: FaustProcessor_default,
+  getFaustAudioWorkletProcessor: FaustAudioWorkletProcessor_default,
+  FaustDspInstance: FaustDspInstance_default,
+  FaustCompiler: FaustCompiler_default,
+  FaustGenerator: FaustGenerator_default,
+  FaustOfflineProcessor: FaustOfflineProcessor_default,
+  LibFaust: LibFaust_default,
   WavEncoder: WavEncoder_default,
   WavDecoder: WavDecoder_default
 };
