@@ -130,14 +130,6 @@ export interface FaustDspMeta {
     ui: FaustUIDescriptor;
 }
 
-export interface FaustDspDistribution {
-    dspModule: WebAssembly.Module;
-    dspMeta: FaustDspMeta;
-    effectModule?: WebAssembly.Module;
-    effectMeta?: FaustDspMeta;
-    mixerModule?: WebAssembly.Module;
-}
-
 export type FaustUIDescriptor = IFaustUIGroup[];
 export type IFaustUIItem = IFaustUIInputItem | IFaustUIOutputItem | IFaustUIGroup;
 export interface IFaustUIInputItem {

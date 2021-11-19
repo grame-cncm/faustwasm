@@ -1,4 +1,4 @@
-import { IFaustMonoWebAudioDsp } from "./FaustWebAudioDsp";
+import type { IFaustMonoWebAudioDsp } from "./FaustWebAudioDsp";
 
 /**
  *  For offline rendering.

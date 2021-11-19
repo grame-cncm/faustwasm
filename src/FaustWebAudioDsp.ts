@@ -1,5 +1,5 @@
-import { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance } from "./FaustDspInstance";
-import { FaustDspMeta, FaustUIDescriptor, IFaustUIGroup, IFaustUIInputItem, IFaustUIItem } from "./types";
+import type { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance } from "./FaustDspInstance";
+import type { FaustDspMeta, FaustUIDescriptor, IFaustUIGroup, IFaustUIInputItem, IFaustUIItem } from "./types";
 
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;

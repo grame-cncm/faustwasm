@@ -1,4 +1,4 @@
-import { ComputeHandler, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, MetadataHandler, OutputParamHandler, PlotHandler } from "./FaustWebAudioDsp";
+import type { ComputeHandler, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, MetadataHandler, OutputParamHandler, PlotHandler } from "./FaustWebAudioDsp";
 
 /**
  * Base class for Monophonic and Polyphonic ScriptProcessorNode
@@ -30,6 +30,8 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (win
 
             return this.fDSPCode.compute(this.fInputs, this.fOutputs);
         }
+
+        this.start();
     }
     // Public API
     compute(input: Float32Array[], output: Float32Array[]) { return this.fDSPCode.compute(input, output); }

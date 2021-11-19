@@ -31,7 +31,7 @@ class WavEncoder {
         const writer = new Writer(dataView);
         const format: Format = {
             formatId: float ? 0x0003 : 0x0001,
-            float,
+            float: !!float,
             numberOfChannels,
             sampleRate: options.sampleRate,
             symmetric: !!options.symmetric,

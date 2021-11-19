@@ -1,6 +1,6 @@
-import { FaustAudioWorkletNodeOptions } from "./FaustAudioWorkletProcessor";
 import { OutputParamHandler, ComputeHandler, PlotHandler, UIHandler, MetadataHandler, FaustBaseWebAudioDsp, IFaustMonoWebAudioDsp, IFaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
-import { FaustDspFactory, FaustDspMeta, IFaustUIInputItem, IFaustUIItem } from "./types";
+import type { FaustAudioWorkletNodeOptions } from "./FaustAudioWorkletProcessor";
+import type { FaustDspFactory, FaustDspMeta, IFaustUIInputItem, IFaustUIItem } from "./types";
 
 /**
  * Base class for Monophonic and Polyphonic AudioWorkletNode

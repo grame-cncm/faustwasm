@@ -1,7 +1,7 @@
 import FaustDspInstance, { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance, IFaustMixerInstance } from "./FaustDspInstance";
-import { FaustDspFactory, FaustDspMeta } from "./types";
+import type { FaustDspFactory, FaustDspMeta } from "./types";
 
-class FaustGenerator {
+class FaustWasmInstantiator {
     private static createWasmImport(memory?: WebAssembly.Memory) {
         return {
             env: {
@@ -180,24 +180,24 @@ class FaustGenerator {
             const effectFunctions = effectInstance.exports as IFaustDspInstance & WebAssembly.Exports;
             const effectAPI = new FaustDspInstance(effectFunctions);
             return {
-                memory: memory,
-                voices: voices,
-                voiceAPI: voiceAPI,
-                effectAPI: effectAPI,
-                mixerAPI: mixerAPI,
+                memory,
+                voices,
+                voiceAPI,
+                effectAPI,
+                mixerAPI,
                 voiceJSON: voiceFactory.json,
                 effectJSON: effectFactory.json
             };
         } else {
             return {
-                memory: memory,
-                voices: voices,
-                voiceAPI: voiceAPI,
-                mixerAPI: mixerAPI,
+                memory,
+                voices,
+                voiceAPI,
+                mixerAPI,
                 voiceJSON: voiceFactory.json
             };
         }
     }
 }
 
-export default FaustGenerator;
+export default FaustWasmInstantiator;

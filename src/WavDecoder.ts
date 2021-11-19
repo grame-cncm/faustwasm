@@ -23,20 +23,20 @@ class WavDecoder {
         if (reader.string(4) !== "WAVE") {
             throw new TypeError("Invalid WAV file");
         }
-        let format: Format = null;
+        let format: Format | null = null;
         let audioData: {
             numberOfChannels: number;
             length: number;
             sampleRate: number;
             channelData: Float32Array[];
-        } = null;
+        } | null = null;
         do {
             const chunkType = reader.string(4);
             const chunkSize = reader.uint32();
             if (chunkType === "fmt ") {
                 format = this.decodeFormat(reader, chunkSize);
             } else if (chunkType === "data") {
-                audioData = this.decodeData(reader, chunkSize, format, options || {});
+                audioData = this.decodeData(reader, chunkSize, format as Format, options || {});
             } else {
                 reader.skip(chunkSize);
             }
@@ -86,11 +86,11 @@ class WavDecoder {
     private static readPCM(reader: Reader, channelData: Float32Array[], length: number, format: Format, options: WavDecoderOptions) {
         const bitDepth = format.bitDepth;
         const decoderOption = format.float ? "f" : options.symmetric ? "s" : "";
-        const methodName = "pcm" + bitDepth + decoderOption;
-        if (!reader[methodName]) {
+        const methodName = "pcm" + bitDepth + decoderOption as `pcm${8 | 16 | 32}${"f" | "s" | ""}`;
+        if (!(reader as any)[methodName]) {
             throw new TypeError("Not supported bit depth: " + format.bitDepth);
         }
-        const read: () => number = reader[methodName].bind(reader);
+        const read: () => number = (reader as any)[methodName].bind(reader);
         const numberOfChannels = format.numberOfChannels;
         for (let i = 0; i < length; i++) {
             for (let ch = 0; ch < numberOfChannels; ch++) {

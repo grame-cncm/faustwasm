@@ -2,7 +2,7 @@ import instantiateLibFaust from "./instantiateLibFaust";
 import getFaustAudioWorkletProcessor from "./FaustAudioWorkletProcessor";
 import FaustCompiler from "./FaustCompiler";
 import FaustDspInstance from "./FaustDspInstance";
-import FaustGenerator from "./FaustGenerator";
+import FaustWasmInstantiator from "./FaustWasmInstantiator";
 import FaustOfflineProcessor from "./FaustOfflineProcessor";
 import LibFaust from "./LibFaust";
 import WavEncoder from "./WavEncoder";
@@ -15,7 +15,7 @@ export * from "./FaustDspInstance";
 export * from "./FaustOfflineProcessor";
 export * from "./FaustScriptProcessorNode";
 export * from "./FaustWebAudioDsp";
-export * from "./FaustWebAudioFactory";
+export * from "./FaustDspGenerator";
 export * from "./LibFaust";
 
 
@@ -24,7 +24,7 @@ export {
     getFaustAudioWorkletProcessor,
     FaustDspInstance,
     FaustCompiler,
-    FaustGenerator,
+    FaustWasmInstantiator,
     FaustOfflineProcessor,
     LibFaust,
     WavEncoder,
@@ -36,7 +36,7 @@ export default {
     getFaustAudioWorkletProcessor,
     FaustDspInstance,
     FaustCompiler,
-    FaustGenerator,
+    FaustWasmInstantiator,
     FaustOfflineProcessor,
     LibFaust,
     WavEncoder,

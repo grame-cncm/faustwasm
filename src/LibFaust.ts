@@ -1,4 +1,4 @@
-import { FaustModule, FaustWasm, LibFaustWasm, TFaustInfoType } from "./types";
+import type { FaustModule, LibFaustWasm, TFaustInfoType } from "./types";
 
 export interface ILibFaust extends LibFaustWasm {
     module(): FaustModule;

@@ -1,6 +1,6 @@
 import { sha256 } from "js-sha256";
-import { ILibFaust } from "./LibFaust";
-import { FaustDspFactory, IntVector } from "./types";
+import type { ILibFaust } from "./LibFaust";
+import type { FaustDspFactory, IntVector } from "./types";
 
 export interface IFaustCompiler {
     /**

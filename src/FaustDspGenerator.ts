@@ -1,14 +1,14 @@
-import { FaustDspInstance } from ".";
 import { FaustMonoAudioWorkletNode } from "./FaustAudioWorkletNode";
 import getFaustAudioWorkletProcessor from "./FaustAudioWorkletProcessor";
-import { IFaustCompiler } from "./FaustCompiler";
-import FaustGenerator from "./FaustGenerator";
+import FaustDspInstance from "./FaustDspInstance";
+import FaustWasmInstantiator from "./FaustWasmInstantiator";
 import FaustOfflineProcessor, { IFaustOfflineProcessor } from "./FaustOfflineProcessor";
 import { FaustMonoScriptProcessorNode } from "./FaustScriptProcessorNode";
 import { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, IFaustMonoWebAudioNode, IFaustPolyWebAudioNode } from "./FaustWebAudioDsp";
-import { FaustDspFactory, FaustDspMeta } from "./types";
+import type { IFaustCompiler } from "./FaustCompiler";
+import type { FaustDspFactory, FaustDspMeta } from "./types";
 
-export interface IFaustMonoDspFactory {
+export interface IFaustMonoDspGenerator {
 
     /**
      * Compile a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
@@ -69,7 +69,7 @@ export interface IFaustMonoDspFactory {
     createOfflineProcessor(factory: FaustDspFactory, sampleRate: number, bufferSize: number): Promise<IFaustOfflineProcessor | null>;
 }
 
-export interface IFaustPolyDspFactory {
+export interface IFaustPolyDspGenerator {
     /**
      * Compile a polyphonic WebAudio node from a single DSP file (either ScriptProcessorNode or AudioWorkletNode). 
      * Note that the an internal cache avoid recompilation when a same DSP program is recompiled several times.
@@ -136,7 +136,7 @@ export interface IFaustPolyDspFactory {
     getEffectFactory(): FaustDspFactory | null;
 }
 
-export class FaustMonoDspFactory implements IFaustMonoDspFactory {
+export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
     fFactory: FaustDspFactory | null;
 
     // Set of all created WorkletProcessors, each of them has to be unique
@@ -154,7 +154,7 @@ export class FaustMonoDspFactory implements IFaustMonoDspFactory {
         const JSONObj: FaustDspMeta = JSON.parse(factory.json);
         const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
         if (sp) {
-            const instance = await FaustGenerator.createAsyncMonoDSPInstance(factory);
+            const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
             const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
             const sp = context.createScriptProcessor(bufferSize, monoDsp.getNumInputs(), monoDsp.getNumOutputs()) as FaustMonoScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustMonoScriptProcessorNode.prototype);
@@ -163,7 +163,7 @@ export class FaustMonoDspFactory implements IFaustMonoDspFactory {
         } else {
             const name = nameIn + factory.cfactory.toString();
             // Dynamically create AudioWorkletProcessor if code not yet created
-            if (!FaustMonoDspFactory.gWorkletProcessors.has(name)) {
+            if (!FaustMonoDspGenerator.gWorkletProcessors.has(name)) {
                 try {
                     const processorCode = `
 // DSP name and JSON string for DSP are generated
@@ -175,12 +175,12 @@ const faustData = {
 const ${FaustDspInstance.name}_default = ${FaustDspInstance.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
 const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
-const ${FaustGenerator.name} = ${FaustGenerator.toString()}
+const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
 // Put them in dependencies
 const dependencies = {
     ${FaustBaseWebAudioDsp.name},
     ${FaustMonoWebAudioDsp.name},
-    ${FaustGenerator.name}
+    ${FaustWasmInstantiator.name}
 };
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
@@ -188,7 +188,7 @@ const dependencies = {
                     const url = window.URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
                     await context.audioWorklet.addModule(url);
                     // Keep the DSP name
-                    FaustMonoDspFactory.gWorkletProcessors.add(name);
+                    FaustMonoDspGenerator.gWorkletProcessors.add(name);
                 } catch (e) {
                     console.error(`=> exception raised while running createMonoNode: ${e}`);
                     console.error(`=> check that your page is served using https.${e}`);
@@ -203,7 +203,7 @@ const dependencies = {
         return this.fFactory;
     }
     async createOfflineProcessor(factory: FaustDspFactory, sampleRate: number, bufferSize: number): Promise<IFaustOfflineProcessor | null> {
-        const instance = await FaustGenerator.createAsyncMonoDSPInstance(factory);
+        const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
         const JSONObj: FaustDspMeta = JSON.parse(factory.json);
         const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
         const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);

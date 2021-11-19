@@ -4,8 +4,8 @@
 		instantiateLibFaust,
 		LibFaust,
 		WavEncoder,
-		FaustGenerator,
-		FaustMonoDspFactory,
+		FaustWasmInstantiator,
+		FaustMonoDspGenerator,
 		FaustCompiler
 	} = await import("../../dist/esm/index.js");
     const faustModule = await instantiateLibFaust("../../libfaust-wasm/libfaust-wasm.js");
@@ -24,7 +24,7 @@
 	const ctx = new AudioContext();
 
 	const compiler = new FaustCompiler(libFaust);
-	const f = new FaustMonoDspFactory();
+	const f = new FaustMonoDspGenerator();
 	const node = await f.compileNode(ctx, name1, compiler, code1, args.join(" "));
 	node.start();
 	window.node = node;

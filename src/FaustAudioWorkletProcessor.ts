@@ -1,7 +1,6 @@
-import FaustDspInstance from "./FaustDspInstance";
-import FaustGenerator from "./FaustGenerator";
-import { FaustBaseWebAudioDsp, FaustWebAudioDspVoice, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
-import { AudioParamDescriptor, AudioWorkletGlobalScope, FaustDspFactory, FaustDspMeta, IFaustUIItem } from "./types";
+import type FaustWasmInstantiator from "./FaustWasmInstantiator";
+import type { FaustBaseWebAudioDsp, FaustWebAudioDspVoice, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
+import type { AudioParamDescriptor, AudioWorkletGlobalScope, FaustDspFactory, FaustDspMeta, IFaustUIItem } from "./types";
 
 /**
  * Injected in the string to be compiled on AudioWorkletProcessor side
@@ -16,7 +15,7 @@ export interface FaustAudioWorkletProcessorDependencies<Poly extends boolean = f
     FaustMonoWebAudioDsp: Poly extends true ? undefined : typeof FaustMonoWebAudioDsp;
     FaustPolyWebAudioDsp: Poly extends true ? typeof FaustPolyWebAudioDsp : undefined;
     FaustWebAudioDspVoice: Poly extends true ? undefined : typeof FaustWebAudioDspVoice;
-    FaustGenerator: typeof FaustGenerator;
+    FaustWasmInstantiator: typeof FaustWasmInstantiator;
 }
 export interface FaustAudioWorkletNodeOptions<Poly extends boolean = false> extends AudioWorkletNodeOptions {
     processorOptions: Poly extends true ? FaustPolyAudioWorkletProcessorOptions : FaustMonoAudioWorkletProcessorOptions;
@@ -50,8 +49,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
     const { registerProcessor, AudioWorkletProcessor, sampleRate } = globalThis as unknown as AudioWorkletGlobalScope;
 
     const {
-        FaustBaseWebAudioDsp: FaustWebAudioBaseDSP,
-        FaustGenerator
+        FaustBaseWebAudioDsp,
+        FaustWasmInstantiator
     } = dependencies;
     
     const {
@@ -85,9 +84,9 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
                     params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
                 }
             }
-            FaustWebAudioBaseDSP.parseUI(dspMeta.ui, callback);
+            FaustBaseWebAudioDsp.parseUI(dspMeta.ui, callback);
             // Analyse effect JSON to generate AudioParam parameters
-            if (effectMeta) FaustWebAudioBaseDSP.parseUI(effectMeta.ui, callback);
+            if (effectMeta) FaustBaseWebAudioDsp.parseUI(effectMeta.ui, callback);
             return params;
         }
 
@@ -172,12 +171,14 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             const { FaustMonoWebAudioDsp: FaustWebAudioMonoDSP } = dependencies as FaustAudioWorkletProcessorDependencies<false>;
             const { factory, sampleSize } = options.processorOptions;
 
-            const instance = FaustGenerator.createSyncMonoDSPInstance(factory);
+            const instance = FaustWasmInstantiator.createSyncMonoDSPInstance(factory);
             // Create Monophonic DSP
             this.fDSPCode = new FaustWebAudioMonoDSP(instance, sampleRate, sampleSize, 128);
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+
+            this.fDSPCode.start();
         }
     }
 
@@ -192,7 +193,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
             const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
 
-            const instance = FaustGenerator.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
+            const instance = FaustWasmInstantiator.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
             // Create Polyphonic DSP
             this.fDSPCode = new FaustWebAudioPolyDSP(instance, sampleRate, sampleSize, 128);
 
@@ -201,6 +202,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+
+            this.fDSPCode.start();
         }
 
         protected midiMessage(data: number[] | Uint8Array) {

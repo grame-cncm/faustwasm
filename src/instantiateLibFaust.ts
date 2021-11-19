@@ -1,5 +1,5 @@
-import { FaustModuleFactory } from "./types";
 import fetchModule from "./fetchModule";
+import type { FaustModuleFactory } from "./types";
 
 /**
  * Load libfaust-wasm files, than instantiate libFaust

@@ -540,9 +540,8 @@ __export(exports, {
   FaustBaseWebAudioDsp: () => FaustBaseWebAudioDsp,
   FaustCompiler: () => FaustCompiler_default,
   FaustDspInstance: () => FaustDspInstance_default,
-  FaustGenerator: () => FaustGenerator_default,
   FaustMonoAudioWorkletNode: () => FaustMonoAudioWorkletNode,
-  FaustMonoDspFactory: () => FaustMonoDspFactory,
+  FaustMonoDspGenerator: () => FaustMonoDspGenerator,
   FaustMonoScriptProcessorNode: () => FaustMonoScriptProcessorNode,
   FaustMonoWebAudioDsp: () => FaustMonoWebAudioDsp,
   FaustOfflineProcessor: () => FaustOfflineProcessor_default,
@@ -550,6 +549,7 @@ __export(exports, {
   FaustPolyScriptProcessorNode: () => FaustPolyScriptProcessorNode,
   FaustPolyWebAudioDsp: () => FaustPolyWebAudioDsp,
   FaustScriptProcessorNode: () => FaustScriptProcessorNode,
+  FaustWasmInstantiator: () => FaustWasmInstantiator_default,
   FaustWebAudioDspVoice: () => FaustWebAudioDspVoice,
   LibFaust: () => LibFaust_default,
   WavDecoder: () => WavDecoder_default,
@@ -609,8 +609,8 @@ var instantiateLibFaust_default = instantiateLibFaust;
 var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
   const { registerProcessor, AudioWorkletProcessor, sampleRate } = globalThis;
   const {
-    FaustBaseWebAudioDsp: FaustWebAudioBaseDSP,
-    FaustGenerator: FaustGenerator2
+    FaustBaseWebAudioDsp: FaustBaseWebAudioDsp2,
+    FaustWasmInstantiator: FaustWasmInstantiator2
   } = dependencies;
   const {
     dspName,
@@ -633,9 +633,9 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
           params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
         }
       };
-      FaustWebAudioBaseDSP.parseUI(dspMeta.ui, callback);
+      FaustBaseWebAudioDsp2.parseUI(dspMeta.ui, callback);
       if (effectMeta)
-        FaustWebAudioBaseDSP.parseUI(effectMeta.ui, callback);
+        FaustBaseWebAudioDsp2.parseUI(effectMeta.ui, callback);
       return params;
     }
     process(inputs, outputs, parameters) {
@@ -699,9 +699,10 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
       super(options);
       const { FaustMonoWebAudioDsp: FaustWebAudioMonoDSP } = dependencies;
       const { factory, sampleSize } = options.processorOptions;
-      const instance = FaustGenerator2.createSyncMonoDSPInstance(factory);
+      const instance = FaustWasmInstantiator2.createSyncMonoDSPInstance(factory);
       this.fDSPCode = new FaustWebAudioMonoDSP(instance, sampleRate, sampleSize, 128);
       this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+      this.fDSPCode.start();
     }
   }
   class FaustPolyAudioWorkletProcessor extends FaustAudioWorkletProcessor {
@@ -723,12 +724,13 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
       };
       const { FaustPolyWebAudioDsp: FaustWebAudioPolyDSP } = dependencies;
       const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
-      const instance = FaustGenerator2.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
+      const instance = FaustWasmInstantiator2.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
       this.fDSPCode = new FaustWebAudioPolyDSP(instance, sampleRate, sampleSize, 128);
       this.port.onmessage = (e) => {
         this.handleMessageAux(e);
       };
       this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+      this.fDSPCode.start();
     }
     midiMessage(data) {
       const cmd = data[0] >> 4;
@@ -893,8 +895,8 @@ var FaustDspInstance = class {
 };
 var FaustDspInstance_default = FaustDspInstance;
 
-// src/FaustGenerator.ts
-var FaustGenerator = class {
+// src/FaustWasmInstantiator.ts
+var FaustWasmInstantiator = class {
   static createWasmImport(memory) {
     return {
       env: {
@@ -1100,7 +1102,7 @@ var FaustGenerator = class {
     }
   }
 };
-var FaustGenerator_default = FaustGenerator;
+var FaustWasmInstantiator_default = FaustWasmInstantiator;
 
 // src/FaustOfflineProcessor.ts
 var FaustOfflineProcessor = class {
@@ -1210,7 +1212,7 @@ var WavEncoder = class {
     const writer = new Writer(dataView);
     const format = {
       formatId: float ? 3 : 1,
-      float,
+      float: !!float,
       numberOfChannels,
       sampleRate: options.sampleRate,
       symmetric: !!options.symmetric,
@@ -2411,6 +2413,7 @@ var FaustScriptProcessorNode = class extends (window.ScriptProcessorNode || null
       }
       return this.fDSPCode.compute(this.fInputs, this.fOutputs);
     };
+    this.start();
   }
   compute(input, output) {
     return this.fDSPCode.compute(input, output);
@@ -2495,8 +2498,8 @@ var FaustPolyScriptProcessorNode = class extends FaustScriptProcessorNode {
   }
 };
 
-// src/FaustWebAudioFactory.ts
-var _FaustMonoDspFactory = class {
+// src/FaustDspGenerator.ts
+var _FaustMonoDspGenerator = class {
   constructor() {
     this.fFactory = null;
   }
@@ -2508,7 +2511,7 @@ var _FaustMonoDspFactory = class {
     const JSONObj = JSON.parse(factory.json);
     const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
     if (sp) {
-      const instance = await FaustGenerator_default.createAsyncMonoDSPInstance(factory);
+      const instance = await FaustWasmInstantiator_default.createAsyncMonoDSPInstance(factory);
       const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
       const sp2 = context.createScriptProcessor(bufferSize, monoDsp.getNumInputs(), monoDsp.getNumOutputs());
       Object.setPrototypeOf(sp2, FaustMonoScriptProcessorNode.prototype);
@@ -2516,7 +2519,7 @@ var _FaustMonoDspFactory = class {
       return sp2;
     } else {
       const name = nameIn + factory.cfactory.toString();
-      if (!_FaustMonoDspFactory.gWorkletProcessors.has(name)) {
+      if (!_FaustMonoDspGenerator.gWorkletProcessors.has(name)) {
         try {
           const processorCode = `
 // DSP name and JSON string for DSP are generated
@@ -2525,21 +2528,22 @@ const faustData = {
     dspMeta: ${factory.json}
 };
 // Implementation needed classes of functions
+const ${FaustDspInstance_default.name}_default = ${FaustDspInstance_default.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
 const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
-const ${FaustGenerator_default.name} = ${FaustGenerator_default.toString()}
+const ${FaustWasmInstantiator_default.name} = ${FaustWasmInstantiator_default.toString()}
 // Put them in dependencies
 const dependencies = {
     ${FaustBaseWebAudioDsp.name},
     ${FaustMonoWebAudioDsp.name},
-    ${FaustGenerator_default.name}
+    ${FaustWasmInstantiator_default.name}
 };
 // Generate the actual AudioWorkletProcessor code
 (${FaustAudioWorkletProcessor_default.toString()})(dependencies, faustData);
 `;
           const url = window.URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
           await context.audioWorklet.addModule(url);
-          _FaustMonoDspFactory.gWorkletProcessors.add(name);
+          _FaustMonoDspGenerator.gWorkletProcessors.add(name);
         } catch (e) {
           console.error(`=> exception raised while running createMonoNode: ${e}`);
           console.error(`=> check that your page is served using https.${e}`);
@@ -2553,15 +2557,15 @@ const dependencies = {
     return this.fFactory;
   }
   async createOfflineProcessor(factory, sampleRate, bufferSize) {
-    const instance = await FaustGenerator_default.createAsyncMonoDSPInstance(factory);
+    const instance = await FaustWasmInstantiator_default.createAsyncMonoDSPInstance(factory);
     const JSONObj = JSON.parse(factory.json);
     const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
     const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
     return new FaustOfflineProcessor_default(monoDsp, bufferSize);
   }
 };
-var FaustMonoDspFactory = _FaustMonoDspFactory;
-FaustMonoDspFactory.gWorkletProcessors = new Set();
+var FaustMonoDspGenerator = _FaustMonoDspGenerator;
+FaustMonoDspGenerator.gWorkletProcessors = new Set();
 
 // src/index.ts
 var src_default = {
@@ -2569,7 +2573,7 @@ var src_default = {
   getFaustAudioWorkletProcessor: FaustAudioWorkletProcessor_default,
   FaustDspInstance: FaustDspInstance_default,
   FaustCompiler: FaustCompiler_default,
-  FaustGenerator: FaustGenerator_default,
+  FaustWasmInstantiator: FaustWasmInstantiator_default,
   FaustOfflineProcessor: FaustOfflineProcessor_default,
   LibFaust: LibFaust_default,
   WavEncoder: WavEncoder_default,
