@@ -3,7 +3,7 @@ import type { ComputeHandler, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, Metada
 /**
  * Base class for Monophonic and Polyphonic ScriptProcessorNode
  */
-export class FaustScriptProcessorNode<Poly extends boolean = false> extends (window.ScriptProcessorNode || null) {
+export class FaustScriptProcessorNode<Poly extends boolean = false> extends (globalThis.ScriptProcessorNode || null) {
     protected fDSPCode!: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp;
 
     // Needed for ScriptProcessorNode

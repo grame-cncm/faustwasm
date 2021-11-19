@@ -465,10 +465,10 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         this.fDSP = 0;
 
         // Audio buffer start at the end of DSP
-        const audio_ptr = this.fJSONDsp.size;
+        const $audio = this.fJSONDsp.size;
 
         // Setup audio pointers offset
-        this.fAudioInputs = audio_ptr;
+        this.fAudioInputs = $audio;
         this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.gPtrSize;
 
         // Prepare wasm memory layout
@@ -760,18 +760,18 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         this.fEffect = this.fJSONDsp.size * this.fInstance.voices;
 
         // Audio buffer start at the end of effect
-        const audio_ptr = this.fEffect + (this.fJSONEffect ? this.fJSONEffect.size : 0);
+        const $audio = this.fEffect + (this.fJSONEffect ? this.fJSONEffect.size : 0);
 
         // Setup audio pointers offset
-        this.fAudioInputs = audio_ptr;
+        this.fAudioInputs = $audio;
         this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.gPtrSize;
         this.fAudioMixing = this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize;
         this.fAudioMixingHalf = this.fAudioMixing + this.getNumOutputs() * this.gPtrSize;
 
         // Prepare wasm memory layout
-        const audio_inputs_ptr = this.fAudioMixingHalf + this.getNumOutputs() * this.gPtrSize;
-        const audio_outputs_ptr = audio_inputs_ptr + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
-        const audio_mixing_ptr = audio_outputs_ptr + this.getNumOutputs() * this.fBufferSize * this.gSampleSize;
+        const $audioInputs = this.fAudioMixingHalf + this.getNumOutputs() * this.gPtrSize;
+        const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
+        const $audioMixing = $audioOutputs + this.getNumOutputs() * this.fBufferSize * this.gSampleSize;
 
         const HEAP = this.fInstance.memory.buffer;
         const HEAP32 = new Int32Array(HEAP);
@@ -779,7 +779,7 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
 
         if (this.getNumInputs() > 0) {
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                HEAP32[(this.fAudioInputs >> 2) + chan] = audio_inputs_ptr + this.fBufferSize * this.gSampleSize * chan;
+                HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.gSampleSize * chan;
             }
             // Prepare Ins buffer tables
             const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, (this.fAudioInputs + this.getNumInputs() * this.gPtrSize) >> 2);
@@ -789,9 +789,9 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         }
         if (this.getNumOutputs() > 0) {
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                HEAP32[(this.fAudioOutputs >> 2) + chan] = audio_outputs_ptr + this.fBufferSize * this.gSampleSize * chan;
-                HEAP32[(this.fAudioMixing >> 2) + chan] = audio_mixing_ptr + this.fBufferSize * this.gSampleSize * chan;
-                HEAP32[(this.fAudioMixingHalf >> 2) + chan] = audio_mixing_ptr + this.fBufferSize * this.gSampleSize * chan + this.fBufferSize / 2 * this.gSampleSize;
+                HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.gSampleSize * chan;
+                HEAP32[(this.fAudioMixing >> 2) + chan] = $audioMixing + this.fBufferSize * this.gSampleSize * chan;
+                HEAP32[(this.fAudioMixingHalf >> 2) + chan] = $audioMixing + this.fBufferSize * this.gSampleSize * chan + this.fBufferSize / 2 * this.gSampleSize;
             }
             // Prepare Out buffer tables
             const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, (this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize) >> 2);

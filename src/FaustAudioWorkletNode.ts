@@ -5,7 +5,7 @@ import type { FaustDspFactory, FaustDspMeta, IFaustUIInputItem, IFaustUIItem } f
 /**
  * Base class for Monophonic and Polyphonic AudioWorkletNode
  */
-export class FaustAudioWorkletNode<Poly extends boolean = false> extends (window.AudioWorkletNode || null) {
+export class FaustAudioWorkletNode<Poly extends boolean = false> extends (globalThis.AudioWorkletNode || null) {
 
     protected fJSONDsp: FaustDspMeta;
     protected fJSON: string;
@@ -159,7 +159,9 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (window
     }
 }
 
-// Monophonic AudioWorkletNode 
+/**
+ * Monophonic AudioWorkletNode
+ */
 export class FaustMonoAudioWorkletNode extends FaustAudioWorkletNode<false> implements IFaustMonoWebAudioDsp {
 
     onprocessorerror = (e: Event) => {
@@ -172,8 +174,10 @@ export class FaustMonoAudioWorkletNode extends FaustAudioWorkletNode<false> impl
     }
 }
 
-// Polyphonic AudioWorkletNode 
-export class FaustPolyAudioWorkletNodeImp extends FaustAudioWorkletNode<true> implements IFaustPolyWebAudioDsp {
+/**
+ * Polyphonic AudioWorkletNode
+ */
+export class FaustPolyAudioWorkletNode extends FaustAudioWorkletNode<true> implements IFaustPolyWebAudioDsp {
 
     private fJSONEffect: FaustDspMeta | null;
 

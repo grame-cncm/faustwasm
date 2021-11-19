@@ -67,6 +67,11 @@ export interface IFaustCompiler {
      * Delete all factories.
      */
     deleteAllDSPFactories(): void;
+
+    fs(): typeof FS;
+
+    getAsyncInternalMixerModule(isDouble?: boolean): Promise<WebAssembly.Module>;
+    getSyncInternalMixerModule(isDouble?: boolean): WebAssembly.Module;
 }
 
 class FaustCompiler implements IFaustCompiler {
@@ -160,6 +165,21 @@ class FaustCompiler implements IFaustCompiler {
     }
     deleteAllDSPFactories(): void {
         this.fLibFaust.deleteAllDSPFactories();
+    }
+    fs() {
+        return this.fLibFaust.fs();
+    }
+    getAsyncInternalMixerModule(isDouble = false) {
+        const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
+        const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
+        // Compile mixer
+        return WebAssembly.compile(mixerBuffer);
+    }
+    getSyncInternalMixerModule(isDouble = false) {
+        const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
+        const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
+        // Compile mixer
+        return new WebAssembly.Module(mixerBuffer);
     }
 }
 

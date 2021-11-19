@@ -545,10 +545,12 @@ __export(exports, {
   FaustMonoScriptProcessorNode: () => FaustMonoScriptProcessorNode,
   FaustMonoWebAudioDsp: () => FaustMonoWebAudioDsp,
   FaustOfflineProcessor: () => FaustOfflineProcessor_default,
-  FaustPolyAudioWorkletNodeImp: () => FaustPolyAudioWorkletNodeImp,
+  FaustPolyAudioWorkletNode: () => FaustPolyAudioWorkletNode,
+  FaustPolyDspGenerator: () => FaustPolyDspGenerator,
   FaustPolyScriptProcessorNode: () => FaustPolyScriptProcessorNode,
   FaustPolyWebAudioDsp: () => FaustPolyWebAudioDsp,
   FaustScriptProcessorNode: () => FaustScriptProcessorNode,
+  FaustSvgDiagrams: () => FaustSvgDiagrams_default,
   FaustWasmInstantiator: () => FaustWasmInstantiator_default,
   FaustWebAudioDspVoice: () => FaustWebAudioDspVoice,
   LibFaust: () => LibFaust_default,
@@ -848,6 +850,19 @@ var _FaustCompiler = class {
   }
   deleteAllDSPFactories() {
     this.fLibFaust.deleteAllDSPFactories();
+  }
+  fs() {
+    return this.fLibFaust.fs();
+  }
+  getAsyncInternalMixerModule(isDouble = false) {
+    const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
+    const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
+    return WebAssembly.compile(mixerBuffer);
+  }
+  getSyncInternalMixerModule(isDouble = false) {
+    const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
+    const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
+    return new WebAssembly.Module(mixerBuffer);
   }
 };
 var FaustCompiler = _FaustCompiler;
@@ -1150,6 +1165,30 @@ var FaustOfflineProcessor = class {
   }
 };
 var FaustOfflineProcessor_default = FaustOfflineProcessor;
+
+// src/FaustSvgDiagrams.ts
+var FaustSvgDiagrams = class {
+  constructor(libfaust) {
+    this.fLibFaust = libfaust;
+    this.compiler = new FaustCompiler_default(libfaust);
+  }
+  from(name, code, args) {
+    const fs = this.fLibFaust.fs();
+    try {
+      const files2 = fs.readdir(`/${name}-svg/`);
+      files2.filter((file) => file !== "." && file !== "..").forEach((file) => fs.unlink(`/${name}-svg/${file}`));
+    } catch {
+    }
+    const success = this.compiler.generateAuxFiles(name, code, `-lang wasm -svg ${args}`);
+    if (!success)
+      throw new Error(this.compiler.getErrorMessage());
+    const svgs = {};
+    const files = fs.readdir(`/${name}-svg/`);
+    files.filter((file) => file !== "." && file !== "..").forEach((file) => svgs[file] = fs.readFile(`/${name}-svg/${file}`, { encoding: "utf8" }));
+    return svgs;
+  }
+};
+var FaustSvgDiagrams_default = FaustSvgDiagrams;
 
 // src/LibFaust.ts
 var LibFaust = class {
@@ -1741,8 +1780,8 @@ var FaustMonoWebAudioDsp = class extends FaustBaseWebAudioDsp {
   }
   initMemory() {
     this.fDSP = 0;
-    const audio_ptr = this.fJSONDsp.size;
-    this.fAudioInputs = audio_ptr;
+    const $audio = this.fJSONDsp.size;
+    this.fAudioInputs = $audio;
     this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.gPtrSize;
     const $audioInputs = this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize;
     const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
@@ -1951,20 +1990,20 @@ var FaustPolyWebAudioDsp = class extends FaustBaseWebAudioDsp {
   }
   initMemory() {
     this.fEffect = this.fJSONDsp.size * this.fInstance.voices;
-    const audio_ptr = this.fEffect + (this.fJSONEffect ? this.fJSONEffect.size : 0);
-    this.fAudioInputs = audio_ptr;
+    const $audio = this.fEffect + (this.fJSONEffect ? this.fJSONEffect.size : 0);
+    this.fAudioInputs = $audio;
     this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.gPtrSize;
     this.fAudioMixing = this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize;
     this.fAudioMixingHalf = this.fAudioMixing + this.getNumOutputs() * this.gPtrSize;
-    const audio_inputs_ptr = this.fAudioMixingHalf + this.getNumOutputs() * this.gPtrSize;
-    const audio_outputs_ptr = audio_inputs_ptr + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
-    const audio_mixing_ptr = audio_outputs_ptr + this.getNumOutputs() * this.fBufferSize * this.gSampleSize;
+    const $audioInputs = this.fAudioMixingHalf + this.getNumOutputs() * this.gPtrSize;
+    const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
+    const $audioMixing = $audioOutputs + this.getNumOutputs() * this.fBufferSize * this.gSampleSize;
     const HEAP = this.fInstance.memory.buffer;
     const HEAP32 = new Int32Array(HEAP);
     const HEAPF = this.gSampleSize === 4 ? new Float32Array(HEAP) : new Float64Array(HEAP);
     if (this.getNumInputs() > 0) {
       for (let chan = 0; chan < this.getNumInputs(); chan++) {
-        HEAP32[(this.fAudioInputs >> 2) + chan] = audio_inputs_ptr + this.fBufferSize * this.gSampleSize * chan;
+        HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.gSampleSize * chan;
       }
       const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, this.fAudioInputs + this.getNumInputs() * this.gPtrSize >> 2);
       for (let chan = 0; chan < this.getNumInputs(); chan++) {
@@ -1973,9 +2012,9 @@ var FaustPolyWebAudioDsp = class extends FaustBaseWebAudioDsp {
     }
     if (this.getNumOutputs() > 0) {
       for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-        HEAP32[(this.fAudioOutputs >> 2) + chan] = audio_outputs_ptr + this.fBufferSize * this.gSampleSize * chan;
-        HEAP32[(this.fAudioMixing >> 2) + chan] = audio_mixing_ptr + this.fBufferSize * this.gSampleSize * chan;
-        HEAP32[(this.fAudioMixingHalf >> 2) + chan] = audio_mixing_ptr + this.fBufferSize * this.gSampleSize * chan + this.fBufferSize / 2 * this.gSampleSize;
+        HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.gSampleSize * chan;
+        HEAP32[(this.fAudioMixing >> 2) + chan] = $audioMixing + this.fBufferSize * this.gSampleSize * chan;
+        HEAP32[(this.fAudioMixingHalf >> 2) + chan] = $audioMixing + this.fBufferSize * this.gSampleSize * chan + this.fBufferSize / 2 * this.gSampleSize;
       }
       const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize >> 2);
       for (let chan = 0; chan < this.getNumOutputs(); chan++) {
@@ -2198,7 +2237,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
 };
 
 // src/FaustAudioWorkletNode.ts
-var FaustAudioWorkletNode = class extends (window.AudioWorkletNode || null) {
+var FaustAudioWorkletNode = class extends (globalThis.AudioWorkletNode || null) {
   constructor(context, name, factory, options) {
     const JSONObj = JSON.parse(factory.json);
     super(context, name, {
@@ -2335,7 +2374,7 @@ var FaustMonoAudioWorkletNode = class extends FaustAudioWorkletNode {
     };
   }
 };
-var FaustPolyAudioWorkletNodeImp = class extends FaustAudioWorkletNode {
+var FaustPolyAudioWorkletNode = class extends FaustAudioWorkletNode {
   constructor(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory) {
     super(context, name, voiceFactory, {
       name,
@@ -2399,7 +2438,7 @@ var FaustPolyAudioWorkletNodeImp = class extends FaustAudioWorkletNode {
 };
 
 // src/FaustScriptProcessorNode.ts
-var FaustScriptProcessorNode = class extends (window.ScriptProcessorNode || null) {
+var FaustScriptProcessorNode = class extends (globalThis.ScriptProcessorNode || null) {
   init(instance) {
     this.fDSPCode = instance;
     this.fInputs = new Array(this.fDSPCode.getNumInputs());
@@ -2541,7 +2580,7 @@ const dependencies = {
 // Generate the actual AudioWorkletProcessor code
 (${FaustAudioWorkletProcessor_default.toString()})(dependencies, faustData);
 `;
-          const url = window.URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
+          const url = URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
           await context.audioWorklet.addModule(url);
           _FaustMonoDspGenerator.gWorkletProcessors.add(name);
         } catch (e) {
@@ -2566,6 +2605,84 @@ const dependencies = {
 };
 var FaustMonoDspGenerator = _FaustMonoDspGenerator;
 FaustMonoDspGenerator.gWorkletProcessors = new Set();
+var _FaustPolyDspGenerator = class {
+  constructor() {
+    this.fVoiceFactory = null;
+    this.fEffectFactory = null;
+  }
+  async compileNode(context, name, compiler, dspCode, effectCode, args, voices, sp, bufferSize) {
+    const voiceDsp = dspCode;
+    const effect_dsp = effectCode || `
+adapt(1,1) = _; adapt(2,2) = _,_; adapt(1,2) = _ <: _,_; adapt(2,1) = _,_ :> _;
+adaptor(F,G) = adapt(outputs(F),inputs(G));
+dsp_code = environment{${dspCode}};
+process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`;
+    const voiceFactory = await compiler.createPolyDSPFactory(name, voiceDsp, args);
+    if (!voiceFactory)
+      return null;
+    const effectFactory = await compiler.createPolyDSPFactory(name, effect_dsp, args);
+    const JSONObj = JSON.parse(voiceFactory.json);
+    const isDouble = JSONObj.compile_options.match("-double");
+    const mixerModule = await compiler.getAsyncInternalMixerModule(!!isDouble);
+    return mixerModule ? this.createNode(context, name, voiceFactory, mixerModule, voices, sp, effectFactory || void 0, bufferSize) : null;
+  }
+  async createNode(context, nameIn, voiceFactory, mixerModule, voices, sp = false, effectFactory, bufferSize = 1024) {
+    const JSONObj = JSON.parse(voiceFactory.json);
+    const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
+    if (sp) {
+      const instance = await FaustWasmInstantiator_default.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
+      const polyDsp = new FaustPolyWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
+      const sp2 = context.createScriptProcessor(bufferSize, polyDsp.getNumInputs(), polyDsp.getNumOutputs());
+      Object.setPrototypeOf(sp2, FaustPolyScriptProcessorNode.prototype);
+      sp2.init(polyDsp);
+      return sp2;
+    } else {
+      const name = nameIn + voiceFactory.cfactory.toString() + "_poly";
+      if (!_FaustPolyDspGenerator.gWorkletProcessors.has(name)) {
+        try {
+          const processorCode = `
+// DSP name and JSON string for DSP are generated
+const faustData = {
+    dspName: ${JSON.stringify(name)},
+    dspMeta: ${voiceFactory.json},
+    effectMeta: ${effectFactory ? effectFactory.json : void 0}
+};
+// Implementation needed classes of functions
+const ${FaustDspInstance_default.name}_default = ${FaustDspInstance_default.toString()}
+const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
+const ${FaustPolyWebAudioDsp.name} = ${FaustPolyWebAudioDsp.toString()}
+const ${FaustWebAudioDspVoice.name} = ${FaustWebAudioDspVoice.toString()}
+const ${FaustWasmInstantiator_default.name} = ${FaustWasmInstantiator_default.toString()}
+// Put them in dependencies
+const dependencies = {
+    ${FaustBaseWebAudioDsp.name},
+    ${FaustPolyWebAudioDsp.name},
+    ${FaustWasmInstantiator_default.name}
+};
+// Generate the actual AudioWorkletProcessor code
+(${FaustAudioWorkletProcessor_default.toString()})(dependencies, faustData);
+`;
+          const url = URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
+          await context.audioWorklet.addModule(url);
+          _FaustPolyDspGenerator.gWorkletProcessors.add(name);
+        } catch (e) {
+          console.error(`=> exception raised while running createMonoNode: ${e}`);
+          console.error(`=> check that your page is served using https.${e}`);
+          return null;
+        }
+      }
+      return new FaustPolyAudioWorkletNode(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory);
+    }
+  }
+  getVoiceFactory() {
+    return this.fVoiceFactory;
+  }
+  getEffectFactory() {
+    return this.fEffectFactory;
+  }
+};
+var FaustPolyDspGenerator = _FaustPolyDspGenerator;
+FaustPolyDspGenerator.gWorkletProcessors = new Set();
 
 // src/index.ts
 var src_default = {
@@ -2575,6 +2692,7 @@ var src_default = {
   FaustCompiler: FaustCompiler_default,
   FaustWasmInstantiator: FaustWasmInstantiator_default,
   FaustOfflineProcessor: FaustOfflineProcessor_default,
+  FaustSvgDiagrams: FaustSvgDiagrams_default,
   LibFaust: LibFaust_default,
   WavEncoder: WavEncoder_default,
   WavDecoder: WavDecoder_default

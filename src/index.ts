@@ -4,6 +4,7 @@ import FaustCompiler from "./FaustCompiler";
 import FaustDspInstance from "./FaustDspInstance";
 import FaustWasmInstantiator from "./FaustWasmInstantiator";
 import FaustOfflineProcessor from "./FaustOfflineProcessor";
+import FaustSvgDiagrams from "./FaustSvgDiagrams";
 import LibFaust from "./LibFaust";
 import WavEncoder from "./WavEncoder";
 import WavDecoder from "./WavDecoder";
@@ -26,6 +27,7 @@ export {
     FaustCompiler,
     FaustWasmInstantiator,
     FaustOfflineProcessor,
+    FaustSvgDiagrams,
     LibFaust,
     WavEncoder,
     WavDecoder,
@@ -38,6 +40,7 @@ export default {
     FaustCompiler,
     FaustWasmInstantiator,
     FaustOfflineProcessor,
+    FaustSvgDiagrams,
     LibFaust,
     WavEncoder,
     WavDecoder,
