@@ -78,6 +78,8 @@ class FaustCompiler implements IFaustCompiler {
     private fLibFaust: ILibFaust;
     private fErrorMessage: string;
     private static gFactories: Map<string, FaustDspFactory> = new Map<string, FaustDspFactory>();
+    private mixer32Module!: WebAssembly.Module;
+    private mixer64Module!: WebAssembly.Module;
 
     constructor(libFaust: ILibFaust) {
         this.fLibFaust = libFaust;
@@ -169,17 +171,25 @@ class FaustCompiler implements IFaustCompiler {
     fs() {
         return this.fLibFaust.fs();
     }
-    getAsyncInternalMixerModule(isDouble = false) {
+    async getAsyncInternalMixerModule(isDouble = false) {
+        const key = isDouble ? "mixer64Module" : "mixer32Module";
+        if (this[key]) return this[key];
         const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
         const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
         // Compile mixer
-        return WebAssembly.compile(mixerBuffer);
+        const module = await WebAssembly.compile(mixerBuffer);
+        this[key] = module;
+        return module;
     }
     getSyncInternalMixerModule(isDouble = false) {
+        const key = isDouble ? "mixer64Module" : "mixer32Module";
+        if (this[key]) return this[key];
         const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
         const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
         // Compile mixer
-        return new WebAssembly.Module(mixerBuffer);
+        const module = new WebAssembly.Module(mixerBuffer);
+        this[key] = module;
+        return module;
     }
 }
 

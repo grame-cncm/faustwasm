@@ -3,8 +3,10 @@ const path = require("path");
 const fs = require("fs");
 /** @type {import("../dist")} */
 const {
-    instantiateLibFaust,
-    Faust
+    instantiateFaustModule,
+    LibFaust,
+    FaustCompiler,
+    FaustSvgDiagrams,
 } = require(path.join(__dirname, "../dist"));
 
 /**
@@ -13,14 +15,16 @@ const {
  * @param {string[]} [argv]
  */
 const faust2svgFiles = async (inputFile, outputDir, argv = []) => {
-    const libFaust = await instantiateLibFaust(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
-    const faust = new Faust(libFaust);
-    console.log(`Faust Compiler version: ${faust.version}`);
+    const faustModule = await instantiateFaustModule(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
+    const libFaust = new LibFaust(faustModule);
+    const compiler = new FaustCompiler(libFaust);
+    console.log(`Faust Compiler version: ${compiler.version()}`);
     console.log(`Reading file ${inputFile}`);
     const code = fs.readFileSync(inputFile, { encoding: "utf8" });
 
     if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
-    const svgs = faust.getDiagram(code, argv);
+    const diagram = new FaustSvgDiagrams(compiler);
+    const svgs = diagram.from("mydsp", code, argv.join(" "));
     console.log(`Generated ${Object.keys(svgs).length} files.`);
 
     console.log(`Writing files to ${outputDir}`);

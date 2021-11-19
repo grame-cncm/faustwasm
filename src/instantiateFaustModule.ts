@@ -7,7 +7,7 @@ import type { FaustModuleFactory } from "./types";
  * @param dataFile path to `libfaust-wasm.data`
  * @param wasmFile path to `libfaust-wasm.wasm`
  */
-const instantiateLibFaust = async (jsFile: string, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
+const instantiateFaustModule = async (jsFile: string, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
     let LibFaust: FaustModuleFactory;
     try {
         LibFaust = require(jsFile);
@@ -22,4 +22,4 @@ const instantiateLibFaust = async (jsFile: string, dataFile = jsFile.replace(/c?
     return libFaust;
 };
 
-export default instantiateLibFaust;
+export default instantiateFaustModule;

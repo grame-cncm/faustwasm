@@ -1,6 +1,6 @@
 import type FaustWasmInstantiator from "./FaustWasmInstantiator";
 import type { FaustBaseWebAudioDsp, FaustWebAudioDspVoice, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
-import type { AudioParamDescriptor, AudioWorkletGlobalScope, FaustDspFactory, FaustDspMeta, IFaustUIItem } from "./types";
+import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, IFaustUIItem } from "./types";
 
 /**
  * Injected in the string to be compiled on AudioWorkletProcessor side
@@ -8,6 +8,7 @@ import type { AudioParamDescriptor, AudioWorkletGlobalScope, FaustDspFactory, Fa
 export interface FaustData {
     dspName: string;
     dspMeta: FaustDspMeta;
+    poly: boolean;
     effectMeta?: FaustDspMeta;
 };
 export interface FaustAudioWorkletProcessorDependencies<Poly extends boolean = false> {
@@ -34,13 +35,13 @@ export interface FaustAudioWorkletProcessorOptions {
     sampleSize: number;
 }
 export interface FaustMonoAudioWorkletProcessorOptions extends FaustAudioWorkletProcessorOptions {
-    factory: FaustDspFactory;
+    factory: LooseFaustDspFactory;
 }
 export interface FaustPolyAudioWorkletProcessorOptions extends FaustAudioWorkletProcessorOptions {
-    voiceFactory: FaustDspFactory;
+    voiceFactory: LooseFaustDspFactory;
     mixerModule: WebAssembly.Module;
     voices: number;
-    effectFactory?: FaustDspFactory;
+    effectFactory?: LooseFaustDspFactory;
 }
 
 
@@ -56,7 +57,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
     const {
         dspName,
         dspMeta,
-        effectMeta
+        effectMeta,
+        poly
     } = faustData;
 
     /**
@@ -243,7 +245,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
     try {
         // Synchronously compile and instantiate the wasm module
-        if (dspName.endsWith("_poly")) {
+        if (poly) {
             registerProcessor(dspName || "mydsp_poly", FaustPolyAudioWorkletProcessor);
         } else {
             registerProcessor(dspName || "mydsp", FaustMonoAudioWorkletProcessor);

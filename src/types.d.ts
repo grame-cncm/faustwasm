@@ -108,12 +108,14 @@ export interface LibFaustWasm {
  * json: the compiled DSP JSON description
  * poly: whether the factory is a polyphonic one or not
  */
-export interface FaustDspFactory {
-    cfactory: number;
-    code: Uint8Array;
+export interface FaustDspFactory extends Required<LooseFaustDspFactory> {}
+
+export interface LooseFaustDspFactory {
+    cfactory?: number;
+    code?: Uint8Array;
     module: WebAssembly.Module;
     json: string;
-    poly: boolean;
+    poly?: boolean;
 }
 
 export interface FaustDspMeta {

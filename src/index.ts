@@ -1,4 +1,4 @@
-import instantiateLibFaust from "./instantiateLibFaust";
+import instantiateFaustModule from "./instantiateFaustModule";
 import getFaustAudioWorkletProcessor from "./FaustAudioWorkletProcessor";
 import FaustCompiler from "./FaustCompiler";
 import FaustDspInstance from "./FaustDspInstance";
@@ -21,7 +21,7 @@ export * from "./LibFaust";
 
 
 export {
-    instantiateLibFaust,
+    instantiateFaustModule,
     getFaustAudioWorkletProcessor,
     FaustDspInstance,
     FaustCompiler,
@@ -34,7 +34,7 @@ export {
 };
 
 export default {
-    instantiateLibFaust,
+    instantiateFaustModule,
     getFaustAudioWorkletProcessor,
     FaustDspInstance,
     FaustCompiler,

@@ -9,7 +9,7 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 
 (async () => {
 	const {
-		instantiateLibFaust,
+		instantiateFaustModule,
 		LibFaust,
 		WavEncoder,
 		FaustWasmInstantiator,
@@ -20,7 +20,7 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 		FaustCompiler,
 		FaustSvgDiagrams
 	} = await import("../../dist/esm/index.js");
-    const faustModule = await instantiateLibFaust("../../libfaust-wasm/libfaust-wasm.js");
+    const faustModule = await instantiateFaustModule("../../libfaust-wasm/libfaust-wasm.js");
 
     const libFaust = new LibFaust(faustModule);
 	globalThis.libFaust = libFaust;
@@ -200,7 +200,8 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 		offlineProcessor(compiler, log);
 
 		const gen = new FaustPolyDspGenerator()
-		const node = await gen.compileNode(ctx, "mydsp2", compiler, code, effectCode, options, 8, false);
+		await gen.compile(compiler, "mydsp2", code, options, effectCode);
+		const node = await gen.createNode(ctx, 8);
 		console.log(node);
 		console.log(node.getParams());
 		console.log(node.getMeta());

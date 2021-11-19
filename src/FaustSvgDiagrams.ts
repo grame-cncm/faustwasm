@@ -13,17 +13,15 @@ interface IFaustSvgDiagrams {
     from(name: string, code: string, args: string): Record<string, string>;
 }
 
-class FaustSvgDiagrams {
-    private fLibFaust: LibFaust;
+class FaustSvgDiagrams implements IFaustSvgDiagrams {
     private compiler: FaustCompiler;
 
-    constructor(libfaust: LibFaust) {
-        this.fLibFaust = libfaust;
-        this.compiler = new FaustCompiler(libfaust);
+    constructor(compiler: FaustCompiler) {
+        this.compiler = compiler;
     }
     
     from(name: string, code: string, args: string) {
-        const fs = this.fLibFaust.fs();
+        const fs = this.compiler.fs();
         try {
             const files: string[] = fs.readdir(`/${name}-svg/`);
             files.filter(file => file !== "." && file !== "..").forEach(file => fs.unlink(`/${name}-svg/${file}`));

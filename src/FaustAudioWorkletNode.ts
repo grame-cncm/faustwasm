@@ -1,6 +1,6 @@
 import { OutputParamHandler, ComputeHandler, PlotHandler, UIHandler, MetadataHandler, FaustBaseWebAudioDsp, IFaustMonoWebAudioDsp, IFaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
 import type { FaustAudioWorkletNodeOptions } from "./FaustAudioWorkletProcessor";
-import type { FaustDspFactory, FaustDspMeta, IFaustUIInputItem, IFaustUIItem } from "./types";
+import type { LooseFaustDspFactory, FaustDspMeta, IFaustUIInputItem, IFaustUIItem } from "./types";
 
 /**
  * Base class for Monophonic and Polyphonic AudioWorkletNode
@@ -16,7 +16,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     protected fUICallback: UIHandler;
     protected fDescriptor: IFaustUIInputItem[];
 
-    constructor(context: BaseAudioContext, name: string, factory: FaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"]) {
+    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"]) {
 
         // Create JSON object
         const JSONObj: FaustDspMeta = JSON.parse(factory.json);
@@ -169,7 +169,7 @@ export class FaustMonoAudioWorkletNode extends FaustAudioWorkletNode<false> impl
         throw e;
     }
 
-    constructor(context: BaseAudioContext, name: string, factory: FaustDspFactory, sampleSize: number) {
+    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, sampleSize: number) {
         super(context, name, factory, { name, factory, sampleSize });
     }
 }
@@ -188,11 +188,11 @@ export class FaustPolyAudioWorkletNode extends FaustAudioWorkletNode<true> imple
 
     constructor(context: BaseAudioContext,
         name: string,
-        voiceFactory: FaustDspFactory,
+        voiceFactory: LooseFaustDspFactory,
         mixerModule: WebAssembly.Module,
         voices: number,
         sampleSize: number,
-        effectFactory?: FaustDspFactory) {
+        effectFactory?: LooseFaustDspFactory) {
 
         super(context, name, voiceFactory,
             {

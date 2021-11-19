@@ -565,8 +565,8 @@ if (!global2.fetchModuleCache)
   global2.fetchModuleCache = cache;
 var fetchModule_default = fetchModule;
 
-// src/instantiateLibFaust.ts
-var instantiateLibFaust = async (jsFile, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
+// src/instantiateFaustModule.ts
+var instantiateFaustModule = async (jsFile, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
   let LibFaust2;
   try {
     LibFaust2 = __require(jsFile);
@@ -580,7 +580,7 @@ var instantiateLibFaust = async (jsFile, dataFile = jsFile.replace(/c?js$/, "dat
   const libFaust = await LibFaust2({ locateFile });
   return libFaust;
 };
-var instantiateLibFaust_default = instantiateLibFaust;
+var instantiateFaustModule_default = instantiateFaustModule;
 
 // src/FaustAudioWorkletProcessor.ts
 var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
@@ -592,7 +592,8 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
   const {
     dspName,
     dspMeta,
-    effectMeta
+    effectMeta,
+    poly
   } = faustData;
   class FaustAudioWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {
@@ -732,7 +733,7 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
     }
   }
   try {
-    if (dspName.endsWith("_poly")) {
+    if (poly) {
       registerProcessor(dspName || "mydsp_poly", FaustPolyAudioWorkletProcessor);
     } else {
       registerProcessor(dspName || "mydsp", FaustMonoAudioWorkletProcessor);
@@ -829,15 +830,25 @@ var _FaustCompiler = class {
   fs() {
     return this.fLibFaust.fs();
   }
-  getAsyncInternalMixerModule(isDouble = false) {
+  async getAsyncInternalMixerModule(isDouble = false) {
+    const key = isDouble ? "mixer64Module" : "mixer32Module";
+    if (this[key])
+      return this[key];
     const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
     const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
-    return WebAssembly.compile(mixerBuffer);
+    const module2 = await WebAssembly.compile(mixerBuffer);
+    this[key] = module2;
+    return module2;
   }
   getSyncInternalMixerModule(isDouble = false) {
+    const key = isDouble ? "mixer64Module" : "mixer32Module";
+    if (this[key])
+      return this[key];
     const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
     const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
-    return new WebAssembly.Module(mixerBuffer);
+    const module2 = new WebAssembly.Module(mixerBuffer);
+    this[key] = module2;
+    return module2;
   }
 };
 var FaustCompiler = _FaustCompiler;
@@ -969,11 +980,11 @@ var FaustWasmInstantiator = class {
     memorySize = Math.max(2, memorySize);
     return new WebAssembly.Memory({ initial: memorySize, maximum: memorySize });
   }
-  static createMonoDSPInstanceAux(instance, factory) {
+  static createMonoDSPInstanceAux(instance, json) {
     const functions = instance.exports;
     const api = new FaustDspInstance_default(functions);
     const memory = instance.exports.memory;
-    return { memory, api, json: factory.json };
+    return { memory, api, json };
   }
   static createMemoryAux(voices, voiceFactory, effectFactory) {
     const voiceMeta = JSON.parse(voiceFactory.json);
@@ -1027,11 +1038,11 @@ var FaustWasmInstantiator = class {
   }
   static async createAsyncMonoDSPInstance(factory) {
     const instance = await WebAssembly.instantiate(factory.module, this.createWasmImport());
-    return this.createMonoDSPInstanceAux(instance, factory);
+    return this.createMonoDSPInstanceAux(instance, factory.json);
   }
   static createSyncMonoDSPInstance(factory) {
     const instance = new WebAssembly.Instance(factory.module, this.createWasmImport());
-    return this.createMonoDSPInstanceAux(instance, factory);
+    return this.createMonoDSPInstanceAux(instance, factory.json);
   }
   static async createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory) {
     const memory = this.createMemoryAux(voices, voiceFactory, effectFactory);
@@ -1143,12 +1154,11 @@ var FaustOfflineProcessor_default = FaustOfflineProcessor;
 
 // src/FaustSvgDiagrams.ts
 var FaustSvgDiagrams = class {
-  constructor(libfaust) {
-    this.fLibFaust = libfaust;
-    this.compiler = new FaustCompiler_default(libfaust);
+  constructor(compiler) {
+    this.compiler = compiler;
   }
   from(name, code, args) {
-    const fs = this.fLibFaust.fs();
+    const fs = this.compiler.fs();
     try {
       const files2 = fs.readdir(`/${name}-svg/`);
       files2.filter((file) => file !== "." && file !== "..").forEach((file) => fs.unlink(`/${name}-svg/${file}`));
@@ -2515,15 +2525,20 @@ var FaustPolyScriptProcessorNode = class extends FaustScriptProcessorNode {
 // src/FaustDspGenerator.ts
 var _FaustMonoDspGenerator = class {
   constructor() {
-    this.fFactory = null;
+    this.factory = null;
   }
-  async compileNode(context, name, compiler, code, args, sp, bufferSize) {
-    this.fFactory = await compiler.createMonoDSPFactory(name, code, args);
-    return this.fFactory ? this.createNode(context, name, this.fFactory, sp, bufferSize) : null;
+  async compile(compiler, name, code, args) {
+    this.factory = await compiler.createMonoDSPFactory(name, code, args);
+    if (!this.factory)
+      return null;
+    this.name = name + this.factory.cfactory.toString();
+    this.meta = JSON.parse(this.factory.json);
+    return this;
   }
-  async createNode(context, nameIn, factory, sp = false, bufferSize = 1024) {
-    const JSONObj = JSON.parse(factory.json);
-    const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
+  async createNode(context, name = this.name, factory = this.factory, meta = this.meta, sp = false, bufferSize = 1024) {
+    if (!factory)
+      throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+    const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
     if (sp) {
       const instance = await FaustWasmInstantiator_default.createAsyncMonoDSPInstance(factory);
       const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
@@ -2532,15 +2547,15 @@ var _FaustMonoDspGenerator = class {
       sp2.init(monoDsp);
       return sp2;
     } else {
-      const name = nameIn + factory.cfactory.toString();
       if (!_FaustMonoDspGenerator.gWorkletProcessors.has(name)) {
         try {
           const processorCode = `
 // DSP name and JSON string for DSP are generated
-const faustData = {
-    dspName: ${JSON.stringify(name)},
-    dspMeta: ${factory.json}
-};
+const faustData = ${JSON.stringify({
+            dspName: name,
+            dspMeta: meta,
+            poly: false
+          })};
 // Implementation needed classes of functions
 const ${FaustDspInstance_default.name}_default = ${FaustDspInstance_default.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
@@ -2567,13 +2582,11 @@ const dependencies = {
       return new FaustMonoAudioWorkletNode(context, name, factory, sampleSize);
     }
   }
-  getFactory() {
-    return this.fFactory;
-  }
-  async createOfflineProcessor(factory, sampleRate, bufferSize) {
+  async createOfflineProcessor(sampleRate, bufferSize, factory = this.factory, meta = this.meta) {
+    if (!factory)
+      throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
     const instance = await FaustWasmInstantiator_default.createAsyncMonoDSPInstance(factory);
-    const JSONObj = JSON.parse(factory.json);
-    const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
+    const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
     const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
     return new FaustOfflineProcessor_default(monoDsp, bufferSize);
   }
@@ -2582,46 +2595,48 @@ var FaustMonoDspGenerator = _FaustMonoDspGenerator;
 FaustMonoDspGenerator.gWorkletProcessors = new Set();
 var _FaustPolyDspGenerator = class {
   constructor() {
-    this.fVoiceFactory = null;
-    this.fEffectFactory = null;
+    this.voiceFactory = null;
+    this.effectFactory = null;
   }
-  async compileNode(context, name, compiler, dspCode, effectCode, args, voices, sp, bufferSize) {
-    const voiceDsp = dspCode;
-    const effect_dsp = effectCode || `
+  async compile(compiler, name, dspCode, args, effectCode = `
 adapt(1,1) = _; adapt(2,2) = _,_; adapt(1,2) = _ <: _,_; adapt(2,1) = _,_ :> _;
 adaptor(F,G) = adapt(outputs(F),inputs(G));
 dsp_code = environment{${dspCode}};
-process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`;
-    const voiceFactory = await compiler.createPolyDSPFactory(name, voiceDsp, args);
-    if (!voiceFactory)
+process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
+    this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCode, args);
+    if (!this.voiceFactory)
       return null;
-    const effectFactory = await compiler.createPolyDSPFactory(name, effect_dsp, args);
-    const JSONObj = JSON.parse(voiceFactory.json);
-    const isDouble = JSONObj.compile_options.match("-double");
-    const mixerModule = await compiler.getAsyncInternalMixerModule(!!isDouble);
-    return mixerModule ? this.createNode(context, name, voiceFactory, mixerModule, voices, sp, effectFactory || void 0, bufferSize) : null;
+    this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
+    this.name = name + this.voiceFactory.cfactory.toString() + "_poly";
+    this.voiceMeta = JSON.parse(this.voiceFactory.json);
+    if (this.effectFactory)
+      this.effectMeta = JSON.parse(this.effectFactory.json);
+    const isDouble = this.voiceMeta.compile_options.match("-double");
+    this.mixerModule = await compiler.getAsyncInternalMixerModule(!!isDouble);
+    return this;
   }
-  async createNode(context, nameIn, voiceFactory, mixerModule, voices, sp = false, effectFactory, bufferSize = 1024) {
-    const JSONObj = JSON.parse(voiceFactory.json);
-    const sampleSize = JSONObj.compile_options.match("-double") ? 8 : 4;
+  async createNode(context, voices, name = this.name, voiceFactory = this.voiceFactory, voiceMeta = this.voiceMeta, mixerModule = this.mixerModule, effectFactory = this.effectFactory, effectMeta = this.effectMeta, sp = false, bufferSize = 1024) {
+    if (!voiceFactory)
+      throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+    const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
     if (sp) {
-      const instance = await FaustWasmInstantiator_default.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
+      const instance = await FaustWasmInstantiator_default.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || void 0);
       const polyDsp = new FaustPolyWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
       const sp2 = context.createScriptProcessor(bufferSize, polyDsp.getNumInputs(), polyDsp.getNumOutputs());
       Object.setPrototypeOf(sp2, FaustPolyScriptProcessorNode.prototype);
       sp2.init(polyDsp);
       return sp2;
     } else {
-      const name = nameIn + voiceFactory.cfactory.toString() + "_poly";
       if (!_FaustPolyDspGenerator.gWorkletProcessors.has(name)) {
         try {
           const processorCode = `
 // DSP name and JSON string for DSP are generated
-const faustData = {
-    dspName: ${JSON.stringify(name)},
-    dspMeta: ${voiceFactory.json},
-    effectMeta: ${effectFactory ? effectFactory.json : void 0}
-};
+const faustData = ${JSON.stringify({
+            dspName: name,
+            dspMeta: voiceMeta,
+            poly: true,
+            effectMeta
+          })};
 // Implementation needed classes of functions
 const ${FaustDspInstance_default.name}_default = ${FaustDspInstance_default.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
@@ -2646,14 +2661,8 @@ const dependencies = {
           return null;
         }
       }
-      return new FaustPolyAudioWorkletNode(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory);
+      return new FaustPolyAudioWorkletNode(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory || void 0);
     }
-  }
-  getVoiceFactory() {
-    return this.fVoiceFactory;
-  }
-  getEffectFactory() {
-    return this.fEffectFactory;
   }
 };
 var FaustPolyDspGenerator = _FaustPolyDspGenerator;
@@ -2661,7 +2670,7 @@ FaustPolyDspGenerator.gWorkletProcessors = new Set();
 
 // src/index.ts
 var src_default = {
-  instantiateLibFaust: instantiateLibFaust_default,
+  instantiateFaustModule: instantiateFaustModule_default,
   getFaustAudioWorkletProcessor: FaustAudioWorkletProcessor_default,
   FaustDspInstance: FaustDspInstance_default,
   FaustCompiler: FaustCompiler_default,
@@ -2695,7 +2704,7 @@ export {
   WavEncoder_default as WavEncoder,
   src_default as default,
   FaustAudioWorkletProcessor_default as getFaustAudioWorkletProcessor,
-  instantiateLibFaust_default as instantiateLibFaust
+  instantiateFaustModule_default as instantiateFaustModule
 };
 /**
  * [js-sha256]{@link https://github.com/emn178/js-sha256}
