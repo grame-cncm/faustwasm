@@ -674,7 +674,7 @@ declare module "FaustDspGenerator" {
     }
 }
 declare module "FaustSvgDiagrams" {
-    import FaustCompiler from "FaustCompiler";
+    import type FaustCompiler from "FaustCompiler";
     interface IFaustSvgDiagrams {
         from(name: string, code: string, args: string): Record<string, string>;
     }

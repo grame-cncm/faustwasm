@@ -1,5 +1,4 @@
-import FaustCompiler from "./FaustCompiler";
-import type LibFaust from "./LibFaust";
+import type FaustCompiler from "./FaustCompiler";
 
 interface IFaustSvgDiagrams {
     /**
