@@ -1,16 +1,17 @@
 import { FaustUI } from './faust-ui/index.js';
 
+/// <reference types="./faustwasm.types" />
 /**
  * @typedef {import('./sdk-parammgr').ParamMgrNode} ParamMgrNode
  * @typedef {import('./sdk').WebAudioModule} WebAudioModule
- * @typedef {import('./FaustNode').default} FaustNode
- * @typedef {import('./types').FaustUIDescriptor} FaustUIDescriptor
+ * @typedef {import("FaustAudioWorkletNode").FaustAudioWorkletNode} FaustAudioWorkletNode
+ * @typedef {import('types').FaustUIDescriptor} FaustUIDescriptor
  */
 
 class FaustDefaultGui extends HTMLElement {
 	/**
 	 * @param {ParamMgrNode} wamNode
-	 * @param {FaustNode} faustNode
+	 * @param {FaustAudioWorkletNode} faustNode
 	 * @param {string} style
 	 */
 	constructor(wamNode, faustNode, style) {
@@ -36,7 +37,7 @@ class FaustDefaultGui extends HTMLElement {
 		this.faustUI.paramChangeByUI = (path, value) => {
 			wamNode.setParamValue(path, value);
 		};
-		faustNode.outputHandler = (path, value) => this.faustUI.paramChangeByDSP(path, value);
+		faustNode.setOutputParamHandler((path, value) => this.faustUI.paramChangeByDSP(path, value));
 		$container.style.width = `${this.faustUI.minWidth}px`;
 		$container.style.height = `${this.faustUI.minHeight}px`;
 		this.root.appendChild($container);
@@ -46,7 +47,6 @@ class FaustDefaultGui extends HTMLElement {
 
 	handleAnimationFrame = async () => {
 		const values = await this.wamNode.getParameterValues();
-		// eslint-disable-next-line no-restricted-syntax, guard-for-in
 		for (const key in values) {
 			const { value } = values[key];
 			this.faustUI.paramChangeByDSP(key, value);
@@ -73,8 +73,8 @@ const createElement = async (plugin) => {
 	}
 	/** @type {ParamMgrNode} */
 	const wamNode = plugin.audioNode;
+	/** @type {FaustAudioWorkletNode} */
 	const faustNode = wamNode._output;
-	const { ui } = faustNode.dspMeta;
 	const style = await (await fetch(new URL('./faust-ui/index.css', import.meta.url).href)).text();
 	/** @type {typeof FaustDefaultGui} */
 	return new FaustDefaultGui(wamNode, faustNode, style);

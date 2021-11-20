@@ -1,29 +1,30 @@
+/// <reference types="./faustwasm.types" />
 /**
  * @typedef {import('./sdk-parammgr').ParamMgrNode} ParamMgrNode
  * @typedef {import("./types").FaustDspDistribution} FaustDspDistribution
- * @typedef {import("./types").FaustDspMeta} FaustDspMeta
- * @typedef {import("./types").FaustUIDescriptor} FaustUIDescriptor
- * @typedef {import("./types").IFaustUIGroup} IFaustUIGroup
- * @typedef {import("./types").IFaustUIItem} IFaustUIItem
+ * @typedef {import("FaustAudioWorkletNode").FaustAudioWorkletNode} FaustAudioWorkletNode
+ * @typedef {import("types").FaustDspMeta} FaustDspMeta
+ * @typedef {import("types").FaustUIDescriptor} FaustUIDescriptor
+ * @typedef {import("types").IFaustUIGroup} IFaustUIGroup
+ * @typedef {import("types").IFaustUIItem} IFaustUIItem
  */
 
-import { WebAudioModule, addFunctionModule } from './sdk/index.js';
+import { WebAudioModule } from './sdk/index.js';
 import { CompositeAudioNode, ParamMgrFactory } from './sdk-parammgr/index.js';
-import getFaustProcessor from "./FaustProcessor.js"
-import FaustNode from "./FaustNode.js"
+import { FaustMonoDspGenerator, FaustPolyDspGenerator } from "./faustwasm.js"
 import createElement from './gui.js';
 
 class FaustCompositeAudioNode extends CompositeAudioNode {
 	/**
-	 * @param {FaustNode} output
+	 * @param {FaustAudioWorkletNode} output
 	 * @param {ParamMgrNode} paramMgr
 	 */
 	setup(output, paramMgr) {
-		this.connect(output, 0, 0);
+		if (output.numberOfInputs > 0) this.connect(output, 0, 0);
 		paramMgr.addEventListener('wam-midi', (e) => output.midiMessage(e.detail.data.bytes));
 		/** @type {ParamMgrNode} */
 		this._wamNode = paramMgr;
-		/** @type {FaustNode} */
+		/** @type {FaustAudioWorkletNode} */
 		this._output = output;
 	}
 
@@ -85,8 +86,27 @@ export default class FaustPingPongDelayPlugin extends WebAudioModule {
 			faustDsp.mixerModule = await WebAssembly.compileStreaming(await fetch(`${this._baseURL}/mixerModule.wasm`));
 		}
 		const voices = faustDsp.mixerModule ? 64 : 0;
-		await addFunctionModule(this.audioContext.audioWorklet, getFaustProcessor, this.moduleId + "Faust", voices, dspMeta, faustDsp.effectMeta);
-		const faustNode = new FaustNode(this.audioContext, this.moduleId + "Faust", faustDsp, voices);
+
+		/** @type {FaustAudioWorkletNode} */
+		let faustNode;
+		if (voices) {
+			const generator = new FaustPolyDspGenerator();
+			faustNode = await generator.createNode(
+				this.audioContext,
+				voices,
+				this.moduleId + "Faust",
+				{ module: faustDsp.dspModule, json: JSON.stringify(faustDsp.dspMeta) },
+				faustDsp.mixerModule,
+				faustDsp.effectModule ? { module: faustDsp.effectModule, json: JSON.stringify(faustDsp.effectMeta) } : undefined
+			);
+		} else {
+			const generator = new FaustMonoDspGenerator();
+			faustNode = await generator.createNode(
+				this.audioContext,
+				this.moduleId + "Faust",
+				{ module: faustDsp.dspModule, json: JSON.stringify(faustDsp.dspMeta) }
+			);
+		}
 		const paramMgrNode = await ParamMgrFactory.create(this, { internalParamsConfig: Object.fromEntries(faustNode.parameters) });
 		const node = new FaustCompositeAudioNode(this.audioContext);
 		node.setup(faustNode, paramMgrNode);

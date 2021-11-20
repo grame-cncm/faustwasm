@@ -70,14 +70,16 @@ export interface IFaustCompiler {
 
     fs(): typeof FS;
 
-    getAsyncInternalMixerModule(isDouble?: boolean): Promise<WebAssembly.Module>;
-    getSyncInternalMixerModule(isDouble?: boolean): WebAssembly.Module;
+    getAsyncInternalMixerModule(isDouble?: boolean): Promise<{ mixerBuffer: Uint8Array; mixerModule: WebAssembly.Module }>;
+    getSyncInternalMixerModule(isDouble?: boolean): { mixerBuffer: Uint8Array; mixerModule: WebAssembly.Module };
 }
 
 class FaustCompiler implements IFaustCompiler {
     private fLibFaust: ILibFaust;
     private fErrorMessage: string;
     private static gFactories: Map<string, FaustDspFactory> = new Map<string, FaustDspFactory>();
+    private mixer32Buffer!: Uint8Array;
+    private mixer64Buffer!: Uint8Array;
     private mixer32Module!: WebAssembly.Module;
     private mixer64Module!: WebAssembly.Module;
 
@@ -172,24 +174,28 @@ class FaustCompiler implements IFaustCompiler {
         return this.fLibFaust.fs();
     }
     async getAsyncInternalMixerModule(isDouble = false) {
-        const key = isDouble ? "mixer64Module" : "mixer32Module";
-        if (this[key]) return this[key];
+        const bufferKey = isDouble ? "mixer64Buffer" : "mixer32Buffer";
+        const moduleKey = isDouble ? "mixer64Module" : "mixer32Module";
+        if (this[moduleKey]) return { mixerBuffer: this[bufferKey], mixerModule: this[moduleKey] };
         const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
         const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
+        this[bufferKey] = mixerBuffer;
         // Compile mixer
-        const module = await WebAssembly.compile(mixerBuffer);
-        this[key] = module;
-        return module;
+        const mixerModule = await WebAssembly.compile(mixerBuffer);
+        this[moduleKey] = mixerModule;
+        return { mixerBuffer, mixerModule };
     }
     getSyncInternalMixerModule(isDouble = false) {
-        const key = isDouble ? "mixer64Module" : "mixer32Module";
-        if (this[key]) return this[key];
+        const bufferKey = isDouble ? "mixer64Buffer" : "mixer32Buffer";
+        const moduleKey = isDouble ? "mixer64Module" : "mixer32Module";
+        if (this[moduleKey]) return { mixerBuffer: this[bufferKey], mixerModule: this[moduleKey] };
         const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
         const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
+        this[bufferKey] = mixerBuffer;
         // Compile mixer
-        const module = new WebAssembly.Module(mixerBuffer);
-        this[key] = module;
-        return module;
+        const mixerModule = new WebAssembly.Module(mixerBuffer);
+        this[moduleKey] = mixerModule;
+        return { mixerBuffer, mixerModule };
     }
 }
 

@@ -2723,4 +2723,4 @@ export {
  * @copyright Chen, Yi-Cyuan 2014-2017
  * @license MIT
  */
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=faustwasm.js.map

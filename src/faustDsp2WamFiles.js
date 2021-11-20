@@ -3,13 +3,15 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * @param {import("./FaustDsp").default} dsp
+ * @param {import("./types").FaustDspMeta} dspMeta
+ * @param {import("./types").FaustDspMeta} effectMeta
  * @param {boolean} [poly]
- * @returns {import("@webaudiomodules/api").WamDescriptor}
+ * @returns {Record<string, any>}
  */
-const faustDspToWam2Descriptor = (dsp, poly = false) => {
+const faustDspToWam2Descriptor = (dspMeta, effectMeta, poly = false) => {
+    /** @type {Record<string, any>} */
     const flatMeta = {};
-    for (const metaItem of dsp.mainMeta.meta) {
+    for (const metaItem of dspMeta.meta) {
         for (const key in metaItem) {
             flatMeta[key] = metaItem[key];
         }
@@ -20,34 +22,32 @@ const faustDspToWam2Descriptor = (dsp, poly = false) => {
         vendor: author,
         description: description || "",
         version: version || "1.0.0",
-        // @ts-ignore
         apiVersion: "2.0.0",
         keywords: keywords ? keywords.split(", ") : [],
         isInstrument: isInstrument === "true",
         website: website || "",
         faustMeta: {
             poly,
-            effect: !!dsp.effectMeta
+            effect: !!effectMeta
         }
     }
 };
 
 /**
- * @param {import("./FaustDsp").default} dsp
+ * @param {import("./types").FaustDspMeta} dspMeta
+ * @param {import("./types").FaustDspMeta} effectMeta
  * @param {string} outputDir
  * @param {boolean} [poly]
  */
-const faustDsp2wam2Files = async (dsp, outputDir, poly = false) => {
+const faustDsp2wam2Files = async (dspMeta, effectMeta, outputDir, poly = false) => {
     console.log(`Writing WAM2 assets files.`)
     const assetsPath = path.join(__dirname, "../assets/wam2");
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
     fs.cpSync(assetsPath, outputDir, { force: true, recursive: true });
-    const mixerPath = path.join(outputDir, "./mixerModule.wasm");
-    if (!poly) fs.rmSync(mixerPath);
     console.log(`Writing Descriptor file.`)
     const descriptorPath = path.join(outputDir, "descriptor.json");
     if (fs.existsSync(descriptorPath)) fs.rmSync(descriptorPath);
-    fs.writeFileSync(descriptorPath, JSON.stringify(faustDspToWam2Descriptor(dsp, poly), null, 4));
+    fs.writeFileSync(descriptorPath, JSON.stringify(faustDspToWam2Descriptor(dspMeta, effectMeta, poly), null, 4));
 };
 
 module.exports = { default: faustDsp2wam2Files, faustDspToWam2Descriptor };

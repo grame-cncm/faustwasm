@@ -856,24 +856,28 @@ var _FaustCompiler = class {
     return this.fLibFaust.fs();
   }
   async getAsyncInternalMixerModule(isDouble = false) {
-    const key = isDouble ? "mixer64Module" : "mixer32Module";
-    if (this[key])
-      return this[key];
+    const bufferKey = isDouble ? "mixer64Buffer" : "mixer32Buffer";
+    const moduleKey = isDouble ? "mixer64Module" : "mixer32Module";
+    if (this[moduleKey])
+      return { mixerBuffer: this[bufferKey], mixerModule: this[moduleKey] };
     const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
     const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
-    const module2 = await WebAssembly.compile(mixerBuffer);
-    this[key] = module2;
-    return module2;
+    this[bufferKey] = mixerBuffer;
+    const mixerModule = await WebAssembly.compile(mixerBuffer);
+    this[moduleKey] = mixerModule;
+    return { mixerBuffer, mixerModule };
   }
   getSyncInternalMixerModule(isDouble = false) {
-    const key = isDouble ? "mixer64Module" : "mixer32Module";
-    if (this[key])
-      return this[key];
+    const bufferKey = isDouble ? "mixer64Buffer" : "mixer32Buffer";
+    const moduleKey = isDouble ? "mixer64Module" : "mixer32Module";
+    if (this[moduleKey])
+      return { mixerBuffer: this[bufferKey], mixerModule: this[moduleKey] };
     const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
     const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
-    const module2 = new WebAssembly.Module(mixerBuffer);
-    this[key] = module2;
-    return module2;
+    this[bufferKey] = mixerBuffer;
+    const mixerModule = new WebAssembly.Module(mixerBuffer);
+    this[moduleKey] = mixerModule;
+    return { mixerBuffer, mixerModule };
   }
 };
 var FaustCompiler = _FaustCompiler;
@@ -2557,12 +2561,12 @@ var _FaustMonoDspGenerator = class {
     if (!this.factory)
       return null;
     this.name = name + this.factory.cfactory.toString();
-    this.meta = JSON.parse(this.factory.json);
     return this;
   }
-  async createNode(context, name = this.name, factory = this.factory, meta = this.meta, sp = false, bufferSize = 1024) {
+  async createNode(context, name = this.name, factory = this.factory, sp = false, bufferSize = 1024) {
     if (!factory)
       throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+    const meta = JSON.parse(factory.json);
     const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
     if (sp) {
       const instance = await FaustWasmInstantiator_default.createAsyncMonoDSPInstance(factory);
@@ -2604,12 +2608,14 @@ const dependencies = {
           return null;
         }
       }
-      return new FaustMonoAudioWorkletNode(context, name, factory, sampleSize);
+      const node = new FaustMonoAudioWorkletNode(context, name, factory, sampleSize);
+      return node;
     }
   }
-  async createOfflineProcessor(sampleRate, bufferSize, factory = this.factory, meta = this.meta) {
+  async createOfflineProcessor(sampleRate, bufferSize, factory = this.factory) {
     if (!factory)
       throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+    const meta = JSON.parse(factory.json);
     const instance = await FaustWasmInstantiator_default.createAsyncMonoDSPInstance(factory);
     const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
     const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
@@ -2633,16 +2639,18 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
       return null;
     this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
     this.name = name + this.voiceFactory.cfactory.toString() + "_poly";
-    this.voiceMeta = JSON.parse(this.voiceFactory.json);
-    if (this.effectFactory)
-      this.effectMeta = JSON.parse(this.effectFactory.json);
-    const isDouble = this.voiceMeta.compile_options.match("-double");
-    this.mixerModule = await compiler.getAsyncInternalMixerModule(!!isDouble);
+    const voiceMeta = JSON.parse(this.voiceFactory.json);
+    const isDouble = voiceMeta.compile_options.match("-double");
+    const { mixerBuffer, mixerModule } = await compiler.getAsyncInternalMixerModule(!!isDouble);
+    this.mixerBuffer = mixerBuffer;
+    this.mixerModule = mixerModule;
     return this;
   }
-  async createNode(context, voices, name = this.name, voiceFactory = this.voiceFactory, voiceMeta = this.voiceMeta, mixerModule = this.mixerModule, effectFactory = this.effectFactory, effectMeta = this.effectMeta, sp = false, bufferSize = 1024) {
+  async createNode(context, voices, name = this.name, voiceFactory = this.voiceFactory, mixerModule = this.mixerModule, effectFactory = this.effectFactory, sp = false, bufferSize = 1024) {
     if (!voiceFactory)
       throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+    const voiceMeta = JSON.parse(voiceFactory.json);
+    const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : void 0;
     const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
     if (sp) {
       const instance = await FaustWasmInstantiator_default.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || void 0);
@@ -2686,7 +2694,8 @@ const dependencies = {
           return null;
         }
       }
-      return new FaustPolyAudioWorkletNode(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory || void 0);
+      const node = new FaustPolyAudioWorkletNode(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory || void 0);
+      return node;
     }
   }
 };

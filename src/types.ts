@@ -185,7 +185,7 @@ export interface AudioWorkletProcessor {
     port: MessagePort;
     process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, Float32Array>): boolean;
 }
-export const AudioWorkletProcessor: {
+export declare const AudioWorkletProcessor: {
     prototype: AudioWorkletProcessor;
     parameterDescriptors: AudioParamDescriptor[];
     new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;

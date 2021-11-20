@@ -1,7 +1,7 @@
 //@ts-check
 const process = require("process");
 const { default: faust2wasmFiles } = require("../src/faust2wasmFiles.js");
-const { default: faustDsp2wam2Files } = require("../src/faustDsp2wam2Files.js");
+const { default: faustDsp2wam2Files } = require("../src/faustDsp2WamFiles.js");
 
 const argv = process.argv.slice(2);
 
@@ -24,6 +24,6 @@ if (wam2) argv.splice($wam2, 1);
 const [inputFile, outputDir, ...argvFaust] = argv;
 
 (async () => {
-    const dsp = await faust2wasmFiles(inputFile, outputDir, argvFaust, poly);
-    if (wam2) await faustDsp2wam2Files(dsp, outputDir, poly);
+    const { dspMeta, effectMeta } = await faust2wasmFiles(inputFile, outputDir, argvFaust, poly);
+    if (wam2) await faustDsp2wam2Files(dspMeta, effectMeta, outputDir, poly);
 })();

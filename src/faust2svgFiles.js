@@ -6,7 +6,7 @@ const {
     instantiateFaustModule,
     LibFaust,
     FaustCompiler,
-    FaustSvgDiagrams,
+    FaustSvgDiagrams
 } = require(path.join(__dirname, "../dist"));
 
 /**
