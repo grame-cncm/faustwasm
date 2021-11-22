@@ -40,10 +40,11 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     let effectMeta = null;
     /** @type {Uint8Array | null} */
     let mixerModule = null;
+    const { name } = path.parse(inputFile);
     if (poly) {
         const generator = new FaustPolyDspGenerator();
         const t1 = Date.now();
-        const dsp = await generator.compile(compiler, "MyDSP", code, argv.join(" "));
+        const dsp = await generator.compile(compiler, name, code, argv.join(" "));
         if (!dsp) throw new Error("Faust DSP not compiled");
         const { voiceFactory, effectFactory, mixerBuffer } = dsp;
         if (!voiceFactory) throw new Error("Faust DSP Factory not compiled");
@@ -59,7 +60,7 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     } else {
         const generator = new FaustMonoDspGenerator();
         const t1 = Date.now();
-        const dsp = await generator.compile(compiler, "MyDSP", code, argv.join(" "));
+        const dsp = await generator.compile(compiler, name, code, argv.join(" "));
         if (!dsp) throw new Error("Faust DSP not compiled");
         const { factory } = dsp;
         if (!factory) throw new Error("Faust DSP Factory not compiled");

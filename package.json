@@ -9,7 +9,7 @@
     "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist --format=cjs",
     "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm",
     "build-esm-wam": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outfile=assets/wam2/faustwasm.js --format=esm",
-    "build-types": "tsc --emitDeclarationOnly --outFile assets/wam2/faustwasm.types.d.ts --declaration true --removeComments true"
+    "build-types": "dts-bundle-generator -o assets/wam2/faustwasm.d.ts src/index.ts --external-imports"
   },
   "repository": {
     "type": "git",
@@ -32,6 +32,7 @@
     "@webaudiomodules/api": "^2.0.0-alpha.1",
     "@webaudiomodules/sdk": "^0.0.5",
     "@webaudiomodules/sdk-parammgr": "^0.0.4",
+    "dts-bundle-generator": "^6.0.0",
     "esbuild": "^0.13.13",
     "js-sha256": "^0.9.0",
     "typescript": "^4.4.4",

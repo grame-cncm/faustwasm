@@ -1,12 +1,11 @@
-/// <reference types="./faustwasm.types" />
 /**
  * @typedef {import('./sdk-parammgr').ParamMgrNode} ParamMgrNode
  * @typedef {import("./types").FaustDspDistribution} FaustDspDistribution
- * @typedef {import("FaustAudioWorkletNode").FaustAudioWorkletNode} FaustAudioWorkletNode
- * @typedef {import("types").FaustDspMeta} FaustDspMeta
- * @typedef {import("types").FaustUIDescriptor} FaustUIDescriptor
- * @typedef {import("types").IFaustUIGroup} IFaustUIGroup
- * @typedef {import("types").IFaustUIItem} IFaustUIItem
+ * @typedef {import("./faustwasm").FaustAudioWorkletNode} FaustAudioWorkletNode
+ * @typedef {import("./faustwasm").FaustDspMeta} FaustDspMeta
+ * @typedef {import("./faustwasm").FaustUIDescriptor} FaustUIDescriptor
+ * @typedef {import("./faustwasm").IFaustUIGroup} IFaustUIGroup
+ * @typedef {import("./faustwasm").IFaustUIItem} IFaustUIItem
  */
 
 import { WebAudioModule } from './sdk/index.js';

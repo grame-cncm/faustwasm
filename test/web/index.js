@@ -131,12 +131,13 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 	}
 
 	/**
+	 * @param {InstanceType<FaustCompiler>} compiler
 	 * @param {(msg: string) => any} log
 	 * @param {string} code
 	 */
-	const svgdiagrams = (log, code) => {
+	const svgdiagrams = (compiler, log, code) => {
 		const filter = "import(\"stdfaust.lib\");\nprocess = dm.oscrs_demo;";
-		const SvgDiagrams = new FaustSvgDiagrams(libFaust);
+		const SvgDiagrams = new FaustSvgDiagrams(compiler);
 	
 		let svg1 = SvgDiagrams.from("TestSVG1", code, options);
 		log(`<div>${svg1["process.svg"]}</div>`);
@@ -194,7 +195,7 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 		await createPolyDsp(compiler, log, errCode, effectCode).catch(e => { log(e); });
 	
 		log("\n-----------------\nTest SVG diagrams: ");
-		svgdiagrams(log, code);
+		svgdiagrams(compiler, log, code);
 	
 		log("\n-----------------\nTest Offline processor ");
 		offlineProcessor(compiler, log);

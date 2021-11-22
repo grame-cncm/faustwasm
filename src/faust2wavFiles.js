@@ -30,8 +30,9 @@ const faust2wavFiles = async (inputFile, inputWav, outputWav, bufferSize = 64, s
     console.log(`Reading file ${inputFile}`);
     const code = fs.readFileSync(inputFile, { encoding: "utf8" });
     if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
+    const { name } = path.parse(inputFile);
     const gen = new FaustMonoDspGenerator();
-    await gen.compile(compiler, "mydsp", code, argv.join(" "));
+    await gen.compile(compiler, name, code, argv.join(" "));
     const processor = await gen.createOfflineProcessor(sampleRate, bufferSize);
     if (!processor) throw Error("Processor not generated");
     /** @type {Float32Array[] | undefined} */

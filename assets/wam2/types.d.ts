@@ -1,4 +1,4 @@
-import { FaustDspMeta } from "types";
+import { FaustDspMeta } from "./faustwasm";
 
 export interface FaustDspDistribution {
     dspModule: WebAssembly.Module;
