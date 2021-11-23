@@ -19,7 +19,7 @@ export interface FaustModule extends EmscriptenModule {
     libFaustWasm: new () => LibFaustWasm;
 }
 
-export type TFaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
+export type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
 
 export interface IntVector { size(): number; get(i: number): number; }
 
@@ -97,7 +97,7 @@ export interface LibFaustWasm {
      * Get info about the embedded Faust engine
      * @param what - the requested info
      */
-    getInfos(what: TFaustInfoType): string;
+    getInfos(what: FaustInfoType): string;
 }
 
 /**
@@ -132,9 +132,9 @@ export interface FaustDspMeta {
     ui: FaustUIDescriptor;
 }
 
-export type FaustUIDescriptor = IFaustUIGroup[];
-export type IFaustUIItem = IFaustUIInputItem | IFaustUIOutputItem | IFaustUIGroup;
-export interface IFaustUIInputItem {
+export type FaustUIDescriptor = FaustUIGroup[];
+export type IFaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
+export interface FaustUIInputItem {
     type: FaustUIInputType;
     label: string;
     address: string;
@@ -143,18 +143,18 @@ export interface IFaustUIInputItem {
     min?: number;
     max?: number;
     step?: number;
-    meta?: IFaustUIMeta[];
+    meta?: FaustUIMeta[];
 }
-export interface IFaustUIOutputItem {
+export interface FaustUIOutputItem {
     type: FaustUIOutputType;
     label: string;
     address: string;
     index: number;
     min?: number;
     max?: number;
-    meta?: IFaustUIMeta[];
+    meta?: FaustUIMeta[];
 }
-export interface IFaustUIMeta {
+export interface FaustUIMeta {
     [order: number]: string;
     style?: string; // "knob" | "menu{'Name0':value0;'Name1':value1}" | "radio{'Name0':value0;'Name1':value1}" | "led";
     unit?: string;
@@ -166,7 +166,7 @@ export interface IFaustUIMeta {
 export type FaustUIGroupType = "vgroup" | "hgroup" | "tgroup";
 export type FaustUIOutputType = "hbargraph" | "vbargraph";
 export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry";
-export interface IFaustUIGroup {
+export interface FaustUIGroup {
     type: FaustUIGroupType;
     label: string;
     items: IFaustUIItem[];

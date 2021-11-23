@@ -1,6 +1,6 @@
 import { OutputParamHandler, ComputeHandler, PlotHandler, UIHandler, MetadataHandler, FaustBaseWebAudioDsp, IFaustMonoWebAudioDsp, IFaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
 import type { FaustAudioWorkletNodeOptions } from "./FaustAudioWorkletProcessor";
-import type { LooseFaustDspFactory, FaustDspMeta, IFaustUIInputItem, IFaustUIItem } from "./types";
+import type { LooseFaustDspFactory, FaustDspMeta, FaustUIInputItem, IFaustUIItem } from "./types";
 
 /**
  * Base class for Monophonic and Polyphonic AudioWorkletNode
@@ -14,7 +14,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     protected fComputeHandler: ComputeHandler | null;
     protected fPlotHandler: PlotHandler | null;
     protected fUICallback: UIHandler;
-    protected fDescriptor: IFaustUIInputItem[];
+    protected fDescriptor: FaustUIInputItem[];
 
     constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"]) {
 

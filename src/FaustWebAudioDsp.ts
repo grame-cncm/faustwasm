@@ -1,5 +1,5 @@
 import type { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance } from "./FaustDspInstance";
-import type { FaustDspMeta, FaustUIDescriptor, IFaustUIGroup, IFaustUIInputItem, IFaustUIItem } from "./types";
+import type { FaustDspMeta, FaustUIDescriptor, FaustUIGroup, FaustUIInputItem, IFaustUIItem } from "./types";
 
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;
@@ -162,7 +162,7 @@ export interface IFaustBaseWebAudioDsp {
     *
     * @return the DSP UI items description
     */
-    getDescriptors(): IFaustUIInputItem[];
+    getDescriptors(): FaustUIInputItem[];
 
     /**
      * Start the DSP.
@@ -228,7 +228,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     // UI items path
     protected fInputsItems: string[];
     protected fOutputsItems: string[];
-    protected fDescriptor: IFaustUIInputItem[];
+    protected fDescriptor: FaustUIInputItem[];
 
     // Buffers in wasm memory
     protected fAudioInputs!: number;
@@ -317,7 +317,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         ui.forEach(group => this.parseGroup(group, callback));
     }
 
-    static parseGroup(group: IFaustUIGroup, callback: (...args: any[]) => any) {
+    static parseGroup(group: FaustUIGroup, callback: (...args: any[]) => any) {
         if (group.items) {
             this.parseItems(group.items, callback);
         }

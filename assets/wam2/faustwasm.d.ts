@@ -21,7 +21,7 @@ export interface FaustModule extends EmscriptenModule {
 	FS: typeof FS;
 	libFaustWasm: new () => LibFaustWasm;
 }
-export type TFaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
+export type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
 export interface IntVector {
 	size(): number;
 	get(i: number): number;
@@ -91,7 +91,7 @@ export interface LibFaustWasm {
 	 * Get info about the embedded Faust engine
 	 * @param what - the requested info
 	 */
-	getInfos(what: TFaustInfoType): string;
+	getInfos(what: FaustInfoType): string;
 }
 /**
  * The Factory structure.
@@ -125,9 +125,9 @@ export interface FaustDspMeta {
 	}[];
 	ui: FaustUIDescriptor;
 }
-export type FaustUIDescriptor = IFaustUIGroup[];
-export type IFaustUIItem = IFaustUIInputItem | IFaustUIOutputItem | IFaustUIGroup;
-export interface IFaustUIInputItem {
+export type FaustUIDescriptor = FaustUIGroup[];
+export type IFaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
+export interface FaustUIInputItem {
 	type: FaustUIInputType;
 	label: string;
 	address: string;
@@ -136,18 +136,18 @@ export interface IFaustUIInputItem {
 	min?: number;
 	max?: number;
 	step?: number;
-	meta?: IFaustUIMeta[];
+	meta?: FaustUIMeta[];
 }
-export interface IFaustUIOutputItem {
+export interface FaustUIOutputItem {
 	type: FaustUIOutputType;
 	label: string;
 	address: string;
 	index: number;
 	min?: number;
 	max?: number;
-	meta?: IFaustUIMeta[];
+	meta?: FaustUIMeta[];
 }
-export interface IFaustUIMeta {
+export interface FaustUIMeta {
 	[order: number]: string;
 	style?: string; // "knob" | "menu{'Name0':value0;'Name1':value1}" | "radio{'Name0':value0;'Name1':value1}" | "led";
 	unit?: string;
@@ -159,7 +159,7 @@ export interface IFaustUIMeta {
 export type FaustUIGroupType = "vgroup" | "hgroup" | "tgroup";
 export type FaustUIOutputType = "hbargraph" | "vbargraph";
 export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry";
-export interface IFaustUIGroup {
+export interface FaustUIGroup {
 	type: FaustUIGroupType;
 	label: string;
 	items: IFaustUIItem[];
@@ -448,7 +448,7 @@ export interface IFaustBaseWebAudioDsp {
 	*
 	* @return the DSP UI items description
 	*/
-	getDescriptors(): IFaustUIInputItem[];
+	getDescriptors(): FaustUIInputItem[];
 	/**
 	 * Start the DSP.
 	 */
@@ -506,7 +506,7 @@ export declare class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 	protected fOutputsTimer: number;
 	protected fInputsItems: string[];
 	protected fOutputsItems: string[];
-	protected fDescriptor: IFaustUIInputItem[];
+	protected fDescriptor: FaustUIInputItem[];
 	protected fAudioInputs: number;
 	protected fAudioOutputs: number;
 	protected fBufferSize: number;
@@ -532,7 +532,7 @@ export declare class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 	constructor(sampleSize: number, bufferSize: number);
 	static remap(v: number, mn0: number, mx0: number, mn1: number, mx1: number): number;
 	static parseUI(ui: FaustUIDescriptor, callback: (...args: any[]) => any): void;
-	static parseGroup(group: IFaustUIGroup, callback: (...args: any[]) => any): void;
+	static parseGroup(group: FaustUIGroup, callback: (...args: any[]) => any): void;
 	static parseItems(items: IFaustUIItem[], callback: (...args: any[]) => any): void;
 	static parseItem(item: IFaustUIItem, callback: (...args: any[]) => any): void;
 	protected updateOutputs(): void;
@@ -555,7 +555,7 @@ export declare class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 	getMeta(): FaustDspMeta;
 	getJSON(): string;
 	getUI(): FaustUIDescriptor;
-	getDescriptors(): IFaustUIInputItem[];
+	getDescriptors(): FaustUIInputItem[];
 	start(): void;
 	stop(): void;
 	destroy(): void;
@@ -574,7 +574,7 @@ export declare class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implement
 	getParamValue(path: string): number;
 	getMeta(): FaustDspMeta;
 	getJSON(): string;
-	getDescriptors(): IFaustUIInputItem[];
+	getDescriptors(): FaustUIInputItem[];
 	getUI(): FaustUIDescriptor;
 }
 export declare class FaustWebAudioDspVoice {
@@ -631,7 +631,7 @@ export declare class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implement
 	getMeta(): FaustDspMeta;
 	getJSON(): string;
 	getUI(): FaustUIDescriptor;
-	getDescriptors(): IFaustUIInputItem[];
+	getDescriptors(): FaustUIInputItem[];
 	midiMessage(data: number[] | Uint8Array): void;
 	ctrlChange(channel: number, ctrl: number, value: number): void;
 	keyOn(channel: number, pitch: number, velocity: number): void;
@@ -696,7 +696,7 @@ export declare class LibFaust implements ILibFaust {
 	deleteAllDSPFactories(): void;
 	getErrorAfterException(): string;
 	cleanupAfterException(): void;
-	getInfos(what: TFaustInfoType): string;
+	getInfos(what: FaustInfoType): string;
 	toString(): string;
 }
 export interface IFaustCompiler {
@@ -841,6 +841,9 @@ export interface WavEncoderOptions {
 	shared?: boolean;
 	sampleRate: number;
 }
+/**
+ * Code from https://github.com/mohayonao/wav-encoder
+ */
 export declare class WavEncoder {
 	static encode(audioBuffer: Float32Array[], options: WavEncoderOptions): ArrayBuffer;
 	private static writeHeader;
@@ -850,6 +853,9 @@ export interface WavDecoderOptions {
 	symmetric?: boolean;
 	shared?: boolean;
 }
+/**
+ * Code from https://github.com/mohayonao/wav-decoder
+ */
 export declare class WavDecoder {
 	static decode(buffer: ArrayBuffer, options?: WavDecoderOptions): {
 		numberOfChannels: number;
@@ -876,7 +882,7 @@ export declare class FaustAudioWorkletNode<Poly extends boolean = false> extends
 	protected fComputeHandler: ComputeHandler | null;
 	protected fPlotHandler: PlotHandler | null;
 	protected fUICallback: UIHandler;
-	protected fDescriptor: IFaustUIInputItem[];
+	protected fDescriptor: FaustUIInputItem[];
 	constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"]);
 	setOutputParamHandler(handler: OutputParamHandler | null): void;
 	getOutputParamHandler(): OutputParamHandler | null;
@@ -897,7 +903,7 @@ export declare class FaustAudioWorkletNode<Poly extends boolean = false> extends
 	getMeta(): FaustDspMeta;
 	getJSON(): string;
 	getUI(): FaustUIDescriptor;
-	getDescriptors(): IFaustUIInputItem[];
+	getDescriptors(): FaustUIInputItem[];
 	start(): void;
 	stop(): void;
 	destroy(): void;
@@ -953,15 +959,15 @@ export declare class FaustScriptProcessorNode<Poly extends boolean = false> exte
 	getParams(): string[];
 	getMeta(): FaustDspMeta;
 	getJSON(): string;
-	getDescriptors(): IFaustUIInputItem[];
+	getDescriptors(): FaustUIInputItem[];
 	getUI(): FaustUIDescriptor;
 	start(): void;
 	stop(): void;
 	destroy(): void;
 }
-export declare class FaustMonoScriptProcessorNode extends FaustScriptProcessorNode<false> {
+export declare class FaustMonoScriptProcessorNode extends FaustScriptProcessorNode<false> implements IFaustMonoWebAudioDsp {
 }
-export declare class FaustPolyScriptProcessorNode extends FaustScriptProcessorNode<true> {
+export declare class FaustPolyScriptProcessorNode extends FaustScriptProcessorNode<true> implements IFaustPolyWebAudioDsp {
 	keyOn(channel: number, pitch: number, velocity: number): void;
 	keyOff(channel: number, pitch: number, velocity: number): void;
 	allNotesOff(hard: boolean): void;

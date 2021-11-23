@@ -1,4 +1,4 @@
-import type { FaustModule, LibFaustWasm, TFaustInfoType } from "./types";
+import type { FaustModule, LibFaustWasm, FaustInfoType } from "./types";
 
 export interface ILibFaust extends LibFaustWasm {
     module(): FaustModule;
@@ -45,7 +45,7 @@ class LibFaust implements ILibFaust {
     cleanupAfterException() {
         return this.fCompiler.cleanupAfterException();
     }
-    getInfos(what: TFaustInfoType) {
+    getInfos(what: FaustInfoType) {
         return this.fCompiler.getInfos(what);
     }
     toString() {

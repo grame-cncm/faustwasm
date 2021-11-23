@@ -16,6 +16,9 @@ interface Format {
     byteDepth: number;
 }
 
+/**
+ * Code from https://github.com/mohayonao/wav-encoder
+ */
 class WavEncoder {
     static encode(audioBuffer: Float32Array[], options: WavEncoderOptions) {
         const numberOfChannels = audioBuffer.length;

@@ -12,6 +12,9 @@ interface Format {
     bitDepth: number;
 }
 
+/**
+ * Code from https://github.com/mohayonao/wav-decoder
+ */
 class WavDecoder {
     static decode(buffer: ArrayBuffer, options?: WavDecoderOptions) {
         const dataView = new DataView(buffer);

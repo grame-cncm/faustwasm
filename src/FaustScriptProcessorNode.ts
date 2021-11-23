@@ -1,4 +1,4 @@
-import type { ComputeHandler, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, MetadataHandler, OutputParamHandler, PlotHandler } from "./FaustWebAudioDsp";
+import type { ComputeHandler, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, IFaustMonoWebAudioDsp, IFaustPolyWebAudioDsp, MetadataHandler, OutputParamHandler, PlotHandler } from "./FaustWebAudioDsp";
 
 /**
  * Base class for Monophonic and Polyphonic ScriptProcessorNode
@@ -70,10 +70,10 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
     destroy() { this.fDSPCode.destroy(); }
 }
 
-export class FaustMonoScriptProcessorNode extends FaustScriptProcessorNode<false> {
+export class FaustMonoScriptProcessorNode extends FaustScriptProcessorNode<false> implements IFaustMonoWebAudioDsp {
 }
 
-export class FaustPolyScriptProcessorNode extends FaustScriptProcessorNode<true> {
+export class FaustPolyScriptProcessorNode extends FaustScriptProcessorNode<true> implements IFaustPolyWebAudioDsp {
     keyOn(channel: number, pitch: number, velocity: number) { this.fDSPCode.keyOn(channel, pitch, velocity); }
     keyOff(channel: number, pitch: number, velocity: number) { this.fDSPCode.keyOff(channel, pitch, velocity); }
     allNotesOff(hard: boolean) { this.fDSPCode.allNotesOff(hard); }
