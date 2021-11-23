@@ -133,7 +133,7 @@ export interface FaustDspMeta {
 }
 
 export type FaustUIDescriptor = FaustUIGroup[];
-export type IFaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
+export type FaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
 export interface FaustUIInputItem {
     type: FaustUIInputType;
     label: string;
@@ -169,7 +169,7 @@ export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "
 export interface FaustUIGroup {
     type: FaustUIGroupType;
     label: string;
-    items: IFaustUIItem[];
+    items: FaustUIItem[];
 }
 export type FaustUIType = FaustUIGroupType | FaustUIOutputType | FaustUIInputType;
 

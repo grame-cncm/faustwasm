@@ -1,6 +1,6 @@
 import type FaustWasmInstantiator from "./FaustWasmInstantiator";
 import type { FaustBaseWebAudioDsp, FaustWebAudioDspVoice, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
-import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, IFaustUIItem } from "./types";
+import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem } from "./types";
 
 /**
  * Injected in the string to be compiled on AudioWorkletProcessor side
@@ -79,7 +79,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         static get parameterDescriptors() {
             const params = [] as AudioParamDescriptor[];
             // Analyse voice JSON to generate AudioParam parameters
-            const callback = (item: IFaustUIItem) => {
+            const callback = (item: FaustUIItem) => {
                 if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
                     params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
                 } else if (item.type === "button" || item.type === "checkbox") {

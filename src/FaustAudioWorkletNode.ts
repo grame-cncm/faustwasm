@@ -1,6 +1,6 @@
 import { OutputParamHandler, ComputeHandler, PlotHandler, UIHandler, MetadataHandler, FaustBaseWebAudioDsp, IFaustMonoWebAudioDsp, IFaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
 import type { FaustAudioWorkletNodeOptions } from "./FaustAudioWorkletProcessor";
-import type { LooseFaustDspFactory, FaustDspMeta, FaustUIInputItem, IFaustUIItem } from "./types";
+import type { LooseFaustDspFactory, FaustDspMeta, FaustUIInputItem, FaustUIItem } from "./types";
 
 /**
  * Base class for Monophonic and Polyphonic AudioWorkletNode
@@ -41,7 +41,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
 
         // Parse UI
         this.fInputsItems = [];
-        this.fUICallback = (item: IFaustUIItem) => {
+        this.fUICallback = (item: FaustUIItem) => {
             if (item.type === "vslider" || item.type === "hslider" || item.type === "button" || item.type === "checkbox" || item.type === "nentry") {
                 // Keep inputs adresses
                 this.fInputsItems.push(item.address);

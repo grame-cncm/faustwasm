@@ -1,5 +1,5 @@
 import type { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance } from "./FaustDspInstance";
-import type { FaustDspMeta, FaustUIDescriptor, FaustUIGroup, FaustUIInputItem, IFaustUIItem } from "./types";
+import type { FaustDspMeta, FaustUIDescriptor, FaustUIGroup, FaustUIInputItem, FaustUIItem } from "./types";
 
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;
@@ -8,7 +8,7 @@ export type PlotHandler = (plotted: Float32Array[], index: number, events?: { ty
 export type MetadataHandler = (key: string, value: string) => void;
 
 // Implementation API
-export type UIHandler = (item: IFaustUIItem) => void;
+export type UIHandler = (item: FaustUIItem) => void;
 
 /**
  * DSP implementation: mimic the C++ 'dsp' class:
@@ -279,7 +279,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         this.fProcessing = false;
         this.fDestroyed = false;
 
-        this.fUICallback = (item: IFaustUIItem) => {
+        this.fUICallback = (item: FaustUIItem) => {
             if (item.type === "hbargraph" || item.type === "vbargraph") {
                 // Keep bargraph adresses
                 this.fOutputsItems.push(item.address);
@@ -322,11 +322,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             this.parseItems(group.items, callback);
         }
     }
-    static parseItems(items: IFaustUIItem[], callback: (...args: any[]) => any) {
+    static parseItems(items: FaustUIItem[], callback: (...args: any[]) => any) {
         items.forEach(item => this.parseItem(item, callback));
     }
 
-    static parseItem(item: IFaustUIItem, callback: (...args: any[]) => any) {
+    static parseItem(item: FaustUIItem, callback: (...args: any[]) => any) {
         if (item.type === "vgroup" || item.type === "hgroup" || item.type === "tgroup") {
             this.parseItems(item.items, callback);
         } else {

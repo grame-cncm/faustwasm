@@ -126,7 +126,7 @@ export interface FaustDspMeta {
 	ui: FaustUIDescriptor;
 }
 export type FaustUIDescriptor = FaustUIGroup[];
-export type IFaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
+export type FaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
 export interface FaustUIInputItem {
 	type: FaustUIInputType;
 	label: string;
@@ -162,7 +162,7 @@ export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "
 export interface FaustUIGroup {
 	type: FaustUIGroupType;
 	label: string;
-	items: IFaustUIItem[];
+	items: FaustUIItem[];
 }
 /**
  * Load libfaust-wasm files, than instantiate libFaust
@@ -314,7 +314,7 @@ export declare type PlotHandler = (plotted: Float32Array[], index: number, event
 	data: any;
 }[]) => void;
 export declare type MetadataHandler = (key: string, value: string) => void;
-export declare type UIHandler = (item: IFaustUIItem) => void;
+export declare type UIHandler = (item: FaustUIItem) => void;
 /**
  * DSP implementation: mimic the C++ 'dsp' class:
  * - adding MIDI control: metadata are decoded and incoming MIDI messages will control the associated controllers
@@ -533,8 +533,8 @@ export declare class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 	static remap(v: number, mn0: number, mx0: number, mn1: number, mx1: number): number;
 	static parseUI(ui: FaustUIDescriptor, callback: (...args: any[]) => any): void;
 	static parseGroup(group: FaustUIGroup, callback: (...args: any[]) => any): void;
-	static parseItems(items: IFaustUIItem[], callback: (...args: any[]) => any): void;
-	static parseItem(item: IFaustUIItem, callback: (...args: any[]) => any): void;
+	static parseItems(items: FaustUIItem[], callback: (...args: any[]) => any): void;
+	static parseItem(item: FaustUIItem, callback: (...args: any[]) => any): void;
 	protected updateOutputs(): void;
 	metadata(handler: MetadataHandler): void;
 	compute(input: Float32Array[], output: Float32Array[]): boolean;
