@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FaustLive WASM</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="faust-ui/index.css">
+</head>
+<body>
+    <center>
+        <H1> Testing the embedded dynamic Faust compiler </H1>
+    </center>
+
+    <P> This page embeds the Faust compiler as a JavaScript library named libfaust.js (associated with the auxiliary
+        WebAssembly library), including its WebAssembly generating backend, and compiled using <a
+            href="http://kripken.github.io/emscripten-site/">Emscripten</a>.
+
+    <P> You can compile Faust .dsp files or URL by just dropping them on the drop zone. A WebAudio node will be created
+        and connected to audio inputs/outputs and controlled with the displayed HTML/SVG based GUI.
+    <P>Settings (buffer size, polyphonic mode and voices, audio rendering model, sample size and ftz mode) can be
+        changed dynamically
+        and the DSP will be recompiled on the fly.
+    <P>Clicking on the yellow cross on the top right allows to access to the GRAME online compiler, to generate
+        different targets (like for instance standalone applications, VST, Max/MSP plugins, iOS or JUCE ready
+        projects...).
+    <div class="config">
+
+        <div class="config-element">
+            <H3>Buffer size</H3>
+            <form method="POST" name="menu">
+                <select id="selectedBuffer" name="selectedBuffer" onchange="setBufferSize(this.form.selectedBuffer)">
+                    <option value=128> 128 </option>
+                    <option value=256> 256 </option>
+                    <option value=512> 512 </option>
+                    <option selected value=1024> 1024 </option>
+                    <option value=2048> 2048 </option>
+                    <option value=4096> 4096 </option>
+                    <option value=8192> 8192 </option>
+                </select>
+            </form>
+            <p>You can change the buffer size (from 256 to 8192 frames in ScripProcessor mode, it will be fixed at 128
+                frames in AudioWorklet mode).</p>
+        </div>
+
+        <div class="config-element">
+            <H3>Polyphonic instrument</H3>
+            <div class="line2">
+                <form method="POST" name="menu">
+                    <select id="selectedPoly" name="selectedPoly" onchange="setPoly(this.form.selectedPoly)">
+                        <option value=ON> ON </option>
+                        <option selected value=OFF> OFF </option>
+                    </select>
+                </form>
+                <form method="POST" name="menu">
+                    <select id="polyVoices" name="polyVoices" onchange="setPolyVoices(this.form.polyVoices)">
+                        <option value=1> 1 </option>
+                        <option value=2> 2 </option>
+                        <option value=4> 4 </option>
+                        <option value=8> 8 </option>
+                        <option selected value=16> 16 </option>
+                        <option value=32> 32 </option>
+                        <option value=64> 64 </option>
+                        <option value=128> 128 </option>
+                    </select>
+                </form>
+            </div>
+            <p>Assuming your DSP code is <a
+                    href="https://faustdoc.grame.fr/manual/midi/#midi-polyphony-support">polyphonic ready</a>, you
+                can activate the polyphonic mode, adjust the number of available voices, and test it with a MIDI device
+                or application (usable with Chrome which implements the <a
+                    href="https://webaudio.github.io/web-midi-api/">Web MIDI API</a>).
+        </div>
+
+        <div class="config-element">
+            <H3>ScriptProcessor/AudioWorklet</H3>
+            <form method="POST" name="menu">
+                <select id="selectedRenderingMode" name="selectedRenderingMode"
+                    onchange="setRenderingMode(this.form.selectedRenderingMode)">
+                    <option selected value=ScriptProcessor> ScriptProcessor </option>
+                    <option value=AudioWorklet> AudioWorklet </option>
+                </select>
+            </form>
+            <p>ScriptProcessor: audio rendering is done using the old ScriptProcessor model.</p>
+            <p>AudioWorklet: audio rendering is done using the new AudioWorklet model.
+            <p>
+        </div>
+
+        <div class="config-element">
+            <H3>Sample format</H3>
+            <form method="POST" name="menu">
+                <select id="selectedSampleFormat" name="selectedSampleFormat"
+                    onchange="setSampleFormat(this.form.selectedSampleFormat)">
+                    <option selected value=float> float </option>
+                    <option value=double> double </option>
+                </select>
+            </form>
+            <H3>Float denormals handling</H3>
+            <form method="POST" name="menu">
+                <select id="selectedFTZ" name="selectedFTZ" onchange="setFTZ(this.form.selectedFTZ)">
+                    <option value=0> 0 </option>
+                    <option value=1> 1 </option>
+                    <option selected value=2> 2 </option>
+                </select>
+            </form>
+            <p>0: means no denormal handling.</p>
+            <p>1: uses <B>fabs</B> and a <B>threshold</B> to detect denormal values (slower).
+            <p>
+            <p>2: uses a <B>bitmask</B> to detect denormal values (faster).</p>
+        </div>
+
+    </div>
+
+    <p> <input id="localstorage" type="checkbox" onclick="setLocalStorage(checked)"> <B>Save page and DSP control
+            parameters state</B> </p>
+
+    <div id="filedrag">
+        Loading JavaScript/WebAssembly ressources...
+    </div>
+
+    <form id="upload" action="CompilerResponse" method="POST" enctype="multipart/form-data">
+        <input type="hidden" id="MAX_FILE_SIZE" name="MAX_FILE_SIZE" value="5000000" />
+    </form>
+
+    <div id="faust-ui"></div>
+
+    <script src="index.js"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+* {
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+    font-weight: normal;
+}
+
+body {
+    margin-left: 10%;
+    margin-right: 10%;
+    background-color: #FFFFFF,
+}
+
+h1 {
+    font-family: 'Open Sans', sans-serif;
+    font-size: 30px;
+    font-weight: lighter;
+}
+
+h2 {
+    font-family: 'Open Sans', sans-serif;
+    font-size: 24px;
+}
+
+h3 {
+    font-family: 'Open Sans', sans-serif;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+h4 {
+    font-family: 'Open Sans', sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.config {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-gap: 8px;
+}
+
+.config-element {
+    border: none;
+    background-color: #9FA8EB;
+    padding: 10px;
+}
+
+.config-element p {
+    font-style: italic;
+}
+
+.config-element ul {
+    font-style: italic;
+    list-style-type: none;
+}
+
+.config-element li {
+    font-style: italic;
+    list-style-type: none;
+}
+
+.line2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+/* WEBKIT */
+text {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+#filedrag {
+    font-weight: bold;
+    text-align: center;
+    padding: 1em 0;
+    margin: 1em 0;
+    color: #8d97e8;
+    border: 4px dashed #8d97e8;
+    cursor: default;
+    font-size: 20px;
+}
+
+#filedrag.hover {
+    color: #FF7F00;
+    border-color: #FF7F00;
+    border-style: solid;
+}
+
+td {
+    text-align: center;
+    padding: 40px;
+}

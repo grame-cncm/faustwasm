@@ -21,7 +21,11 @@ export interface FaustModule extends EmscriptenModule {
 
 export type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
 
-export interface IntVector { size(): number; get(i: number): number; }
+export interface IntVector {
+    size(): number;
+    get(i: number): number;
+    delete(): void;
+}
 
 export interface FaustWasm {
     /* The C++ factory pointer as in integer */

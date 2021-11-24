@@ -771,6 +771,7 @@ var _FaustCompiler = class {
         const faustWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
         try {
           const code2 = this.intVec2intArray(faustWasm.data);
+          faustWasm.data.delete();
           const module2 = await WebAssembly.compile(code2);
           const factory = { cfactory: faustWasm.cfactory, code: code2, module: module2, json: faustWasm.json, poly };
           this.deleteDSPFactory(factory);

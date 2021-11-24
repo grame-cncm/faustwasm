@@ -9,7 +9,8 @@
     "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist --format=cjs",
     "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm",
     "build-esm-wam": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outfile=assets/wam2/faustwasm.js --format=esm",
-    "build-types": "dts-bundle-generator -o assets/wam2/faustwasm.d.ts src/index.ts --external-imports"
+    "build-types": "dts-bundle-generator -o assets/wam2/faustwasm.d.ts src/index.ts --external-imports",
+    "postbuild": "node build.js"
   },
   "repository": {
     "type": "git",
@@ -26,7 +27,7 @@
   },
   "homepage": "https://github.com/Fr0stbyteR/faustwasm#readme",
   "devDependencies": {
-    "@shren/faust-ui": "^1.0.5",
+    "@shren/faust-ui": "^1.1.1",
     "@types/emscripten": "^1.39.5",
     "@types/node": "^16.11.7",
     "@webaudiomodules/api": "^2.0.0-alpha.1",

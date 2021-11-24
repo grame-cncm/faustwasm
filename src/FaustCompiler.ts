@@ -111,6 +111,7 @@ class FaustCompiler implements IFaustCompiler {
                 const faustWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
                 try {
                     const code = this.intVec2intArray(faustWasm.data);
+                    faustWasm.data.delete();
                     const module = await WebAssembly.compile(code);
                     const factory = { cfactory: faustWasm.cfactory, code, module, json: faustWasm.json, poly }
                     // Factory C++ side can be deallocated immediately

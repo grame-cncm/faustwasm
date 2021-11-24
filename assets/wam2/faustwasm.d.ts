@@ -25,6 +25,7 @@ export type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "arch
 export interface IntVector {
 	size(): number;
 	get(i: number): number;
+	delete(): void;
 }
 export interface FaustWasm {
 	/* The C++ factory pointer as in integer */
