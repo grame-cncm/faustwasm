@@ -3,6 +3,7 @@
 /// <reference types="emscripten" />
 /// <reference types="node" />
 
+export declare type FaustModuleFactory = EmscriptenModuleFactory<FaustModule>;
 export interface FaustModule extends EmscriptenModule {
 	ccall: typeof ccall;
 	cwrap: typeof cwrap;
@@ -21,18 +22,15 @@ export interface FaustModule extends EmscriptenModule {
 	FS: typeof FS;
 	libFaustWasm: new () => LibFaustWasm;
 }
-export type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
+export declare type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
 export interface IntVector {
 	size(): number;
 	get(i: number): number;
 	delete(): void;
 }
 export interface FaustWasm {
-	/* The C++ factory pointer as in integer */
 	cfactory: number;
-	/* The compiled wasm binary code */
 	data: IntVector;
-	/* The DSP JSON description */
 	json: string;
 }
 export interface LibFaustWasm {
@@ -126,8 +124,8 @@ export interface FaustDspMeta {
 	}[];
 	ui: FaustUIDescriptor;
 }
-export type FaustUIDescriptor = FaustUIGroup[];
-export type FaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
+export declare type FaustUIDescriptor = FaustUIGroup[];
+export declare type FaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
 export interface FaustUIInputItem {
 	type: FaustUIInputType;
 	label: string;
@@ -150,20 +148,46 @@ export interface FaustUIOutputItem {
 }
 export interface FaustUIMeta {
 	[order: number]: string;
-	style?: string; // "knob" | "menu{'Name0':value0;'Name1':value1}" | "radio{'Name0':value0;'Name1':value1}" | "led";
+	style?: string;
 	unit?: string;
 	scale?: "linear" | "exp" | "log";
 	tooltip?: string;
 	hidden?: string;
 	[key: string]: string | undefined;
 }
-export type FaustUIGroupType = "vgroup" | "hgroup" | "tgroup";
-export type FaustUIOutputType = "hbargraph" | "vbargraph";
-export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry";
+export declare type FaustUIGroupType = "vgroup" | "hgroup" | "tgroup";
+export declare type FaustUIOutputType = "hbargraph" | "vbargraph";
+export declare type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry";
 export interface FaustUIGroup {
 	type: FaustUIGroupType;
 	label: string;
 	items: FaustUIItem[];
+}
+export declare type FaustUIType = FaustUIGroupType | FaustUIOutputType | FaustUIInputType;
+export interface AudioParamDescriptor {
+	automationRate?: AutomationRate;
+	defaultValue?: number;
+	maxValue?: number;
+	minValue?: number;
+	name: string;
+}
+export interface AudioWorkletProcessor {
+	port: MessagePort;
+	process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, Float32Array>): boolean;
+}
+export declare const AudioWorkletProcessor: {
+	prototype: AudioWorkletProcessor;
+	parameterDescriptors: AudioParamDescriptor[];
+	new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
+};
+export interface AudioWorkletGlobalScope {
+	AudioWorkletGlobalScope: any;
+	globalThis: AudioWorkletGlobalScope;
+	registerProcessor: (name: string, constructor: new (options: any) => AudioWorkletProcessor) => void;
+	currentFrame: number;
+	currentTime: number;
+	sampleRate: number;
+	AudioWorkletProcessor: typeof AudioWorkletProcessor;
 }
 /**
  * Load libfaust-wasm files, than instantiate libFaust

@@ -10,7 +10,7 @@
 
 import { WebAudioModule } from './sdk/index.js';
 import { CompositeAudioNode, ParamMgrFactory } from './sdk-parammgr/index.js';
-import { FaustMonoDspGenerator, FaustPolyDspGenerator } from "./faustwasm.js"
+import { FaustMonoDspGenerator, FaustPolyDspGenerator } from "./faustwasm/index.js";
 import createElement from './gui.js';
 
 class FaustCompositeAudioNode extends CompositeAudioNode {

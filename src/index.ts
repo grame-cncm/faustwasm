@@ -19,6 +19,7 @@ export * from "./FaustWebAudioDsp";
 export * from "./FaustDspGenerator";
 export * from "./LibFaust";
 
+export * from "./types";
 
 export {
     instantiateFaustModule,

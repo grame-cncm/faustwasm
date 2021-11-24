@@ -25,4 +25,29 @@ const dts = `export * from "@shren/faust-ui";\n`;
 fs.writeFileSync(path.join(faustUIDistDest, "index.d.ts"), dts);
 fs.writeFileSync(path.join(faustUIDistDest2, "index.d.ts"), dts);
 
-console.log("Build files copied.")
+console.log("FaustUI files copied.")
+
+const faustWasmDistPath = path.join(__dirname, "./dist");
+const faustWasmDistEsmPath = path.join(__dirname, "./dist/esm");
+const faustWasmDistDest = path.join(__dirname, "./assets/wam2/faustwasm");
+const faustWasmDistDest2 = path.join(__dirname, "./test/faustlive-wasm/faustwasm");
+
+fs.copyFileSync(path.join(faustWasmDistPath, "index.d.ts"), path.join(faustWasmDistEsmPath, "index.d.ts"));
+
+try {
+    fs.rmSync(faustWasmDistDest, { force: true, recursive: true });
+    fs.rmSync(faustWasmDistDest2, { force: true, recursive: true });
+} catch (e) {
+    console.warn(e);
+}
+try {
+    fs.mkdirSync(faustWasmDistDest);
+    fs.mkdirSync(faustWasmDistDest2);
+} catch (e) {
+    console.warn(e);
+}
+
+fs.cpSync(faustWasmDistEsmPath, faustWasmDistDest, { recursive: true });
+fs.cpSync(faustWasmDistEsmPath, faustWasmDistDest2, { recursive: true });
+
+console.log("FaustWasm files copied.")

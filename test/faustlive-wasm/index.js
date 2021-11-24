@@ -10,17 +10,17 @@ const workletAvailable = typeof AudioWorklet !== "undefined";
 /** @type {HTMLDivElement} */
 const faustUIRoot = document.getElementById("faust-ui");
 
-/** @type {import("../../src/index").FaustCompiler} */
+/** @type {import("./faustwasm").FaustCompiler} */
 let faust_compiler = null;
-/** @type {import("../../src/index").FaustMonoDspGenerator} */
+/** @type {import("./faustwasm").FaustMonoDspGenerator} */
 let faust_mono_factory = null;
-/** @type {import("../../src/index").FaustPolyDspGenerator} */
+/** @type {import("./faustwasm").FaustPolyDspGenerator} */
 let faust_poly_factory = null;
 let isPoly = false;
 let buffer_size = 1024;
 let audio_input = null;
 let factory = null;
-/** @type {import("../../src/index").FaustAudioWorkletNode<any> | import("../../src/index").FaustScriptProcessorNode<any>} */
+/** @type {import("./faustwasm").FaustAudioWorkletNode<any> | import("./faustwasm").FaustScriptProcessorNode<any>} */
 let DSP = null;
 /** @type {string} */
 let dsp_code = null;
@@ -581,7 +581,7 @@ const init = async () => {
         FaustMonoDspGenerator,
         FaustPolyDspGenerator,
         LibFaust
-    } = await import("../../dist/esm/index.js");
+    } = await import("./faustwasm/index.js");
     FaustUI = (await import("./faust-ui/index.js")).FaustUI;
     // Init Faust compiler and node factory 
     const module = await instantiateFaustModule("../../libfaust-wasm/libfaust-wasm.js");

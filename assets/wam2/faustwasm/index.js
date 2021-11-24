@@ -617,6 +617,10 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
       return params;
     }
     process(inputs, outputs, parameters) {
+      for (const path in parameters) {
+        const paramArray = parameters[path];
+        this.fDSPCode.setParamValue(path, paramArray[0]);
+      }
       return this.fDSPCode.compute(inputs[0], outputs[0]);
     }
     handleMessageAux(e) {
@@ -2724,4 +2728,4 @@ export {
  * @copyright Chen, Yi-Cyuan 2014-2017
  * @license MIT
  */
-//# sourceMappingURL=faustwasm.js.map
+//# sourceMappingURL=index.js.map

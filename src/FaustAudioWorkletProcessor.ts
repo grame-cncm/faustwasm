@@ -94,13 +94,11 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
         process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: { [key: string]: Float32Array }) {
 
-            /*
-            // Update controls (possibly needed for sample accurate control), deactivated for now
+            // Update controls (possibly needed for sample accurate control)
             for (const path in parameters) {
                 const paramArray = parameters[path];
                 this.fDSPCode.setParamValue(path, paramArray[0]);
             }
-            */
 
             return this.fDSPCode.compute(inputs[0], outputs[0]);
         }

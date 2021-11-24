@@ -5,12 +5,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "npm run build-cjs & npm run build-esm & npm run build-esm-wam & npm run build-types",
+    "build": "npm run build-cjs & npm run build-esm  & npm run build-types",
     "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist --format=cjs",
     "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm",
-    "build-esm-wam": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outfile=assets/wam2/faustwasm.js --format=esm",
-    "build-types": "dts-bundle-generator -o assets/wam2/faustwasm.d.ts src/index.ts --external-imports",
-    "postbuild": "node build.js"
+    "build-types": "dts-bundle-generator -o dist/index.d.ts src/index.ts --external-imports",
+    "postbuild": "node postbuild.js"
   },
   "repository": {
     "type": "git",
