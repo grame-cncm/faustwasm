@@ -75,7 +75,7 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     console.log(`Writing files to ${outputDir}`);
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
     for (const filePath in files) {
-        if (fs.existsSync(filePath)) fs.rmSync(filePath);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     fs.writeFileSync(dspModulePath, dspModule);
     fs.writeFileSync(dspMetaPath, JSON.stringify(dspMeta, null, 4));

@@ -1,6 +1,7 @@
 //@ts-check
 const fs = require("fs");
 const path = require("path");
+const { cpSync } = require("../postbuild");
 
 /**
  * @param {import("./types").FaustDspMeta} dspMeta
@@ -43,10 +44,10 @@ const faustDsp2wam2Files = async (dspMeta, effectMeta, outputDir, poly = false) 
     console.log(`Writing WAM2 assets files.`)
     const assetsPath = path.join(__dirname, "../assets/wam2");
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-    fs.cpSync(assetsPath, outputDir, { force: true, recursive: true });
+    cpSync(assetsPath, outputDir);
     console.log(`Writing Descriptor file.`)
     const descriptorPath = path.join(outputDir, "descriptor.json");
-    if (fs.existsSync(descriptorPath)) fs.rmSync(descriptorPath);
+    if (fs.existsSync(descriptorPath)) fs.unlinkSync(descriptorPath);
     fs.writeFileSync(descriptorPath, JSON.stringify(faustDspToWam2Descriptor(dspMeta, effectMeta, poly), null, 4));
 };
 

@@ -46,7 +46,7 @@ const faust2wavFiles = async (inputFile, inputWav, outputWav, bufferSize = 64, s
     console.log(`Processing...`);
     const output = processor.render(input, samples, sample => process.stdout.write(`\r${sample} / ${samples}`));
     console.log("");
-    console.log(`Decoding...`);
+    console.log(`Encoding...`);
     const outputBuffer = WavEncoder.encode(output, { bitDepth, sampleRate });
     console.log(`Writing output wav file ${outputWav}.`);
     fs.writeFileSync(outputWav, new Uint8Array(outputBuffer));
