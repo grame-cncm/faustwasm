@@ -29,28 +29,68 @@ const cpSync = (src, dest) => {
     }
 };
 
-const faustUIDistPath = path.join(__dirname, "./node_modules/@shren/faust-ui/dist/esm");
-const faustUIDistDest = path.join(__dirname, "./assets/wam2/faust-ui");
-const faustUIDistDest2 = path.join(__dirname, "./test/faustlive-wasm/faust-ui");
+const wamSdkParamMgrDistPath = path.join(__dirname, "./node_modules/@webaudiomodules/sdk-parammgr/dist");
+const wamSdkParamMgrDistDest = path.join(__dirname, "./assets/wam2/sdk-parammgr");
 
 try {
-    rmSync(faustUIDistDest);
-    rmSync(faustUIDistDest2);
+    rmSync(wamSdkParamMgrDistDest);
 } catch (e) {
     console.warn(e);
 }
 try {
-    fs.mkdirSync(faustUIDistDest);
-    fs.mkdirSync(faustUIDistDest2);
+    fs.mkdirSync(wamSdkParamMgrDistDest);
 } catch (e) {
     console.warn(e);
 }
 
-cpSync(faustUIDistPath, faustUIDistDest);
-cpSync(faustUIDistPath, faustUIDistDest2);
-const dts = `export * from "@shren/faust-ui";\n`;
-fs.writeFileSync(path.join(faustUIDistDest, "index.d.ts"), dts);
-fs.writeFileSync(path.join(faustUIDistDest2, "index.d.ts"), dts);
+cpSync(wamSdkParamMgrDistPath, wamSdkParamMgrDistDest);
+const wamSdkParamMgrDts = `export * from "@webaudiomodules/sdk-parammgr";\n`;
+fs.writeFileSync(path.join(wamSdkParamMgrDistDest, "index.d.ts"), wamSdkParamMgrDts);
+
+console.log("WAM SDK-ParamMgr files copied.")
+
+const wamSdkDistPath = path.join(__dirname, "./node_modules/@webaudiomodules/sdk/dist");
+const wamSdkDistDest = path.join(__dirname, "./assets/wam2/sdk");
+
+try {
+    rmSync(wamSdkDistDest);
+} catch (e) {
+    console.warn(e);
+}
+try {
+    fs.mkdirSync(wamSdkDistDest);
+} catch (e) {
+    console.warn(e);
+}
+
+cpSync(wamSdkDistPath, wamSdkDistDest);
+const wamSdkDts = `export * from "@webaudiomodules/sdk";\n`;
+fs.writeFileSync(path.join(wamSdkDistDest, "index.d.ts"), wamSdkDts);
+
+console.log("WAM SDK files copied.")
+
+const faustUiDistPath = path.join(__dirname, "./node_modules/@shren/faust-ui/dist/esm");
+const faustUiDistDest = path.join(__dirname, "./assets/wam2/faust-ui");
+const faustUiDistDest2 = path.join(__dirname, "./test/faustlive-wasm/faust-ui");
+
+try {
+    rmSync(faustUiDistDest);
+    rmSync(faustUiDistDest2);
+} catch (e) {
+    console.warn(e);
+}
+try {
+    fs.mkdirSync(faustUiDistDest);
+    fs.mkdirSync(faustUiDistDest2);
+} catch (e) {
+    console.warn(e);
+}
+
+cpSync(faustUiDistPath, faustUiDistDest);
+cpSync(faustUiDistPath, faustUiDistDest2);
+const faustUiDts = `export * from "@shren/faust-ui";\n`;
+fs.writeFileSync(path.join(faustUiDistDest, "index.d.ts"), faustUiDts);
+fs.writeFileSync(path.join(faustUiDistDest2, "index.d.ts"), faustUiDts);
 
 console.log("FaustUI files copied.")
 

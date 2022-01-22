@@ -1,46 +1,34 @@
+/** @type {HTMLMediaElement} */
 const player = document.querySelector('#player');
+/** @type {HTMLDivElement} */
 const mount = document.querySelector('#mount');
-
-// Safari...
-const AudioContext = window.AudioContext // Default
-	|| window.webkitAudioContext // Safari and old versions of Chrome
-	|| false;
 
 const audioContext = new AudioContext();
 const mediaElementSource = audioContext.createMediaElementSource(player);
 
-// Very simple function to connect the plugin audionode to the host
-const connectPlugin = (audioNode) => {
-	mediaElementSource.connect(audioNode);
-	audioNode.connect(audioContext.destination);
-};
-
-// Very simple function to append the plugin root dom node to the host
-const mountPlugin = (domNode) => {
-	mount.innerHtml = '';
-	mount.appendChild(domNode);
-};
-
 (async () => {
 	// Init WamEnv
-	const { VERSION: apiVersion } = await import("../api/index.js");
-	const { addFunctionModule, initializeWamEnv } = await import("../sdk/index.js");
-	await addFunctionModule(audioContext.audioWorklet, initializeWamEnv, apiVersion);
-	const { default: WAM } = await import('../index.js');
+	const { initializeWamHost } = await import('../sdk/index.js');
+	const [hostGroupId] = await initializeWamHost(audioContext);
+
+	// Load the WAM
+	const { default: WAM } = await import("../index.js");
+
 	// Create a new instance of the plugin
 	// You can can optionnally give more options such as the initial state of the plugin
-	const instance = await WAM.createInstance(audioContext);
-
-	window.instance = instance;
+	const wamInstance = await WAM.createInstance(hostGroupId, audioContext);
 
 	// Connect the audionode to the host
-	connectPlugin(instance.audioNode);
+	mediaElementSource.connect(wamInstance.audioNode);
+	wamInstance.audioNode.connect(audioContext.destination);
 
 	// Load the GUI if need (ie. if the option noGui was set to true)
 	// And calls the method createElement of the Gui module
-	const pluginDomNode = await instance.createGui();
+	const wamGui = await wamInstance.createGui();
 
-	mountPlugin(pluginDomNode);
+	// Mount the GUI
+	mount.innerHTML = '';
+	mount.appendChild(wamGui);
 
 	player.onplay = () => {
 		audioContext.resume(); // audio context must be resumed because browser restrictions
