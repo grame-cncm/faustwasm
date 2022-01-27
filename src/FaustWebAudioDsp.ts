@@ -337,7 +337,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected updateOutputs() {
         if (this.fOutputsItems.length > 0 && this.fOutputHandler && this.fOutputsTimer-- === 0) {
             this.fOutputsTimer = 5;
-            this.fOutputsItems.forEach(item => { if (this.fOutputHandler) this.fOutputHandler(item, this.getParamValue(item)) });
+            this.fOutputsItems.forEach(item => this.fOutputHandler?.(item, this.getParamValue(item)));
         }
     }
 
@@ -623,8 +623,8 @@ export class FaustWebAudioDspVoice {
         FaustWebAudioDspVoice.kNoVoice = -4;
         FaustWebAudioDspVoice.VOICE_STOP_LEVEL = 0.0005;
         // Default versions
-        this.fKeyFun = (pitch: number) => { return FaustWebAudioDspVoice.midiToFreq(pitch); }
-        this.fVelFun = (velocity: number) => { return velocity / 127.0; }
+        this.fKeyFun = (pitch: number) => FaustWebAudioDspVoice.midiToFreq(pitch);
+        this.fVelFun = (velocity: number) => velocity / 127.0;
         this.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
         this.fNextNote = this.fNextVel = -1;
         this.fLevel = 0;
@@ -638,23 +638,23 @@ export class FaustWebAudioDspVoice {
         this.extractPaths(inputItems, pathTable);
     }
 
-    static midiToFreq(note: number) { return 440.0 * 2 ** ((note - 69) / 12) }
+    static midiToFreq(note: number) { return 440.0 * 2 ** ((note - 69) / 12); }
 
     private extractPaths(inputItems: string[], pathTable: { [address: string]: number }) {
         inputItems.forEach((item) => {
             if (item.endsWith("/gate")) {
                 this.fGateLabel.push(pathTable[item]);
             } else if (item.endsWith("/freq")) {
-                this.fKeyFun = (pitch: number) => { return FaustWebAudioDspVoice.midiToFreq(pitch); }
+                this.fKeyFun = (pitch: number) => FaustWebAudioDspVoice.midiToFreq(pitch);
                 this.fFreqLabel.push(pathTable[item]);
             } else if (item.endsWith("/key")) {
-                this.fKeyFun = (pitch: number) => { return pitch; }
+                this.fKeyFun = (pitch: number) => pitch;
                 this.fFreqLabel.push(pathTable[item]);
             } else if (item.endsWith("/gain")) {
-                this.fVelFun = (velocity: number) => { return velocity / 127.0; }
+                this.fVelFun = (velocity: number) => velocity / 127.0;
                 this.fGainLabel.push(pathTable[item]);
             } else if (item.endsWith("/vel") && item.endsWith("/velocity")) {
-                this.fVelFun = (velocity: number) => { return velocity; }
+                this.fVelFun = (velocity: number) => velocity;
                 this.fGainLabel.push(pathTable[item]);
             }
         });
@@ -904,7 +904,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
 
         // Compute
         this.fInstance.mixerAPI.clearOutput(this.fBufferSize, this.getNumOutputs(), this.fAudioOutputs);
-        this.fVoiceTable.forEach(voice => {
+        this.fVoiceTable.forEach((voice) => {
             if (voice.fCurNote === FaustWebAudioDspVoice.kLegatoVoice) {
                 // Play from current note and next note
                 voice.computeLegato(this.fBufferSize, this.fAudioInputs, this.fAudioMixing, this.fAudioMixingHalf);
@@ -970,7 +970,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
         if (this.fJSONEffect && FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) && this.fInstance.effectAPI) {
             this.fInstance.effectAPI.setParamValue(this.fEffect, this.fPathTable[path], value);
         } else {
-            this.fVoiceTable.forEach(voice => { voice.setParamValue(this.fPathTable[path], value); });
+            this.fVoiceTable.forEach(voice => voice.setParamValue(this.fPathTable[path], value));
         }
     }
     getParamValue(path: string) {

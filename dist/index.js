@@ -623,17 +623,19 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
   class FaustAudioWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {
       super(options);
-      this.port.onmessage = (e) => {
-        this.handleMessageAux(e);
-      };
+      this.port.onmessage = (e) => this.handleMessageAux(e);
     }
     static get parameterDescriptors() {
       const params = [];
       const callback = (item) => {
         if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-          params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
+          if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain")) {
+            params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
+          }
         } else if (item.type === "button" || item.type === "checkbox") {
-          params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
+          if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain")) {
+            params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
+          }
         }
       };
       FaustBaseWebAudioDsp2.parseUI(dspMeta.ui, callback);
@@ -733,9 +735,7 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
       const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
       const instance = FaustWasmInstantiator2.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
       this.fDSPCode = new FaustWebAudioPolyDSP(instance, sampleRate, sampleSize, 128);
-      this.port.onmessage = (e) => {
-        this.handleMessageAux(e);
-      };
+      this.port.onmessage = (e) => this.handleMessageAux(e);
       this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
       this.fDSPCode.start();
     }
@@ -1684,10 +1684,7 @@ var FaustBaseWebAudioDsp = class {
   updateOutputs() {
     if (this.fOutputsItems.length > 0 && this.fOutputHandler && this.fOutputsTimer-- === 0) {
       this.fOutputsTimer = 5;
-      this.fOutputsItems.forEach((item) => {
-        if (this.fOutputHandler)
-          this.fOutputHandler(item, this.getParamValue(item));
-      });
+      this.fOutputsItems.forEach((item) => this.fOutputHandler?.(item, this.getParamValue(item)));
     }
   }
   metadata(handler) {
@@ -1905,12 +1902,8 @@ var FaustWebAudioDspVoice = class {
     FaustWebAudioDspVoice.kLegatoVoice = -3;
     FaustWebAudioDspVoice.kNoVoice = -4;
     FaustWebAudioDspVoice.VOICE_STOP_LEVEL = 5e-4;
-    this.fKeyFun = (pitch) => {
-      return FaustWebAudioDspVoice.midiToFreq(pitch);
-    };
-    this.fVelFun = (velocity) => {
-      return velocity / 127;
-    };
+    this.fKeyFun = (pitch) => FaustWebAudioDspVoice.midiToFreq(pitch);
+    this.fVelFun = (velocity) => velocity / 127;
     this.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
     this.fNextNote = this.fNextVel = -1;
     this.fLevel = 0;
@@ -1931,24 +1924,16 @@ var FaustWebAudioDspVoice = class {
       if (item.endsWith("/gate")) {
         this.fGateLabel.push(pathTable[item]);
       } else if (item.endsWith("/freq")) {
-        this.fKeyFun = (pitch) => {
-          return FaustWebAudioDspVoice.midiToFreq(pitch);
-        };
+        this.fKeyFun = (pitch) => FaustWebAudioDspVoice.midiToFreq(pitch);
         this.fFreqLabel.push(pathTable[item]);
       } else if (item.endsWith("/key")) {
-        this.fKeyFun = (pitch) => {
-          return pitch;
-        };
+        this.fKeyFun = (pitch) => pitch;
         this.fFreqLabel.push(pathTable[item]);
       } else if (item.endsWith("/gain")) {
-        this.fVelFun = (velocity) => {
-          return velocity / 127;
-        };
+        this.fVelFun = (velocity) => velocity / 127;
         this.fGainLabel.push(pathTable[item]);
       } else if (item.endsWith("/vel") && item.endsWith("/velocity")) {
-        this.fVelFun = (velocity) => {
-          return velocity;
-        };
+        this.fVelFun = (velocity) => velocity;
         this.fGainLabel.push(pathTable[item]);
       }
     });
@@ -2173,9 +2158,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
     if (this.fJSONEffect && FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) && this.fInstance.effectAPI) {
       this.fInstance.effectAPI.setParamValue(this.fEffect, this.fPathTable[path], value);
     } else {
-      this.fVoiceTable.forEach((voice) => {
-        voice.setParamValue(this.fPathTable[path], value);
-      });
+      this.fVoiceTable.forEach((voice) => voice.setParamValue(this.fPathTable[path], value));
     }
   }
   getParamValue(path) {

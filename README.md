@@ -24,12 +24,11 @@ or
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/poly.dsp test/out -poly
 ```
-You can create [WebAudioModule](https://github.com/webaudiomodules) Plugins using the same command line
+You can create standalone DSP on a web page using the same command line
 ```bash
 rm -rf test/out # make sure you are under the faustwasm directory.
-node scripts/faust2wasm.js test/rev.dsp test/out -wam2
+node scripts/faust2wasm.js test/rev.dsp test/out -standalone
 ```
-The WAM2 comes with a small host, check out `test/out/host/index.html`.
 
 #### Generate SVG Diagrams of a Faust DSP
 For example:

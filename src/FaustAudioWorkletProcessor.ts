@@ -73,7 +73,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             super(options);
 
             // Setup port message handling
-            this.port.onmessage = (e: MessageEvent) => { this.handleMessageAux(e); }
+            this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);
         }
 
         static get parameterDescriptors() {
@@ -81,9 +81,13 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             // Analyse voice JSON to generate AudioParam parameters
             const callback = (item: FaustUIItem) => {
                 if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-                    params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
+                    if (!poly || (!item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain"))) {
+                        params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
+                    }
                 } else if (item.type === "button" || item.type === "checkbox") {
-                    params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
+                    if (!poly || (!item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain"))) {
+                        params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
+                    }
                 }
             }
             FaustBaseWebAudioDsp.parseUI(dspMeta.ui, callback);
@@ -198,7 +202,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             this.fDSPCode = new FaustWebAudioPolyDSP(instance, sampleRate, sampleSize, 128);
 
             // Setup port message handling
-            this.port.onmessage = (e: MessageEvent) => { this.handleMessageAux(e); }
+            this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));

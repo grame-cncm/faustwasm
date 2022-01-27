@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faust DSP</title>
+    <style>
+        body {
+            padding: 20px;
+            color: #b0b0b0;
+            background-color: #1f1f1f;
+            display: flex;
+            bottom: 0;
+            top: 0;
+            left: 0;
+            right: 0;
+            margin: 0;
+            position: absolute;
+        }
+        main {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+        }
+        main span {
+            position: relative;
+            display: flex;
+        }
+        main span[hidden] {
+            display: none;
+        }
+        main span span {
+            margin: 0px 10px;
+            flex: 1;
+        }
+        main span select {
+            flex: 2;
+        }
+        #dsp-switch {
+            margin: 20px auto;
+        }
+        #button-dsp {
+            padding: 10px;
+        }
+        #div-faust-ui {
+            flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+    <link rel="stylesheet" href="./faust-ui/index.css">
+</head>
+<body>
+    <main>
+        <span id="audio-input">
+            <span>Select Audio Input Device</span>
+            <select id="select-audio-input"></select>
+        </span>
+        <span id="midi-input">
+            <span>Select MIDI Input Device</span>
+            <select id="select-midi-input"></select>
+        </span>
+        <span id="dsp-switch">
+            <button id="button-dsp">Activate DSP</button>
+        </span>
+        <div id="div-faust-ui">
+        </div>
+    </main>
+    <script src="./index.js"></script>
+</body>
+</html>

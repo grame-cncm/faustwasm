@@ -216,7 +216,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
         this.name = name + this.voiceFactory.cfactory.toString() + "_poly";
         const voiceMeta = JSON.parse(this.voiceFactory.json);
         const isDouble = voiceMeta.compile_options.match("-double");
-        const { mixerBuffer, mixerModule, } = await compiler.getAsyncInternalMixerModule(!!isDouble);
+        const { mixerBuffer, mixerModule } = await compiler.getAsyncInternalMixerModule(!!isDouble);
         this.mixerBuffer = mixerBuffer;
         this.mixerModule = mixerModule;
         return this;
