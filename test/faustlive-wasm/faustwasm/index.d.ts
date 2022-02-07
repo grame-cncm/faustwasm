@@ -195,7 +195,7 @@ export interface AudioWorkletGlobalScope {
  * @param dataFile path to `libfaust-wasm.data`
  * @param wasmFile path to `libfaust-wasm.wasm`
  */
-export declare const instantiateFaustModule: (jsFile: string, dataFile?: string, wasmFile?: string) => Promise<FaustModule>;
+export declare const instantiateFaustModuleFromFile: (jsFile: string, dataFile?: string, wasmFile?: string) => Promise<FaustModule>;
 /**
  * The Faust wasm instance interface.
  */
@@ -1084,7 +1084,7 @@ export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 	createNode<SP extends boolean = false>(context: BaseAudioContext, voices: number, name?: string, voiceFactory?: LooseFaustDspFactory, mixerModule?: WebAssembly.Module, effectFactory?: LooseFaustDspFactory | null, sp?: SP, bufferSize?: number): Promise<SP extends true ? FaustPolyScriptProcessorNode | null : FaustPolyAudioWorkletNode | null>;
 }
 declare const _default: {
-	instantiateFaustModule: (jsFile: string, dataFile?: string, wasmFile?: string) => Promise<FaustModule>;
+	instantiateFaustModuleFromFile: (jsFile: string, dataFile?: string, wasmFile?: string) => Promise<FaustModule>;
 	getFaustAudioWorkletProcessor: <Poly extends boolean = false>(dependencies: FaustAudioWorkletProcessorDependencies<Poly>, faustData: FaustData) => void;
 	FaustDspInstance: typeof FaustDspInstance;
 	FaustCompiler: typeof FaustCompiler;

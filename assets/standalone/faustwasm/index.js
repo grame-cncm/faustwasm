@@ -565,22 +565,22 @@ if (!global2.fetchModuleCache)
   global2.fetchModuleCache = cache;
 var fetchModule_default = fetchModule;
 
-// src/instantiateFaustModule.ts
-var instantiateFaustModule = async (jsFile, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
-  let LibFaust2;
+// src/instantiateFaustModuleFromFile.ts
+var instantiateFaustModuleFromFile = async (jsFile, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
+  let FaustModule;
   try {
-    LibFaust2 = __require(jsFile);
+    FaustModule = __require(jsFile);
   } catch (error) {
-    LibFaust2 = await fetchModule_default(jsFile);
+    FaustModule = await fetchModule_default(jsFile);
   }
   const locateFile = (url, scriptDirectory) => ({
     "libfaust-wasm.wasm": wasmFile,
     "libfaust-wasm.data": dataFile
   })[url] || scriptDirectory + url;
-  const libFaust = await LibFaust2({ locateFile });
-  return libFaust;
+  const faustModule = await FaustModule({ locateFile });
+  return faustModule;
 };
-var instantiateFaustModule_default = instantiateFaustModule;
+var instantiateFaustModuleFromFile_default = instantiateFaustModuleFromFile;
 
 // src/FaustAudioWorkletProcessor.ts
 var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
@@ -2667,7 +2667,7 @@ FaustPolyDspGenerator.gWorkletProcessors = new Set();
 
 // src/index.ts
 var src_default = {
-  instantiateFaustModule: instantiateFaustModule_default,
+  instantiateFaustModuleFromFile: instantiateFaustModuleFromFile_default,
   getFaustAudioWorkletProcessor: FaustAudioWorkletProcessor_default,
   FaustDspInstance: FaustDspInstance_default,
   FaustCompiler: FaustCompiler_default,
@@ -2701,7 +2701,7 @@ export {
   WavEncoder_default as WavEncoder,
   src_default as default,
   FaustAudioWorkletProcessor_default as getFaustAudioWorkletProcessor,
-  instantiateFaustModule_default as instantiateFaustModule
+  instantiateFaustModuleFromFile_default as instantiateFaustModuleFromFile
 };
 /**
  * [js-sha256]{@link https://github.com/emn178/js-sha256}

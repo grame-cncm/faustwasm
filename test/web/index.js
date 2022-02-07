@@ -9,7 +9,7 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 
 (async () => {
 	const {
-		instantiateFaustModule,
+		instantiateFaustModuleFromFile,
 		LibFaust,
 		WavEncoder,
 		FaustWasmInstantiator,
@@ -20,7 +20,7 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 		FaustCompiler,
 		FaustSvgDiagrams
 	} = await import("../../dist/esm/index.js");
-    const faustModule = await instantiateFaustModule("../../libfaust-wasm/libfaust-wasm.js");
+    const faustModule = await instantiateFaustModuleFromFile("../../libfaust-wasm/libfaust-wasm.js");
 
     const libFaust = new LibFaust(faustModule);
 	globalThis.libFaust = libFaust;

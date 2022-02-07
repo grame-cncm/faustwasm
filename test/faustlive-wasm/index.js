@@ -576,7 +576,10 @@ const initPage = () => {
 
 const init = async () => {
     const {
-        instantiateFaustModule,
+        instantiateFaustModule
+    } = await import("../../dist/esm-bundle/index.js");
+    const {
+        instantiateFaustModuleFromFile,
         FaustCompiler,
         FaustMonoDspGenerator,
         FaustPolyDspGenerator,
@@ -584,7 +587,7 @@ const init = async () => {
     } = await import("./faustwasm/index.js");
     FaustUI = (await import("./faust-ui/index.js")).FaustUI;
     // Init Faust compiler and node factory 
-    const module = await instantiateFaustModule("../../libfaust-wasm/libfaust-wasm.js");
+    const module = await instantiateFaustModule();
     const libFaust = new LibFaust(module);
     faust_compiler = new FaustCompiler(libFaust);
     faust_mono_factory = new FaustMonoDspGenerator();

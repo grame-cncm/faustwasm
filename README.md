@@ -77,7 +77,7 @@ import * as url from "url";
 import * as fs from "fs";
 
 const {
-    instantiateFaustModule,
+    instantiateFaustModuleFromFile,
     LibFaust,
     FaustOfflineProcessor,
     WavEncoder
@@ -90,7 +90,7 @@ const __dirname = path.dirname(__filename);
     const libFaustPath = path.join(__dirname, "../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
 
     // initialize the libfaust wasm
-    const libFaust = await instantiateFaustModule(libFaustPath);
+    const libFaust = await instantiateFaustModuleFromFile(libFaustPath);
     // Get the Faust compiler
     const faust = new LibFaust(libFaust);
     console.log(`Faust Compiler version: ${faust.version}`);
@@ -125,13 +125,13 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 
 (async () => {
     const {
-        instantiateFaustModule,
+        instantiateFaustModuleFromFile,
         LibFaust,
         FaustOfflineProcessor,
         WavEncoder
     } = await import("../node_modules/@shren/faustwasm/dist/esm/index.js");
     // initialize the libfaust wasm
-    const libFaust = await instantiateFaustModule("../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
+    const libFaust = await instantiateFaustModuleFromFile("../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
     // Get the Faust compiler
     const faust = new LibFaust(libFaust);
     window.faust = faust;
