@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 /** @type {import("../dist")} */
 const {
-    instantiateFaustModule,
+    instantiateFaustModuleFromFile,
     LibFaust,
     FaustCompiler,
     FaustMonoDspGenerator,
@@ -17,7 +17,7 @@ const {
  * @param {boolean} [poly]
  */
 const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) => {
-    const faustModule = await instantiateFaustModule(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
+    const faustModule = await instantiateFaustModuleFromFile(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
     const libFaust = new LibFaust(faustModule);
     const compiler = new FaustCompiler(libFaust);
     console.log(`Faust Compiler version: ${compiler.version()}`);

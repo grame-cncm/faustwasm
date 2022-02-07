@@ -4,7 +4,7 @@ const fs = require("fs");
 const process = require("process");
 /** @type {import("../dist")} */
 const {
-    instantiateFaustModule,
+    instantiateFaustModuleFromFile,
     LibFaust,
     FaustCompiler,
     FaustMonoDspGenerator,
@@ -23,7 +23,7 @@ const {
  * @param {string[]} [argv]
  */
 const faust2wavFiles = async (inputFile, inputWav, outputWav, bufferSize = 64, sampleRate = 44100, samples = 5 * sampleRate, bitDepth = 16, argv = []) => {
-    const faustModule = await instantiateFaustModule(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
+    const faustModule = await instantiateFaustModuleFromFile(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
     const libFaust = new LibFaust(faustModule);
     const compiler = new FaustCompiler(libFaust);
     console.log(`Faust Compiler version: ${compiler.version()}`);
