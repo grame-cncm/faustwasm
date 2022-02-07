@@ -1,25 +1,16 @@
-import fetchModule from "./fetchModule";
-import type { FaustModuleFactory } from "./types";
+import FaustModule from "../libfaust-wasm/libfaust-wasm";
+import wasmBinary from "../libfaust-wasm/libfaust-wasm.wasm";
+import dataBinary from "../libfaust-wasm/libfaust-wasm.data";
 
-/**
- * Load libfaust-wasm files, than instantiate libFaust
- * @param jsFile path to `libfaust-wasm.js`
- * @param dataFile path to `libfaust-wasm.data`
- * @param wasmFile path to `libfaust-wasm.wasm`
- */
-const instantiateFaustModule = async (jsFile: string, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
-    let LibFaust: FaustModuleFactory;
-    try {
-        LibFaust = require(jsFile);
-    } catch (error) {
-        LibFaust = await fetchModule(jsFile);
-    }
-    const locateFile = (url: string, scriptDirectory: string) => ({
-        "libfaust-wasm.wasm": wasmFile,
-        "libfaust-wasm.data": dataFile
-    }[url]) || scriptDirectory + url;
-    const libFaust = await LibFaust({ locateFile });
-    return libFaust;
+const instantiateFaustModule = async (FaustModuleIn = FaustModule, dataBinaryIn = dataBinary, wasmBinaryIn = wasmBinary) => {
+    const faustModule = await FaustModuleIn({
+        wasmBinary: wasmBinaryIn,
+        getPreloadedPackage: (remotePackageName: string, remotePackageSize: number) => {
+            if (remotePackageName === "libfaust-wasm.data") return dataBinaryIn.buffer;
+            return new ArrayBuffer(0);
+        }
+    });
+    return faustModule;
 };
 
 export default instantiateFaustModule;
