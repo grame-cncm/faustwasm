@@ -77,9 +77,9 @@ import * as url from "url";
 import * as fs from "fs";
 
 const {
-    instantiateLibFaust,
-    Faust,
-    FaustProcessor,
+    instantiateFaustModule,
+    LibFaust,
+    FaustOfflineProcessor,
     WavEncoder
 } = FaustWasm;
 
@@ -90,9 +90,9 @@ const __dirname = path.dirname(__filename);
     const libFaustPath = path.join(__dirname, "../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
 
     // initialize the libfaust wasm
-    const libFaust = await instantiateLibFaust(libFaustPath);
+    const libFaust = await instantiateFaustModule(libFaustPath);
     // Get the Faust compiler
-    const faust = new Faust(libFaust);
+    const faust = new LibFaust(libFaust);
     console.log(`Faust Compiler version: ${faust.version}`);
     const code = `
 import("stdfaust.lib");
@@ -109,8 +109,8 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 
     const sampleRate = 48000;
 
-    // To generate audio using FaustProcessor
-    const processor = new FaustProcessor({ dsp, sampleRate });
+    // To generate audio using FaustOfflineProcessor
+    const processor = new FaustOfflineProcessor({ dsp, sampleRate });
     await processor.initialize();
     const out = processor.generate(null, 192000);
 
@@ -125,15 +125,15 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 
 (async () => {
     const {
-        instantiateLibFaust,
-        Faust,
-        FaustProcessor,
+        instantiateFaustModule,
+        LibFaust,
+        FaustOfflineProcessor,
         WavEncoder
     } = await import("../node_modules/@shren/faustwasm/dist/esm/index.js");
     // initialize the libfaust wasm
-    const libFaust = await instantiateLibFaust("../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
+    const libFaust = await instantiateFaustModule("../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
     // Get the Faust compiler
-    const faust = new Faust(libFaust);
+    const faust = new LibFaust(libFaust);
     window.faust = faust;
     console.log(faust.version);
     const sampleRate = 48000;
@@ -149,8 +149,8 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
     const svgs = faust.getDiagram(code, args);
     console.log(Object.keys(svgs));
 
-    // To generate audio using FaustProcessor
-    const processor = new FaustProcessor({ dsp, sampleRate });
+    // To generate audio using FaustOfflineProcessor
+    const processor = new FaustOfflineProcessor({ dsp, sampleRate });
     await processor.initialize();
     const out = processor.generate(null, 192000);
     const wav = WavEncoder.encode(out, { sampleRate, bitDepth: 24 });
