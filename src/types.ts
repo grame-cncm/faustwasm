@@ -70,7 +70,7 @@ export interface LibFaustWasm {
      * @param args - the compiler options
      * @returns return the expanded dsp code
      */
-    expandDSP(name: string, code: string, args: string): string
+    expandDSP(name: string, code: string, args: string): string;
 
     /**
      * Generates auxiliary files from Faust code. The output depends on the compiler options.

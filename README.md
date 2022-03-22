@@ -85,7 +85,7 @@ const {
 } = FaustWasm;
 
 (async () => {
-    const faustModulePath = path.join(__dirname, "../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
+    const faustModulePath = path.join(__dirname, "../node_modules/@shren/faustwasm/ libfaust-wasm/libfaust-wasm.js");
 
     // initialize the libfaust wasm
     const faustModule = await instantiateFaustModuleFromFile(faustModulePath);
@@ -94,20 +94,20 @@ const {
     const libFaust = new LibFaust(faustModule);
     console.log(libFaust.version());
     const compiler = new FaustCompiler(libFaust);
-	const generator = new FaustMonoDspGenerator();
+    const generator = new FaustMonoDspGenerator();
     const sampleRate = 48000;
-	const name = "Djembe"
+    const name = "Djembe"
     const argv = ["-I", "libraries/"];
     const code = `
 import("stdfaust.lib");
 process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 `;
     // Compile the DSP
-	await generator.compile(compiler, name, code, argv.join(" "));
+    await generator.compile(compiler, name, code, argv.join(" "));
     const processor = await generator.createOfflineProcessor(sampleRate, 1024);
 
     // Generate SVG diagrams.
-	const svgDiagrams = new FaustSvgDiagrams(compiler);
+    const svgDiagrams = new FaustSvgDiagrams(compiler);
     const svgs = svgDiagrams.from(name, code, argv.join(" "));
     console.log(Object.keys(svgs));
 
@@ -124,12 +124,12 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 
 (async () => {
     const {
-		instantiateFaustModuleFromFile,
-		LibFaust,
-		WavEncoder,
-		FaustMonoDspGenerator,
-		FaustCompiler,
-		FaustSvgDiagrams
+        instantiateFaustModuleFromFile,
+        LibFaust,
+        WavEncoder,
+        FaustMonoDspGenerator,
+        FaustCompiler,
+        FaustSvgDiagrams
     } = await import("../node_modules/@shren/faustwasm/dist/esm/index.js");
 
     // initialize the libfaust wasm
@@ -140,20 +140,20 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
     window.libFaust = libFaust;
     console.log(libFaust.version());
     const compiler = new FaustCompiler(libFaust);
-	const generator = new FaustMonoDspGenerator();
+    const generator = new FaustMonoDspGenerator();
     const sampleRate = 48000;
-	const name = "Djembe"
+    const name = "Djembe"
     const argv = ["-I", "libraries/"];
     const code = `
 import("stdfaust.lib");
 process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 `;
     // Compile the DSP
-	await generator.compile(compiler, name, code, argv.join(" "));
+    await generator.compile(compiler, name, code, argv.join(" "));
     const processor = await generator.createOfflineProcessor(sampleRate, 1024);
 
     // Generate SVG diagrams.
-	const svgDiagrams = new FaustSvgDiagrams(compiler);
+    const svgDiagrams = new FaustSvgDiagrams(compiler);
     const svgs = svgDiagrams.from(name, code, argv.join(" "));
     console.log(Object.keys(svgs));
 
@@ -166,8 +166,8 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
     player.controls = true;
     player.src = URL.createObjectURL(blob);
     document.body.appendChild(player);
-	const svg = document.createElement("div");
-	svg.innerHTML = svgs["process.svg"];
+    const svg = document.createElement("div");
+    svg.innerHTML = svgs["process.svg"];
     document.body.appendChild(svg);
 })();
 ```
