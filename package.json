@@ -4,10 +4,11 @@
   "description": "WebAssembly version of Faust Compiler",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "build": "npm run build-cjs & npm run build-esm & npm run build-esm-bundle & npm run build-types & npm run build-types-bundle",
     "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist --format=cjs",
-    "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm",
+    "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm --external:fs/promises --external:url",
     "build-esm-bundle": "esbuild src/bundle.ts --target=es2020 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/esm-bundle/index.js --format=esm --external:fs --external:path",
     "build-types": "dts-bundle-generator -o dist/index.d.ts src/index.ts --external-imports",
     "build-types-bundle": "dts-bundle-generator -o dist/esm-bundle/index.d.ts src/bundle.ts --external-imports",

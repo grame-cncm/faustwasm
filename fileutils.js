@@ -1,6 +1,14 @@
 //@ts-check
-const path = require("path");
-const fs = require("fs");
+import * as fs from "fs";
+import * as path from "path";
+
+/**
+import * as path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+*/
 
 /**
  * @param {string} src

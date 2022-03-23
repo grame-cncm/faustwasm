@@ -1,6 +1,16 @@
-import { sha256 } from "js-sha256";
 import type { ILibFaust } from "./LibFaust";
 import type { FaustDspFactory, IntVector } from "./types";
+
+const sha256 = async (str: string) => {
+    if (crypto.subtle) {
+        const inputBuffer = new TextEncoder().encode(str);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", inputBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        return hashHex;
+    }
+    return (crypto as any).createHash("sha256").update(str).digest("hex");
+};
 
 export interface IFaustCompiler {
     /**
@@ -102,7 +112,7 @@ class FaustCompiler implements IFaustCompiler {
         }
 
         // If code is already compiled, return the cached factory
-        let shaKey = sha256(name + code + args + (poly ? "poly" : "mono"));
+        let shaKey = await sha256(name + code + args + (poly ? "poly" : "mono"));
         if (FaustCompiler.gFactories.has(shaKey)) {
             return FaustCompiler.gFactories.get(shaKey) || null;
         } else {
