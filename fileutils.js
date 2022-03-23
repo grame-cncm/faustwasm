@@ -37,4 +37,4 @@ const rmSync = (dir) => {
     }
 };
 
-module.exports = { cpSync, rmSync };
+export { cpSync, rmSync };

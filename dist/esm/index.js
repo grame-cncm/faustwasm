@@ -3,15 +3,39 @@ var instantiateFaustModuleFromFile = async (jsFile, dataFile = jsFile.replace(/c
   let FaustModule;
   let dataBinary;
   let wasmBinary;
-  FaustModule = (await import(jsFile)).default;
   if (typeof globalThis.fetch === "function") {
+    let jsCode = await (await fetch(jsFile)).text();
+    jsCode = `${jsCode}
+export default FaustModule;
+`;
+    const jsFileMod = URL.createObjectURL(new Blob([jsCode], { type: "text/javascript" }));
+    FaustModule = (await import(jsFileMod)).default;
     dataBinary = await (await fetch(dataFile)).arrayBuffer();
     wasmBinary = new Uint8Array(await (await fetch(wasmFile)).arrayBuffer());
   } else {
     const fs = await import("fs/promises");
-    const { fileURLToPath } = await import("url");
-    dataBinary = (await fs.readFile(fileURLToPath(dataFile))).buffer;
-    wasmBinary = (await fs.readFile(fileURLToPath(wasmFile))).buffer;
+    const { pathToFileURL } = await import("url");
+    let jsCode = await fs.readFile(jsFile, { encoding: "utf-8" });
+    jsCode = `
+import process from "process";
+import * as path from "path";
+import { createRequire } from "module";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const require = createRequire(import.meta.url);
+
+${jsCode}
+
+export default FaustModule;
+`;
+    const jsFileMod = jsFile.replace(/c?js$/, "mjs");
+    await fs.writeFile(jsFileMod, jsCode);
+    FaustModule = (await import(pathToFileURL(jsFileMod).href)).default;
+    await fs.unlink(jsFileMod);
+    dataBinary = (await fs.readFile(dataFile)).buffer;
+    wasmBinary = (await fs.readFile(wasmFile)).buffer;
   }
   const faustModule = await FaustModule({
     wasmBinary,

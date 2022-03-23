@@ -587,7 +587,7 @@ const init = async () => {
     } = await import("./faustwasm/index.js");
     FaustUI = (await import("./faust-ui/index.js")).FaustUI;
     // Init Faust compiler and node factory 
-    const module = await instantiateFaustModuleFromFile("../../libfaust-wasm/libfaust-wasm.js");
+    const module = await instantiateFaustModuleFromFile(new URL("../../libfaust-wasm/libfaust-wasm.js", location.href).href);
     // const module = await instantiateFaustModule();
     const libFaust = new LibFaust(module);
     faust_compiler = new FaustCompiler(libFaust);

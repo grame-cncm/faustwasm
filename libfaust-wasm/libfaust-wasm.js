@@ -1,11 +1,3 @@
-import process from "process";
-import * as path from "path";
-import { createRequire } from "module";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const __filename = fileURLToPath(import.meta.url);
-const require = createRequire(import.meta.url);
 
 var FaustModule = (function() {
   var _scriptDir = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : undefined;
@@ -27,5 +19,3 @@ else if (typeof define === 'function' && define['amd'])
   define([], function() { return FaustModule; });
 else if (typeof exports === 'object')
   exports["FaustModule"] = FaustModule;
-
-export default FaustModule;

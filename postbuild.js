@@ -1,11 +1,17 @@
 //@ts-check
-const path = require("path");
-const fs = require("fs");
-const { cpSync, rmSync } = require("./fileutils");
+import { join } from "path";
+import { mkdirSync, writeFileSync, copyFileSync } from "fs";
+import { cpSync, rmSync } from "./fileutils.js";
 
-const faustUiDistPath = path.join(__dirname, "./node_modules/@shren/faust-ui/dist/esm");
-const faustUiDistDest = path.join(__dirname, "./assets/standalone/faust-ui");
-const faustUiDistDest2 = path.join(__dirname, "./test/faustlive-wasm/faust-ui");
+import * as path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+
+const faustUiDistPath = join(__dirname, "./node_modules/@shren/faust-ui/dist/esm");
+const faustUiDistDest = join(__dirname, "./assets/standalone/faust-ui");
+const faustUiDistDest2 = join(__dirname, "./test/faustlive-wasm/faust-ui");
 
 try {
     rmSync(faustUiDistDest);
@@ -14,8 +20,8 @@ try {
     console.warn(e);
 }
 try {
-    fs.mkdirSync(faustUiDistDest);
-    fs.mkdirSync(faustUiDistDest2);
+    mkdirSync(faustUiDistDest);
+    mkdirSync(faustUiDistDest2);
 } catch (e) {
     console.warn(e);
 }
@@ -23,17 +29,17 @@ try {
 cpSync(faustUiDistPath, faustUiDistDest);
 cpSync(faustUiDistPath, faustUiDistDest2);
 const faustUiDts = `export * from "@shren/faust-ui";\n`;
-fs.writeFileSync(path.join(faustUiDistDest, "index.d.ts"), faustUiDts);
-fs.writeFileSync(path.join(faustUiDistDest2, "index.d.ts"), faustUiDts);
+writeFileSync(join(faustUiDistDest, "index.d.ts"), faustUiDts);
+writeFileSync(join(faustUiDistDest2, "index.d.ts"), faustUiDts);
 
 console.log("FaustUI files copied.")
 
-const faustWasmDistPath = path.join(__dirname, "./dist");
-const faustWasmDistEsmPath = path.join(__dirname, "./dist/esm");
-const faustWasmDistDest = path.join(__dirname, "./assets/standalone/faustwasm");
-const faustWasmDistDest2 = path.join(__dirname, "./test/faustlive-wasm/faustwasm");
+const faustWasmDistPath = join(__dirname, "./dist");
+const faustWasmDistEsmPath = join(__dirname, "./dist/esm");
+const faustWasmDistDest = join(__dirname, "./assets/standalone/faustwasm");
+const faustWasmDistDest2 = join(__dirname, "./test/faustlive-wasm/faustwasm");
 
-fs.copyFileSync(path.join(faustWasmDistPath, "index.d.ts"), path.join(faustWasmDistEsmPath, "index.d.ts"));
+copyFileSync(join(faustWasmDistPath, "index.d.ts"), join(faustWasmDistEsmPath, "index.d.ts"));
 
 try {
     rmSync(faustWasmDistDest);
@@ -42,8 +48,8 @@ try {
     console.warn(e);
 }
 try {
-    fs.mkdirSync(faustWasmDistDest);
-    fs.mkdirSync(faustWasmDistDest2);
+    mkdirSync(faustWasmDistDest);
+    mkdirSync(faustWasmDistDest2);
 } catch (e) {
     console.warn(e);
 }
