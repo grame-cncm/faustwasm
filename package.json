@@ -6,13 +6,6 @@
   "types": "dist/esm/index.d.ts",
   "module": "dist/esm/index.js",
   "type": "module",
-  "exports": {
-    ".": {
-      "require": "./dist/cjs/index.js",
-      "import": "./dist/esm/index.js",
-      "types": "./dist/esm/index.d.ts"
-    }
-  },
   "scripts": {
     "build": "npm run build-cjs & npm run build-cjs-bundle & npm run build-esm & npm run build-esm-bundle & npm run build-types & npm run build-types-bundle",
     "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/cjs --format=cjs --external:fs/promises --external:url --external:crypto",
