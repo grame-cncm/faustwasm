@@ -576,9 +576,6 @@ const initPage = () => {
 
 const init = async () => {
     const {
-        instantiateFaustModule
-    } = await import("../../dist/esm-bundle/index.js");
-    const {
         instantiateFaustModuleFromFile,
         FaustCompiler,
         FaustMonoDspGenerator,

@@ -1,13 +1,16 @@
 //@ts-check
-const path = require("path");
-const fs = require("fs");
-/** @type {import("../dist")} */
-const {
+import * as fs from "fs";
+import * as path from "path";
+import {
     instantiateFaustModuleFromFile,
     LibFaust,
     FaustCompiler,
     FaustSvgDiagrams
-} = require(path.join(__dirname, "../dist"));
+} from "../dist/esm/index.js";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
 
 /**
  * @param {string} inputFile
@@ -37,4 +40,4 @@ const faust2svgFiles = async (inputFile, outputDir, argv = []) => {
     return svgs;
 };
 
-module.exports = { default: faust2svgFiles };
+export default faust2svgFiles;

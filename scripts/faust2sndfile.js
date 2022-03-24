@@ -1,6 +1,6 @@
 //@ts-check
-const process = require("process");
-const { default: faust2wavFiles } = require("../src/faust2wavFiles.js");
+import * as process from "process";
+import faust2wavFiles from "../src/faust2wavFiles.js";
 
 const argv = process.argv.slice(2);
 

@@ -1,7 +1,7 @@
 //@ts-check
-const process = require("process");
-const { default: faust2wasmFiles } = require("../src/faust2wasmFiles.js");
-const { default: copyWebStandaloneAssets } = require("../src/copyWebStandaloneAssets.js");
+import * as process from "process";
+import faust2wasmFiles from "../src/faust2wasmFiles.js";
+import copyWebStandaloneAssets from "../src/copyWebStandaloneAssets.js";
 
 const argv = process.argv.slice(2);
 

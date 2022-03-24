@@ -217,14 +217,15 @@ var FaustAudioWorkletProcessor_default = getFaustAudioWorkletProcessor;
 
 // src/FaustCompiler.ts
 var sha256 = async (str) => {
-  if (crypto.subtle) {
+  if (typeof crypto !== "undefined" && crypto?.subtle) {
     const inputBuffer = new TextEncoder().encode(str);
     const hashBuffer = await crypto.subtle.digest("SHA-256", inputBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
     return hashHex;
   }
-  return crypto.createHash("sha256").update(str).digest("hex");
+  const crypto_node = await import("crypto");
+  return crypto_node.createHash("sha256").update(str).digest("hex");
 };
 var _FaustCompiler = class {
   constructor(libFaust) {

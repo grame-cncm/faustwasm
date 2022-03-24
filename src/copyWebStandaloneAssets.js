@@ -1,7 +1,11 @@
 //@ts-check
-const fs = require("fs");
-const path = require("path");
-const { cpSync } = require("../fileutils");
+import * as fs from "fs";
+import * as path from "path";
+import { cpSync } from "../fileutils.js";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
 
 /**
  * @param {string} outputDir
@@ -13,4 +17,4 @@ const copyWebStandaloneAssets = (outputDir) => {
     cpSync(assetsPath, outputDir);
 };
 
-module.exports = { default: copyWebStandaloneAssets };
+export default copyWebStandaloneAssets;

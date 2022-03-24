@@ -1,4 +1,5 @@
-import FaustModule from "../libfaust-wasm/libfaust-wasm";
+//@ts-ignore
+import FaustModule from "../libfaust-wasm/libfaust-wasm.cjs";
 import wasmBinary from "../libfaust-wasm/libfaust-wasm.wasm";
 import dataBinary from "../libfaust-wasm/libfaust-wasm.data";
 

@@ -1,6 +1,6 @@
 //@ts-check
-const process = require("process");
-const { default: faust2svgFiles } = require("../src/faust2svgFiles.js");
+import * as process from "process";
+import faust2svgFiles from "../src/faust2svgFiles.js";
 
 const argv = process.argv.slice(2);
 

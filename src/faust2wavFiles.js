@@ -1,16 +1,19 @@
 //@ts-check
-const path = require("path");
-const fs = require("fs");
-const process = require("process");
-/** @type {import("../dist")} */
-const {
+import * as fs from "fs";
+import * as path from "path";
+import * as process from "process";
+import {
     instantiateFaustModuleFromFile,
     LibFaust,
     FaustCompiler,
     FaustMonoDspGenerator,
     WavDecoder,
     WavEncoder
-} = require(path.join(__dirname, "../dist"));
+} from "../dist/esm/index.js";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
 
 /**
  * @param {string} inputFile
@@ -52,4 +55,4 @@ const faust2wavFiles = async (inputFile, inputWav, outputWav, bufferSize = 64, s
     fs.writeFileSync(outputWav, new Uint8Array(outputBuffer));
 };
 
-module.exports = { default: faust2wavFiles };
+export default faust2wavFiles;
