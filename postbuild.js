@@ -36,10 +36,13 @@ console.log("FaustUI files copied.")
 
 const faustWasmDistPath = path.join(__dirname, "./dist/cjs");
 const faustWasmDistEsmPath = path.join(__dirname, "./dist/esm");
+const faustWasmDistBundlePath = path.join(__dirname, "./dist/cjs-bundle");
+const faustWasmDistEsmBundlePath = path.join(__dirname, "./dist/esm-bundle");
 const faustWasmDistDest = path.join(__dirname, "./assets/standalone/faustwasm");
 const faustWasmDistDest2 = path.join(__dirname, "./test/faustlive-wasm/faustwasm");
 
 fs.copyFileSync(path.join(faustWasmDistPath, "index.d.ts"), path.join(faustWasmDistEsmPath, "index.d.ts"));
+fs.copyFileSync(path.join(faustWasmDistBundlePath, "index.d.ts"), path.join(faustWasmDistEsmBundlePath, "index.d.ts"));
 
 try {
     rmSync(faustWasmDistDest);

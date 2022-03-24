@@ -338,7 +338,7 @@ var _FaustCompiler = class {
   }
 };
 var FaustCompiler = _FaustCompiler;
-FaustCompiler.gFactories = new Map();
+FaustCompiler.gFactories = /* @__PURE__ */ new Map();
 var FaustCompiler_default = FaustCompiler;
 
 // src/FaustDspInstance.ts
@@ -2063,7 +2063,7 @@ const dependencies = {
   }
 };
 var FaustMonoDspGenerator = _FaustMonoDspGenerator;
-FaustMonoDspGenerator.gWorkletProcessors = new Set();
+FaustMonoDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Set();
 var _FaustPolyDspGenerator = class {
   constructor() {
     this.voiceFactory = null;
@@ -2140,7 +2140,7 @@ const dependencies = {
   }
 };
 var FaustPolyDspGenerator = _FaustPolyDspGenerator;
-FaustPolyDspGenerator.gWorkletProcessors = new Set();
+FaustPolyDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Set();
 
 // src/index.ts
 var src_default = {
