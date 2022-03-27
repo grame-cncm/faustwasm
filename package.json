@@ -8,8 +8,8 @@
   "type": "module",
   "scripts": {
     "build": "npm run build-cjs & npm run build-cjs-bundle & npm run build-esm & npm run build-esm-bundle & npm run build-types & npm run build-types-bundle",
-    "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/cjs --format=cjs --external:fs/promises --external:url --external:crypto",
-    "build-cjs-bundle": "node prebuild-bundled.js & esbuild src/bundle.ts --target=es2020 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/cjs-bundle/index.js --format=cjs --external:fs/promises --external:url --external:crypto --external:fs --external:path & node postbuild-bundled.js",
+    "build-cjs": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/cjs --format=iife --global-name=globalThis.faustwasm --external:fs/promises --external:url --external:crypto",
+    "build-cjs-bundle": "node prebuild-bundled.js & esbuild src/bundle.ts --target=es2020 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/cjs-bundle/index.js --format=iife --global-name=globalThis.faustwasm --external:fs/promises --external:url --external:crypto --external:fs --external:path & node postbuild-bundled.js",
     "build-esm": "esbuild src/index.ts --target=es2020 --bundle --sourcemap --outdir=dist/esm --format=esm --external:fs/promises --external:url --external:crypto",
     "build-esm-bundle": "node prebuild-bundled.js & esbuild src/bundle.ts --target=es2020 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/esm-bundle/index.js --format=esm --external:fs/promises --external:url --external:crypto --external:fs --external:path & node postbuild-bundled.js",
     "build-types": "dts-bundle-generator -o dist/cjs/index.d.ts src/index.ts --external-imports",
