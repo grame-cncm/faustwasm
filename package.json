@@ -25,7 +25,7 @@
     "webassembly"
   ],
   "author": "Grame-CNCM",
-  "license": "MIT",
+  "license": "LGPL-3.0",
   "bugs": {
     "url": "https://github.com/Fr0stbyteR/faustwasm/issues"
   },
@@ -37,7 +37,6 @@
     "@types/webmidi": "^2.0.6",
     "dts-bundle-generator": "^6.0.0",
     "esbuild": "^0.14.27",
-    "js-sha256": "^0.9.0",
     "typescript": "^4.4.4"
   }
 }
