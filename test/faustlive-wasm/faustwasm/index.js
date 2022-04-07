@@ -1,3 +1,915 @@
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target, mod));
+
+// node_modules/tslib/tslib.js
+var require_tslib = __commonJS({
+  "node_modules/tslib/tslib.js"(exports, module) {
+    var __extends;
+    var __assign;
+    var __rest;
+    var __decorate;
+    var __param;
+    var __metadata;
+    var __awaiter;
+    var __generator;
+    var __exportStar;
+    var __values;
+    var __read;
+    var __spread;
+    var __spreadArrays;
+    var __await;
+    var __asyncGenerator;
+    var __asyncDelegator;
+    var __asyncValues;
+    var __makeTemplateObject;
+    var __importStar;
+    var __importDefault;
+    var __classPrivateFieldGet;
+    var __classPrivateFieldSet;
+    var __createBinding;
+    (function(factory) {
+      var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
+      if (typeof define === "function" && define.amd) {
+        define("tslib", ["exports"], function(exports2) {
+          factory(createExporter(root, createExporter(exports2)));
+        });
+      } else if (typeof module === "object" && typeof module.exports === "object") {
+        factory(createExporter(root, createExporter(module.exports)));
+      } else {
+        factory(createExporter(root));
+      }
+      function createExporter(exports2, previous) {
+        if (exports2 !== root) {
+          if (typeof Object.create === "function") {
+            Object.defineProperty(exports2, "__esModule", { value: true });
+          } else {
+            exports2.__esModule = true;
+          }
+        }
+        return function(id, v) {
+          return exports2[id] = previous ? previous(id, v) : v;
+        };
+      }
+    })(function(exporter) {
+      var extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d, b) {
+        d.__proto__ = b;
+      } || function(d, b) {
+        for (var p in b)
+          if (b.hasOwnProperty(p))
+            d[p] = b[p];
+      };
+      __extends = function(d, b) {
+        extendStatics(d, b);
+        function __() {
+          this.constructor = d;
+        }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+      };
+      __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+          s = arguments[i];
+          for (var p in s)
+            if (Object.prototype.hasOwnProperty.call(s, p))
+              t[p] = s[p];
+        }
+        return t;
+      };
+      __rest = function(s, e) {
+        var t = {};
+        for (var p in s)
+          if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+            t[p] = s[p];
+        if (s != null && typeof Object.getOwnPropertySymbols === "function")
+          for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+              t[p[i]] = s[p[i]];
+          }
+        return t;
+      };
+      __decorate = function(decorators, target, key, desc) {
+        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function")
+          r = Reflect.decorate(decorators, target, key, desc);
+        else
+          for (var i = decorators.length - 1; i >= 0; i--)
+            if (d = decorators[i])
+              r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+      };
+      __param = function(paramIndex, decorator) {
+        return function(target, key) {
+          decorator(target, key, paramIndex);
+        };
+      };
+      __metadata = function(metadataKey, metadataValue) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function")
+          return Reflect.metadata(metadataKey, metadataValue);
+      };
+      __awaiter = function(thisArg, _arguments, P, generator) {
+        function adopt(value) {
+          return value instanceof P ? value : new P(function(resolve) {
+            resolve(value);
+          });
+        }
+        return new (P || (P = Promise))(function(resolve, reject) {
+          function fulfilled(value) {
+            try {
+              step(generator.next(value));
+            } catch (e) {
+              reject(e);
+            }
+          }
+          function rejected(value) {
+            try {
+              step(generator["throw"](value));
+            } catch (e) {
+              reject(e);
+            }
+          }
+          function step(result) {
+            result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+          }
+          step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+      };
+      __generator = function(thisArg, body) {
+        var _ = { label: 0, sent: function() {
+          if (t[0] & 1)
+            throw t[1];
+          return t[1];
+        }, trys: [], ops: [] }, f, y, t, g;
+        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() {
+          return this;
+        }), g;
+        function verb(n) {
+          return function(v) {
+            return step([n, v]);
+          };
+        }
+        function step(op) {
+          if (f)
+            throw new TypeError("Generator is already executing.");
+          while (_)
+            try {
+              if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done)
+                return t;
+              if (y = 0, t)
+                op = [op[0] & 2, t.value];
+              switch (op[0]) {
+                case 0:
+                case 1:
+                  t = op;
+                  break;
+                case 4:
+                  _.label++;
+                  return { value: op[1], done: false };
+                case 5:
+                  _.label++;
+                  y = op[1];
+                  op = [0];
+                  continue;
+                case 7:
+                  op = _.ops.pop();
+                  _.trys.pop();
+                  continue;
+                default:
+                  if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) {
+                    _ = 0;
+                    continue;
+                  }
+                  if (op[0] === 3 && (!t || op[1] > t[0] && op[1] < t[3])) {
+                    _.label = op[1];
+                    break;
+                  }
+                  if (op[0] === 6 && _.label < t[1]) {
+                    _.label = t[1];
+                    t = op;
+                    break;
+                  }
+                  if (t && _.label < t[2]) {
+                    _.label = t[2];
+                    _.ops.push(op);
+                    break;
+                  }
+                  if (t[2])
+                    _.ops.pop();
+                  _.trys.pop();
+                  continue;
+              }
+              op = body.call(thisArg, _);
+            } catch (e) {
+              op = [6, e];
+              y = 0;
+            } finally {
+              f = t = 0;
+            }
+          if (op[0] & 5)
+            throw op[1];
+          return { value: op[0] ? op[1] : void 0, done: true };
+        }
+      };
+      __createBinding = function(o, m, k, k2) {
+        if (k2 === void 0)
+          k2 = k;
+        o[k2] = m[k];
+      };
+      __exportStar = function(m, exports2) {
+        for (var p in m)
+          if (p !== "default" && !exports2.hasOwnProperty(p))
+            exports2[p] = m[p];
+      };
+      __values = function(o) {
+        var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+        if (m)
+          return m.call(o);
+        if (o && typeof o.length === "number")
+          return {
+            next: function() {
+              if (o && i >= o.length)
+                o = void 0;
+              return { value: o && o[i++], done: !o };
+            }
+          };
+        throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+      };
+      __read = function(o, n) {
+        var m = typeof Symbol === "function" && o[Symbol.iterator];
+        if (!m)
+          return o;
+        var i = m.call(o), r, ar = [], e;
+        try {
+          while ((n === void 0 || n-- > 0) && !(r = i.next()).done)
+            ar.push(r.value);
+        } catch (error) {
+          e = { error };
+        } finally {
+          try {
+            if (r && !r.done && (m = i["return"]))
+              m.call(i);
+          } finally {
+            if (e)
+              throw e.error;
+          }
+        }
+        return ar;
+      };
+      __spread = function() {
+        for (var ar = [], i = 0; i < arguments.length; i++)
+          ar = ar.concat(__read(arguments[i]));
+        return ar;
+      };
+      __spreadArrays = function() {
+        for (var s = 0, i = 0, il = arguments.length; i < il; i++)
+          s += arguments[i].length;
+        for (var r = Array(s), k = 0, i = 0; i < il; i++)
+          for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+            r[k] = a[j];
+        return r;
+      };
+      __await = function(v) {
+        return this instanceof __await ? (this.v = v, this) : new __await(v);
+      };
+      __asyncGenerator = function(thisArg, _arguments, generator) {
+        if (!Symbol.asyncIterator)
+          throw new TypeError("Symbol.asyncIterator is not defined.");
+        var g = generator.apply(thisArg, _arguments || []), i, q = [];
+        return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function() {
+          return this;
+        }, i;
+        function verb(n) {
+          if (g[n])
+            i[n] = function(v) {
+              return new Promise(function(a, b) {
+                q.push([n, v, a, b]) > 1 || resume(n, v);
+              });
+            };
+        }
+        function resume(n, v) {
+          try {
+            step(g[n](v));
+          } catch (e) {
+            settle(q[0][3], e);
+          }
+        }
+        function step(r) {
+          r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);
+        }
+        function fulfill(value) {
+          resume("next", value);
+        }
+        function reject(value) {
+          resume("throw", value);
+        }
+        function settle(f, v) {
+          if (f(v), q.shift(), q.length)
+            resume(q[0][0], q[0][1]);
+        }
+      };
+      __asyncDelegator = function(o) {
+        var i, p;
+        return i = {}, verb("next"), verb("throw", function(e) {
+          throw e;
+        }), verb("return"), i[Symbol.iterator] = function() {
+          return this;
+        }, i;
+        function verb(n, f) {
+          i[n] = o[n] ? function(v) {
+            return (p = !p) ? { value: __await(o[n](v)), done: n === "return" } : f ? f(v) : v;
+          } : f;
+        }
+      };
+      __asyncValues = function(o) {
+        if (!Symbol.asyncIterator)
+          throw new TypeError("Symbol.asyncIterator is not defined.");
+        var m = o[Symbol.asyncIterator], i;
+        return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function() {
+          return this;
+        }, i);
+        function verb(n) {
+          i[n] = o[n] && function(v) {
+            return new Promise(function(resolve, reject) {
+              v = o[n](v), settle(resolve, reject, v.done, v.value);
+            });
+          };
+        }
+        function settle(resolve, reject, d, v) {
+          Promise.resolve(v).then(function(v2) {
+            resolve({ value: v2, done: d });
+          }, reject);
+        }
+      };
+      __makeTemplateObject = function(cooked, raw) {
+        if (Object.defineProperty) {
+          Object.defineProperty(cooked, "raw", { value: raw });
+        } else {
+          cooked.raw = raw;
+        }
+        return cooked;
+      };
+      __importStar = function(mod) {
+        if (mod && mod.__esModule)
+          return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k in mod)
+            if (Object.hasOwnProperty.call(mod, k))
+              result[k] = mod[k];
+        }
+        result["default"] = mod;
+        return result;
+      };
+      __importDefault = function(mod) {
+        return mod && mod.__esModule ? mod : { "default": mod };
+      };
+      __classPrivateFieldGet = function(receiver, privateMap) {
+        if (!privateMap.has(receiver)) {
+          throw new TypeError("attempted to get private field on non-instance");
+        }
+        return privateMap.get(receiver);
+      };
+      __classPrivateFieldSet = function(receiver, privateMap, value) {
+        if (!privateMap.has(receiver)) {
+          throw new TypeError("attempted to set private field on non-instance");
+        }
+        privateMap.set(receiver, value);
+        return value;
+      };
+      exporter("__extends", __extends);
+      exporter("__assign", __assign);
+      exporter("__rest", __rest);
+      exporter("__decorate", __decorate);
+      exporter("__param", __param);
+      exporter("__metadata", __metadata);
+      exporter("__awaiter", __awaiter);
+      exporter("__generator", __generator);
+      exporter("__exportStar", __exportStar);
+      exporter("__createBinding", __createBinding);
+      exporter("__values", __values);
+      exporter("__read", __read);
+      exporter("__spread", __spread);
+      exporter("__spreadArrays", __spreadArrays);
+      exporter("__await", __await);
+      exporter("__asyncGenerator", __asyncGenerator);
+      exporter("__asyncDelegator", __asyncDelegator);
+      exporter("__asyncValues", __asyncValues);
+      exporter("__makeTemplateObject", __makeTemplateObject);
+      exporter("__importStar", __importStar);
+      exporter("__importDefault", __importDefault);
+      exporter("__classPrivateFieldGet", __classPrivateFieldGet);
+      exporter("__classPrivateFieldSet", __classPrivateFieldSet);
+    });
+  }
+});
+
+// node_modules/@aws-crypto/sha256-js/build/constants.js
+var require_constants = __commonJS({
+  "node_modules/@aws-crypto/sha256-js/build/constants.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.MAX_HASHABLE_LENGTH = exports.INIT = exports.KEY = exports.DIGEST_LENGTH = exports.BLOCK_SIZE = void 0;
+    exports.BLOCK_SIZE = 64;
+    exports.DIGEST_LENGTH = 32;
+    exports.KEY = new Uint32Array([
+      1116352408,
+      1899447441,
+      3049323471,
+      3921009573,
+      961987163,
+      1508970993,
+      2453635748,
+      2870763221,
+      3624381080,
+      310598401,
+      607225278,
+      1426881987,
+      1925078388,
+      2162078206,
+      2614888103,
+      3248222580,
+      3835390401,
+      4022224774,
+      264347078,
+      604807628,
+      770255983,
+      1249150122,
+      1555081692,
+      1996064986,
+      2554220882,
+      2821834349,
+      2952996808,
+      3210313671,
+      3336571891,
+      3584528711,
+      113926993,
+      338241895,
+      666307205,
+      773529912,
+      1294757372,
+      1396182291,
+      1695183700,
+      1986661051,
+      2177026350,
+      2456956037,
+      2730485921,
+      2820302411,
+      3259730800,
+      3345764771,
+      3516065817,
+      3600352804,
+      4094571909,
+      275423344,
+      430227734,
+      506948616,
+      659060556,
+      883997877,
+      958139571,
+      1322822218,
+      1537002063,
+      1747873779,
+      1955562222,
+      2024104815,
+      2227730452,
+      2361852424,
+      2428436474,
+      2756734187,
+      3204031479,
+      3329325298
+    ]);
+    exports.INIT = [
+      1779033703,
+      3144134277,
+      1013904242,
+      2773480762,
+      1359893119,
+      2600822924,
+      528734635,
+      1541459225
+    ];
+    exports.MAX_HASHABLE_LENGTH = Math.pow(2, 53) - 1;
+  }
+});
+
+// node_modules/@aws-crypto/sha256-js/build/RawSha256.js
+var require_RawSha256 = __commonJS({
+  "node_modules/@aws-crypto/sha256-js/build/RawSha256.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.RawSha256 = void 0;
+    var constants_1 = require_constants();
+    var RawSha256 = function() {
+      function RawSha2562() {
+        this.state = Int32Array.from(constants_1.INIT);
+        this.temp = new Int32Array(64);
+        this.buffer = new Uint8Array(64);
+        this.bufferLength = 0;
+        this.bytesHashed = 0;
+        this.finished = false;
+      }
+      RawSha2562.prototype.update = function(data) {
+        if (this.finished) {
+          throw new Error("Attempted to update an already finished hash.");
+        }
+        var position = 0;
+        var byteLength = data.byteLength;
+        this.bytesHashed += byteLength;
+        if (this.bytesHashed * 8 > constants_1.MAX_HASHABLE_LENGTH) {
+          throw new Error("Cannot hash more than 2^53 - 1 bits");
+        }
+        while (byteLength > 0) {
+          this.buffer[this.bufferLength++] = data[position++];
+          byteLength--;
+          if (this.bufferLength === constants_1.BLOCK_SIZE) {
+            this.hashBuffer();
+            this.bufferLength = 0;
+          }
+        }
+      };
+      RawSha2562.prototype.digest = function() {
+        if (!this.finished) {
+          var bitsHashed = this.bytesHashed * 8;
+          var bufferView = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+          var undecoratedLength = this.bufferLength;
+          bufferView.setUint8(this.bufferLength++, 128);
+          if (undecoratedLength % constants_1.BLOCK_SIZE >= constants_1.BLOCK_SIZE - 8) {
+            for (var i = this.bufferLength; i < constants_1.BLOCK_SIZE; i++) {
+              bufferView.setUint8(i, 0);
+            }
+            this.hashBuffer();
+            this.bufferLength = 0;
+          }
+          for (var i = this.bufferLength; i < constants_1.BLOCK_SIZE - 8; i++) {
+            bufferView.setUint8(i, 0);
+          }
+          bufferView.setUint32(constants_1.BLOCK_SIZE - 8, Math.floor(bitsHashed / 4294967296), true);
+          bufferView.setUint32(constants_1.BLOCK_SIZE - 4, bitsHashed);
+          this.hashBuffer();
+          this.finished = true;
+        }
+        var out = new Uint8Array(constants_1.DIGEST_LENGTH);
+        for (var i = 0; i < 8; i++) {
+          out[i * 4] = this.state[i] >>> 24 & 255;
+          out[i * 4 + 1] = this.state[i] >>> 16 & 255;
+          out[i * 4 + 2] = this.state[i] >>> 8 & 255;
+          out[i * 4 + 3] = this.state[i] >>> 0 & 255;
+        }
+        return out;
+      };
+      RawSha2562.prototype.hashBuffer = function() {
+        var _a = this, buffer = _a.buffer, state = _a.state;
+        var state0 = state[0], state1 = state[1], state2 = state[2], state3 = state[3], state4 = state[4], state5 = state[5], state6 = state[6], state7 = state[7];
+        for (var i = 0; i < constants_1.BLOCK_SIZE; i++) {
+          if (i < 16) {
+            this.temp[i] = (buffer[i * 4] & 255) << 24 | (buffer[i * 4 + 1] & 255) << 16 | (buffer[i * 4 + 2] & 255) << 8 | buffer[i * 4 + 3] & 255;
+          } else {
+            var u = this.temp[i - 2];
+            var t1_1 = (u >>> 17 | u << 15) ^ (u >>> 19 | u << 13) ^ u >>> 10;
+            u = this.temp[i - 15];
+            var t2_1 = (u >>> 7 | u << 25) ^ (u >>> 18 | u << 14) ^ u >>> 3;
+            this.temp[i] = (t1_1 + this.temp[i - 7] | 0) + (t2_1 + this.temp[i - 16] | 0);
+          }
+          var t1 = (((state4 >>> 6 | state4 << 26) ^ (state4 >>> 11 | state4 << 21) ^ (state4 >>> 25 | state4 << 7)) + (state4 & state5 ^ ~state4 & state6) | 0) + (state7 + (constants_1.KEY[i] + this.temp[i] | 0) | 0) | 0;
+          var t2 = ((state0 >>> 2 | state0 << 30) ^ (state0 >>> 13 | state0 << 19) ^ (state0 >>> 22 | state0 << 10)) + (state0 & state1 ^ state0 & state2 ^ state1 & state2) | 0;
+          state7 = state6;
+          state6 = state5;
+          state5 = state4;
+          state4 = state3 + t1 | 0;
+          state3 = state2;
+          state2 = state1;
+          state1 = state0;
+          state0 = t1 + t2 | 0;
+        }
+        state[0] += state0;
+        state[1] += state1;
+        state[2] += state2;
+        state[3] += state3;
+        state[4] += state4;
+        state[5] += state5;
+        state[6] += state6;
+        state[7] += state7;
+      };
+      return RawSha2562;
+    }();
+    exports.RawSha256 = RawSha256;
+  }
+});
+
+// node_modules/@aws-sdk/util-utf8-browser/dist-cjs/pureJs.js
+var require_pureJs = __commonJS({
+  "node_modules/@aws-sdk/util-utf8-browser/dist-cjs/pureJs.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.toUtf8 = exports.fromUtf8 = void 0;
+    var fromUtf8 = (input) => {
+      const bytes = [];
+      for (let i = 0, len = input.length; i < len; i++) {
+        const value = input.charCodeAt(i);
+        if (value < 128) {
+          bytes.push(value);
+        } else if (value < 2048) {
+          bytes.push(value >> 6 | 192, value & 63 | 128);
+        } else if (i + 1 < input.length && (value & 64512) === 55296 && (input.charCodeAt(i + 1) & 64512) === 56320) {
+          const surrogatePair = 65536 + ((value & 1023) << 10) + (input.charCodeAt(++i) & 1023);
+          bytes.push(surrogatePair >> 18 | 240, surrogatePair >> 12 & 63 | 128, surrogatePair >> 6 & 63 | 128, surrogatePair & 63 | 128);
+        } else {
+          bytes.push(value >> 12 | 224, value >> 6 & 63 | 128, value & 63 | 128);
+        }
+      }
+      return Uint8Array.from(bytes);
+    };
+    exports.fromUtf8 = fromUtf8;
+    var toUtf8 = (input) => {
+      let decoded = "";
+      for (let i = 0, len = input.length; i < len; i++) {
+        const byte = input[i];
+        if (byte < 128) {
+          decoded += String.fromCharCode(byte);
+        } else if (192 <= byte && byte < 224) {
+          const nextByte = input[++i];
+          decoded += String.fromCharCode((byte & 31) << 6 | nextByte & 63);
+        } else if (240 <= byte && byte < 365) {
+          const surrogatePair = [byte, input[++i], input[++i], input[++i]];
+          const encoded = "%" + surrogatePair.map((byteValue) => byteValue.toString(16)).join("%");
+          decoded += decodeURIComponent(encoded);
+        } else {
+          decoded += String.fromCharCode((byte & 15) << 12 | (input[++i] & 63) << 6 | input[++i] & 63);
+        }
+      }
+      return decoded;
+    };
+    exports.toUtf8 = toUtf8;
+  }
+});
+
+// node_modules/@aws-sdk/util-utf8-browser/dist-cjs/whatwgEncodingApi.js
+var require_whatwgEncodingApi = __commonJS({
+  "node_modules/@aws-sdk/util-utf8-browser/dist-cjs/whatwgEncodingApi.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.toUtf8 = exports.fromUtf8 = void 0;
+    function fromUtf8(input) {
+      return new TextEncoder().encode(input);
+    }
+    exports.fromUtf8 = fromUtf8;
+    function toUtf8(input) {
+      return new TextDecoder("utf-8").decode(input);
+    }
+    exports.toUtf8 = toUtf8;
+  }
+});
+
+// node_modules/@aws-sdk/util-utf8-browser/dist-cjs/index.js
+var require_dist_cjs = __commonJS({
+  "node_modules/@aws-sdk/util-utf8-browser/dist-cjs/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.toUtf8 = exports.fromUtf8 = void 0;
+    var pureJs_1 = require_pureJs();
+    var whatwgEncodingApi_1 = require_whatwgEncodingApi();
+    var fromUtf8 = (input) => typeof TextEncoder === "function" ? (0, whatwgEncodingApi_1.fromUtf8)(input) : (0, pureJs_1.fromUtf8)(input);
+    exports.fromUtf8 = fromUtf8;
+    var toUtf8 = (input) => typeof TextDecoder === "function" ? (0, whatwgEncodingApi_1.toUtf8)(input) : (0, pureJs_1.toUtf8)(input);
+    exports.toUtf8 = toUtf8;
+  }
+});
+
+// node_modules/@aws-crypto/util/build/convertToBuffer.js
+var require_convertToBuffer = __commonJS({
+  "node_modules/@aws-crypto/util/build/convertToBuffer.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.convertToBuffer = void 0;
+    var util_utf8_browser_1 = require_dist_cjs();
+    var fromUtf8 = typeof Buffer !== "undefined" && Buffer.from ? function(input) {
+      return Buffer.from(input, "utf8");
+    } : util_utf8_browser_1.fromUtf8;
+    function convertToBuffer(data) {
+      if (data instanceof Uint8Array)
+        return data;
+      if (typeof data === "string") {
+        return fromUtf8(data);
+      }
+      if (ArrayBuffer.isView(data)) {
+        return new Uint8Array(data.buffer, data.byteOffset, data.byteLength / Uint8Array.BYTES_PER_ELEMENT);
+      }
+      return new Uint8Array(data);
+    }
+    exports.convertToBuffer = convertToBuffer;
+  }
+});
+
+// node_modules/@aws-crypto/util/build/isEmptyData.js
+var require_isEmptyData = __commonJS({
+  "node_modules/@aws-crypto/util/build/isEmptyData.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.isEmptyData = void 0;
+    function isEmptyData(data) {
+      if (typeof data === "string") {
+        return data.length === 0;
+      }
+      return data.byteLength === 0;
+    }
+    exports.isEmptyData = isEmptyData;
+  }
+});
+
+// node_modules/@aws-crypto/util/build/numToUint8.js
+var require_numToUint8 = __commonJS({
+  "node_modules/@aws-crypto/util/build/numToUint8.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.numToUint8 = void 0;
+    function numToUint8(num) {
+      return new Uint8Array([
+        (num & 4278190080) >> 24,
+        (num & 16711680) >> 16,
+        (num & 65280) >> 8,
+        num & 255
+      ]);
+    }
+    exports.numToUint8 = numToUint8;
+  }
+});
+
+// node_modules/@aws-crypto/util/build/uint32ArrayFrom.js
+var require_uint32ArrayFrom = __commonJS({
+  "node_modules/@aws-crypto/util/build/uint32ArrayFrom.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.uint32ArrayFrom = void 0;
+    function uint32ArrayFrom(a_lookUpTable) {
+      if (!Uint32Array.from) {
+        var return_array = new Uint32Array(a_lookUpTable.length);
+        var a_index = 0;
+        while (a_index < a_lookUpTable.length) {
+          return_array[a_index] = a_lookUpTable[a_index];
+          a_index += 1;
+        }
+        return return_array;
+      }
+      return Uint32Array.from(a_lookUpTable);
+    }
+    exports.uint32ArrayFrom = uint32ArrayFrom;
+  }
+});
+
+// node_modules/@aws-crypto/util/build/index.js
+var require_build = __commonJS({
+  "node_modules/@aws-crypto/util/build/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.uint32ArrayFrom = exports.numToUint8 = exports.isEmptyData = exports.convertToBuffer = void 0;
+    var convertToBuffer_1 = require_convertToBuffer();
+    Object.defineProperty(exports, "convertToBuffer", { enumerable: true, get: function() {
+      return convertToBuffer_1.convertToBuffer;
+    } });
+    var isEmptyData_1 = require_isEmptyData();
+    Object.defineProperty(exports, "isEmptyData", { enumerable: true, get: function() {
+      return isEmptyData_1.isEmptyData;
+    } });
+    var numToUint8_1 = require_numToUint8();
+    Object.defineProperty(exports, "numToUint8", { enumerable: true, get: function() {
+      return numToUint8_1.numToUint8;
+    } });
+    var uint32ArrayFrom_1 = require_uint32ArrayFrom();
+    Object.defineProperty(exports, "uint32ArrayFrom", { enumerable: true, get: function() {
+      return uint32ArrayFrom_1.uint32ArrayFrom;
+    } });
+  }
+});
+
+// node_modules/@aws-crypto/sha256-js/build/jsSha256.js
+var require_jsSha256 = __commonJS({
+  "node_modules/@aws-crypto/sha256-js/build/jsSha256.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.Sha256 = void 0;
+    var tslib_1 = require_tslib();
+    var constants_1 = require_constants();
+    var RawSha256_1 = require_RawSha256();
+    var util_1 = require_build();
+    var Sha2562 = function() {
+      function Sha2563(secret) {
+        this.hash = new RawSha256_1.RawSha256();
+        if (secret) {
+          this.outer = new RawSha256_1.RawSha256();
+          var inner = bufferFromSecret(secret);
+          var outer = new Uint8Array(constants_1.BLOCK_SIZE);
+          outer.set(inner);
+          for (var i = 0; i < constants_1.BLOCK_SIZE; i++) {
+            inner[i] ^= 54;
+            outer[i] ^= 92;
+          }
+          this.hash.update(inner);
+          this.outer.update(outer);
+          for (var i = 0; i < inner.byteLength; i++) {
+            inner[i] = 0;
+          }
+        }
+      }
+      Sha2563.prototype.update = function(toHash) {
+        if ((0, util_1.isEmptyData)(toHash) || this.error) {
+          return;
+        }
+        try {
+          this.hash.update((0, util_1.convertToBuffer)(toHash));
+        } catch (e) {
+          this.error = e;
+        }
+      };
+      Sha2563.prototype.digestSync = function() {
+        if (this.error) {
+          throw this.error;
+        }
+        if (this.outer) {
+          if (!this.outer.finished) {
+            this.outer.update(this.hash.digest());
+          }
+          return this.outer.digest();
+        }
+        return this.hash.digest();
+      };
+      Sha2563.prototype.digest = function() {
+        return (0, tslib_1.__awaiter)(this, void 0, void 0, function() {
+          return (0, tslib_1.__generator)(this, function(_a) {
+            return [2, this.digestSync()];
+          });
+        });
+      };
+      return Sha2563;
+    }();
+    exports.Sha256 = Sha2562;
+    function bufferFromSecret(secret) {
+      var input = (0, util_1.convertToBuffer)(secret);
+      if (input.byteLength > constants_1.BLOCK_SIZE) {
+        var bufferHash = new RawSha256_1.RawSha256();
+        bufferHash.update(input);
+        input = bufferHash.digest();
+      }
+      var buffer = new Uint8Array(constants_1.BLOCK_SIZE);
+      buffer.set(input);
+      return buffer;
+    }
+  }
+});
+
+// node_modules/@aws-crypto/sha256-js/build/index.js
+var require_build2 = __commonJS({
+  "node_modules/@aws-crypto/sha256-js/build/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var tslib_1 = require_tslib();
+    (0, tslib_1.__exportStar)(require_jsSha256(), exports);
+  }
+});
+
+// src/exports.ts
+var exports_exports = {};
+__export(exports_exports, {
+  FaustAudioWorkletNode: () => FaustAudioWorkletNode,
+  FaustBaseWebAudioDsp: () => FaustBaseWebAudioDsp,
+  FaustCompiler: () => FaustCompiler_default,
+  FaustDspInstance: () => FaustDspInstance_default,
+  FaustMonoAudioWorkletNode: () => FaustMonoAudioWorkletNode,
+  FaustMonoDspGenerator: () => FaustMonoDspGenerator,
+  FaustMonoScriptProcessorNode: () => FaustMonoScriptProcessorNode,
+  FaustMonoWebAudioDsp: () => FaustMonoWebAudioDsp,
+  FaustOfflineProcessor: () => FaustOfflineProcessor_default,
+  FaustPolyAudioWorkletNode: () => FaustPolyAudioWorkletNode,
+  FaustPolyDspGenerator: () => FaustPolyDspGenerator,
+  FaustPolyScriptProcessorNode: () => FaustPolyScriptProcessorNode,
+  FaustPolyWebAudioDsp: () => FaustPolyWebAudioDsp,
+  FaustScriptProcessorNode: () => FaustScriptProcessorNode,
+  FaustSvgDiagrams: () => FaustSvgDiagrams_default,
+  FaustWasmInstantiator: () => FaustWasmInstantiator_default,
+  FaustWebAudioDspVoice: () => FaustWebAudioDspVoice,
+  LibFaust: () => LibFaust_default,
+  WavDecoder: () => WavDecoder_default,
+  WavEncoder: () => WavEncoder_default,
+  getFaustAudioWorkletProcessor: () => FaustAudioWorkletProcessor_default,
+  instantiateFaustModuleFromFile: () => instantiateFaustModuleFromFile_default
+});
+
 // src/instantiateFaustModuleFromFile.ts
 var instantiateFaustModuleFromFile = async (jsFile, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
   let FaustModule;
@@ -50,7 +962,7 @@ export default FaustModule;
 var instantiateFaustModuleFromFile_default = instantiateFaustModuleFromFile;
 
 // src/FaustAudioWorkletProcessor.ts
-var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
+var getFaustAudioWorkletProcessor = (dependencies, faustData, register = true) => {
   const { registerProcessor, AudioWorkletProcessor, sampleRate } = globalThis;
   const {
     FaustBaseWebAudioDsp: FaustBaseWebAudioDsp2,
@@ -203,29 +1115,26 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData) => {
       this.fDSPCode.allNotesOff(hard);
     }
   }
-  try {
-    if (poly) {
-      registerProcessor(dspName || "mydsp_poly", FaustPolyAudioWorkletProcessor);
-    } else {
-      registerProcessor(dspName || "mydsp", FaustMonoAudioWorkletProcessor);
+  const Processor = poly ? FaustPolyAudioWorkletProcessor : FaustMonoAudioWorkletProcessor;
+  if (register) {
+    try {
+      registerProcessor(dspName || (poly ? "mydsp_poly" : "mydsp"), Processor);
+    } catch (error) {
+      console.warn(error);
     }
-  } catch (error) {
-    console.warn(error);
   }
+  return poly ? FaustPolyAudioWorkletProcessor : FaustMonoAudioWorkletProcessor;
 };
 var FaustAudioWorkletProcessor_default = getFaustAudioWorkletProcessor;
 
 // src/FaustCompiler.ts
+var import_sha256_js = __toESM(require_build2(), 1);
 var sha256 = async (str) => {
-  if (typeof crypto !== "undefined" && crypto?.subtle) {
-    const inputBuffer = new TextEncoder().encode(str);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", inputBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-    return hashHex;
-  }
-  const crypto_node = await import("crypto");
-  return crypto_node.createHash("sha256").update(str).digest("hex");
+  const sha2562 = new import_sha256_js.Sha256();
+  sha2562.update(str);
+  const hashArray = Array.from(await sha2562.digest());
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hashHex;
 };
 var _FaustCompiler = class {
   constructor(libFaust) {
@@ -262,9 +1171,9 @@ var _FaustCompiler = class {
           console.error(e);
           return null;
         }
-      } catch {
+      } catch (e) {
         this.fErrorMessage = this.fLibFaust.getErrorAfterException();
-        console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`);
+        console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`, e);
         this.fLibFaust.cleanupAfterException();
         return null;
       }
@@ -2052,6 +2961,34 @@ const dependencies = {
       return node;
     }
   }
+  async createAudioWorkletProcessor(name = this.name, factory = this.factory) {
+    if (!factory)
+      throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+    const meta = JSON.parse(factory.json);
+    const dependencies = {
+      FaustBaseWebAudioDsp,
+      FaustMonoWebAudioDsp,
+      FaustWasmInstantiator: FaustWasmInstantiator_default,
+      FaustPolyWebAudioDsp: void 0,
+      FaustWebAudioDspVoice: void 0
+    };
+    if (!_FaustMonoDspGenerator.gWorkletProcessors.has(name)) {
+      try {
+        const faustData = {
+          dspName: name,
+          dspMeta: meta,
+          poly: false
+        };
+        const Processor = FaustAudioWorkletProcessor_default(dependencies, faustData);
+        _FaustMonoDspGenerator.gWorkletProcessors.add(name);
+        return Processor;
+      } catch (e) {
+        console.error(`=> exception raised while running createMonoNode: ${e}`);
+        console.error(`=> check that your page is served using https.${e}`);
+        return null;
+      }
+    }
+  }
   async createOfflineProcessor(sampleRate, bufferSize, factory = this.factory) {
     if (!factory)
       throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
@@ -2129,7 +3066,7 @@ const dependencies = {
           await context.audioWorklet.addModule(url);
           _FaustPolyDspGenerator.gWorkletProcessors.add(name);
         } catch (e) {
-          console.error(`=> exception raised while running createMonoNode: ${e}`);
+          console.error(`=> exception raised while running createPolyNode: ${e}`);
           console.error(`=> check that your page is served using https.${e}`);
           return null;
         }
@@ -2138,23 +3075,43 @@ const dependencies = {
       return node;
     }
   }
+  async createAudioWorkletProcessor(name = this.name, voiceFactory = this.voiceFactory, effectFactory = this.effectFactory) {
+    if (!voiceFactory)
+      throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+    const voiceMeta = JSON.parse(voiceFactory.json);
+    const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : void 0;
+    const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
+    if (!_FaustPolyDspGenerator.gWorkletProcessors.has(name)) {
+      try {
+        const dependencies = {
+          FaustBaseWebAudioDsp,
+          FaustMonoWebAudioDsp: void 0,
+          FaustWasmInstantiator: FaustWasmInstantiator_default,
+          FaustPolyWebAudioDsp,
+          FaustWebAudioDspVoice
+        };
+        const faustData = {
+          dspName: name,
+          dspMeta: voiceMeta,
+          poly: true,
+          effectMeta
+        };
+        const Processor = FaustAudioWorkletProcessor_default(dependencies, faustData);
+        _FaustPolyDspGenerator.gWorkletProcessors.add(name);
+        return Processor;
+      } catch (e) {
+        console.error(`=> exception raised while running createPolyNode: ${e}`);
+        console.error(`=> check that your page is served using https.${e}`);
+        return null;
+      }
+    }
+  }
 };
 var FaustPolyDspGenerator = _FaustPolyDspGenerator;
 FaustPolyDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Set();
 
 // src/index.ts
-var src_default = {
-  instantiateFaustModuleFromFile: instantiateFaustModuleFromFile_default,
-  getFaustAudioWorkletProcessor: FaustAudioWorkletProcessor_default,
-  FaustDspInstance: FaustDspInstance_default,
-  FaustCompiler: FaustCompiler_default,
-  FaustWasmInstantiator: FaustWasmInstantiator_default,
-  FaustOfflineProcessor: FaustOfflineProcessor_default,
-  FaustSvgDiagrams: FaustSvgDiagrams_default,
-  LibFaust: LibFaust_default,
-  WavEncoder: WavEncoder_default,
-  WavDecoder: WavDecoder_default
-};
+var src_default = exports_exports;
 export {
   FaustAudioWorkletNode,
   FaustBaseWebAudioDsp,
@@ -2180,4 +3137,18 @@ export {
   FaustAudioWorkletProcessor_default as getFaustAudioWorkletProcessor,
   instantiateFaustModuleFromFile_default as instantiateFaustModuleFromFile
 };
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
 //# sourceMappingURL=index.js.map

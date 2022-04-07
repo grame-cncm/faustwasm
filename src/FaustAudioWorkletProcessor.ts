@@ -1,6 +1,6 @@
 import type FaustWasmInstantiator from "./FaustWasmInstantiator";
 import type { FaustBaseWebAudioDsp, FaustWebAudioDspVoice, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
-import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem } from "./types";
+import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem, AudioWorkletProcessor } from "./types";
 
 /**
  * Injected in the string to be compiled on AudioWorkletProcessor side
@@ -15,7 +15,7 @@ export interface FaustAudioWorkletProcessorDependencies<Poly extends boolean = f
     FaustBaseWebAudioDsp: typeof FaustBaseWebAudioDsp;
     FaustMonoWebAudioDsp: Poly extends true ? undefined : typeof FaustMonoWebAudioDsp;
     FaustPolyWebAudioDsp: Poly extends true ? typeof FaustPolyWebAudioDsp : undefined;
-    FaustWebAudioDspVoice: Poly extends true ? undefined : typeof FaustWebAudioDspVoice;
+    FaustWebAudioDspVoice: Poly extends true ? typeof FaustWebAudioDspVoice : undefined;
     FaustWasmInstantiator: typeof FaustWasmInstantiator;
 }
 export interface FaustAudioWorkletNodeOptions<Poly extends boolean = false> extends AudioWorkletNodeOptions {
@@ -46,7 +46,7 @@ export interface FaustPolyAudioWorkletProcessorOptions extends FaustAudioWorklet
 
 
 // Dynamic AudioWorkletProcessor code generator
-const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencies: FaustAudioWorkletProcessorDependencies<Poly>, faustData: FaustData) => {
+const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencies: FaustAudioWorkletProcessorDependencies<Poly>, faustData: FaustData, register = true): typeof AudioWorkletProcessor => {
     const { registerProcessor, AudioWorkletProcessor, sampleRate } = globalThis as unknown as AudioWorkletGlobalScope;
 
     const {
@@ -245,16 +245,16 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         }
     }
 
-    try {
-        // Synchronously compile and instantiate the wasm module
-        if (poly) {
-            registerProcessor(dspName || "mydsp_poly", FaustPolyAudioWorkletProcessor);
-        } else {
-            registerProcessor(dspName || "mydsp", FaustMonoAudioWorkletProcessor);
+    const Processor = poly ? FaustPolyAudioWorkletProcessor : FaustMonoAudioWorkletProcessor;
+    if (register) {
+        try {
+            registerProcessor(dspName || (poly ? "mydsp_poly" : "mydsp"), Processor);
+        } catch (error) {
+            console.warn(error);
         }
-    } catch (error) {
-        console.warn(error);
     }
+
+    return poly ? FaustPolyAudioWorkletProcessor : FaustMonoAudioWorkletProcessor;
 }
 
 export default getFaustAudioWorkletProcessor;

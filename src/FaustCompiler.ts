@@ -1,17 +1,13 @@
+import { Sha256 } from "@aws-crypto/sha256-js";
 import type { ILibFaust } from "./LibFaust";
 import type { FaustDspFactory, IntVector } from "./types";
 
 const sha256 = async (str: string) => {
-    if (typeof crypto !== "undefined" && crypto?.subtle) { // Web
-        const inputBuffer = new TextEncoder().encode(str);
-        const hashBuffer = await crypto.subtle.digest("SHA-256", inputBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-        return hashHex;
-    }
-    // Node.js
-    const crypto_node = await import("crypto");
-    return crypto_node.createHash("sha256").update(str).digest("hex");
+    const sha256 = new Sha256();
+    sha256.update(str);
+    const hashArray = Array.from(await sha256.digest());
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    return hashHex;
 };
 
 export interface IFaustCompiler {
@@ -135,9 +131,9 @@ class FaustCompiler implements IFaustCompiler {
                     console.error(e);
                     return null;
                 }
-            } catch {
+            } catch (e) {
                 this.fErrorMessage = this.fLibFaust.getErrorAfterException();
-                console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`);
+                console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`, e);
                 this.fLibFaust.cleanupAfterException();
                 return null;
             }
