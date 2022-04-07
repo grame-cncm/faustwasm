@@ -165,11 +165,13 @@ const createFaustUI = async (faustNode) => {
 	const { FaustUI } = await import("./faust-ui/index.js");
 	const $container = document.createElement("div");
 	$container.style.margin = "0";
-	$container.style.position = "relative";
+	$container.style.position = "absolute";
 	$container.style.overflow = "auto";
 	$container.style.display = "flex";
 	$container.style.flexDirection = "column";
-	$container.style.flex = "1 0 auto";
+	$container.style.width = "100%";
+	$container.style.height = "100%";
+	$divFaustUI.appendChild($container);
 	const faustUI = new FaustUI({
 		ui: faustNode.getUI(),
 		root: $container,
@@ -180,7 +182,6 @@ const createFaustUI = async (faustNode) => {
 	faustNode.setOutputParamHandler((path, value) => faustUI.paramChangeByDSP(path, value));
 	$container.style.minWidth = `${faustUI.minWidth}px`;
 	$container.style.minHeight = `${faustUI.minHeight}px`;
-	$divFaustUI.appendChild($container);
 	faustUI.resize();
 };
 
