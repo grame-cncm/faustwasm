@@ -16,11 +16,11 @@ const instantiateFaustModuleFromFile = async (jsFile: string, dataFile = jsFile.
 export default FaustModule;
 `;
         const jsFileMod = URL.createObjectURL(new Blob([jsCode], { type: "text/javascript" }));
-        FaustModule = (await import(jsFileMod)).default;
+        FaustModule = (await import(/* webpackIgnore: true */jsFileMod)).default;
         dataBinary = await (await fetch(dataFile)).arrayBuffer();
         wasmBinary = new Uint8Array(await (await fetch(wasmFile)).arrayBuffer());
     } else {
-        const fs = await import("fs/promises");
+        const { promises: fs } = await import("fs");
         const { pathToFileURL } = await import("url");
         let jsCode = (await fs.readFile(jsFile, { encoding: "utf-8" }));
         jsCode = `
@@ -39,7 +39,7 @@ export default FaustModule;
 `;
         const jsFileMod = jsFile.replace(/c?js$/, "mjs");
         await fs.writeFile(jsFileMod, jsCode);
-        FaustModule = (await import(pathToFileURL(jsFileMod).href)).default;
+        FaustModule = (await import(/* webpackIgnore: true */pathToFileURL(jsFileMod).href)).default;
         await fs.unlink(jsFileMod);
         dataBinary = (await fs.readFile(dataFile)).buffer;
         wasmBinary = (await fs.readFile(wasmFile)).buffer;
