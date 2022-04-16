@@ -914,8 +914,10 @@
     LibFaust: () => LibFaust_default,
     WavDecoder: () => WavDecoder_default,
     WavEncoder: () => WavEncoder_default,
+    ab2str: () => ab2str,
     getFaustAudioWorkletProcessor: () => FaustAudioWorkletProcessor_default,
-    instantiateFaustModuleFromFile: () => instantiateFaustModuleFromFile_default
+    instantiateFaustModuleFromFile: () => instantiateFaustModuleFromFile_default,
+    str2ab: () => str2ab
   });
 
   // src/instantiateFaustModuleFromFile.ts
@@ -1137,6 +1139,15 @@ export default FaustModule;
 
   // src/FaustCompiler.ts
   var import_sha256_js = __toESM(require_build2(), 1);
+  var ab2str = (buf) => String.fromCharCode.apply(null, buf);
+  var str2ab = (str) => {
+    const buf = new ArrayBuffer(str.length);
+    const bufView = new Uint8Array(buf);
+    for (let i = 0, strLen = str.length; i < strLen; i++) {
+      bufView[i] = str.charCodeAt(i);
+    }
+    return bufView;
+  };
   var sha256 = async (str) => {
     const sha2562 = new import_sha256_js.Sha256();
     sha2562.update(str);
@@ -1145,6 +1156,25 @@ export default FaustModule;
     return hashHex;
   };
   var _FaustCompiler = class {
+    static stringifyDSPFactories() {
+      const table = {};
+      this.gFactories.forEach((factory, key) => {
+        const { code, json, poly } = factory;
+        table[key] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
+      });
+      return JSON.stringify(table);
+    }
+    static async importDSPFactories(tableStr) {
+      const table = JSON.parse(tableStr);
+      const awaited = [];
+      for (const key in table) {
+        const factory = table[key];
+        const { code, json, poly } = factory;
+        const ab = str2ab(btoa(code));
+        awaited.push(WebAssembly.compile(ab).then((module) => this.gFactories.set(key, { cfactory: -1, code: ab, module, json: JSON.parse(json), poly })));
+      }
+      return Promise.all(awaited);
+    }
     constructor(libFaust) {
       this.fLibFaust = libFaust;
       this.fErrorMessage = "";

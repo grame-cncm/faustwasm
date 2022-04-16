@@ -2,6 +2,16 @@ import { Sha256 } from "@aws-crypto/sha256-js";
 import type { ILibFaust } from "./LibFaust";
 import type { FaustDspFactory, IntVector } from "./types";
 
+export const ab2str = (buf: Uint8Array) => String.fromCharCode.apply(null, buf);
+
+export const str2ab = (str: string) => {
+    const buf = new ArrayBuffer(str.length);
+    const bufView = new Uint8Array(buf);
+    for (let i = 0, strLen = str.length; i < strLen; i++) {
+        bufView[i] = str.charCodeAt(i);
+    }
+    return bufView;
+};
 const sha256 = async (str: string) => {
     const sha256 = new Sha256();
     sha256.update(str);
@@ -91,6 +101,31 @@ class FaustCompiler implements IFaustCompiler {
     private mixer32Module!: WebAssembly.Module;
     private mixer64Module!: WebAssembly.Module;
 
+    /**
+     * Get a stringified DSP factories table
+     */
+    static stringifyDSPFactories() {
+        const table: Record<string, { code: string, json: any; poly: boolean }> = {};
+        this.gFactories.forEach((factory, key) => {
+            const { code, json, poly } = factory;
+            table[key] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
+        });
+        return JSON.stringify(table);
+    }
+    /**
+     * Import a stringified DSP factories table
+     */
+    static async importDSPFactories(tableStr: string) {
+        const table: Record<string, { code: string, json: any; poly: boolean }> = JSON.parse(tableStr);
+        const awaited: Promise<Map<string, FaustDspFactory>>[] = [];
+        for (const key in table) {
+            const factory = table[key];
+            const { code, json, poly } = factory;
+            const ab = str2ab(btoa(code))
+            awaited.push(WebAssembly.compile(ab).then(module => this.gFactories.set(key, { cfactory: -1, code: ab, module, json: JSON.parse(json), poly })));
+        }
+        return Promise.all(awaited);
+    }
     constructor(libFaust: ILibFaust) {
         this.fLibFaust = libFaust;
         this.fErrorMessage = "";
@@ -148,7 +183,6 @@ class FaustCompiler implements IFaustCompiler {
     async createMonoDSPFactory(name: string, code: string, args: string) {
         return this.createDSPFactory(name, code, args, false);
     }
-
     async createPolyDSPFactory(name: string, code: string, args: string) {
         return this.createDSPFactory(name, code, args, true);
     }

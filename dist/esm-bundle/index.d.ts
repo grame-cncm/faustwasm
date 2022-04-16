@@ -732,6 +732,8 @@ export declare class LibFaust implements ILibFaust {
 	getInfos(what: FaustInfoType): string;
 	toString(): string;
 }
+export declare const ab2str: (buf: Uint8Array) => any;
+export declare const str2ab: (str: string) => Uint8Array;
 export interface IFaustCompiler {
 	/**
 	 * Gives the Faust compiler version.
@@ -808,6 +810,14 @@ export declare class FaustCompiler implements IFaustCompiler {
 	private mixer64Buffer;
 	private mixer32Module;
 	private mixer64Module;
+	/**
+	 * Get a stringified DSP factories table
+	 */
+	static stringifyDSPFactories(): string;
+	/**
+	 * Import a stringified DSP factories table
+	 */
+	static importDSPFactories(tableStr: string): Promise<Map<string, FaustDspFactory>[]>;
 	constructor(libFaust: ILibFaust);
 	private intVec2intArray;
 	private createDSPFactory;
