@@ -8,10 +8,10 @@
   "type": "module",
   "scripts": {
     "build": "npm run build-cjs && npm run build-cjs-bundle && npm run build-esm && npm run build-esm-bundle && node postbuild-bundled.js & npm run build-types & npm run build-types-bundle",
-    "build-cjs": "esbuild src/index.ts --target=es2019 --bundle --sourcemap --outdir=dist/cjs --format=iife --external:fs --external:url --external:crypto",
-    "build-cjs-bundle": "node prebuild-bundled.js && esbuild src/index-bundle-iife.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/cjs-bundle/index.js --format=iife --external:fs --external:url --external:crypto --external:path && node postbuild-bundled.js",
-    "build-esm": "esbuild src/index.ts --target=es2019 --bundle --sourcemap --outdir=dist/esm --format=esm --external:fs --external:url --external:crypto",
-    "build-esm-bundle": "node prebuild-bundled.js && esbuild src/index-bundle.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/esm-bundle/index.js --format=esm --external:fs --external:url --external:crypto --external:path && node postbuild-bundled.js",
+    "build-cjs": "esbuild src/index.ts --target=es2019 --bundle --sourcemap --outdir=dist/cjs --format=iife --external:fs --external:url",
+    "build-cjs-bundle": "node prebuild-bundled.js && esbuild src/index-bundle-iife.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/cjs-bundle/index.js --format=iife --external:fs --external:url --external:path && node postbuild-bundled.js",
+    "build-esm": "esbuild src/index.ts --target=es2019 --bundle --sourcemap --outdir=dist/esm --format=esm --external:fs --external:url",
+    "build-esm-bundle": "node prebuild-bundled.js && esbuild src/index-bundle.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/esm-bundle/index.js --format=esm --external:fs --external:url --external:path && node postbuild-bundled.js",
     "build-types": "dts-bundle-generator -o dist/cjs/index.d.ts src/index.ts --external-imports",
     "build-types-bundle": "dts-bundle-generator -o dist/cjs-bundle/index.d.ts src/index-bundle.ts --external-imports",
     "postbuild": "node postbuild.js"

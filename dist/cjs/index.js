@@ -15,10 +15,6 @@
   var __commonJS = (cb, mod) => function __require2() {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
-  var __export = (target, all) => {
-    for (var name in all)
-      __defProp(target, name, { get: all[name], enumerable: true });
-  };
   var __copyProps = (to, from, except, desc) => {
     if (from && typeof from === "object" || typeof from === "function") {
       for (let key of __getOwnPropNames(from))
@@ -891,44 +887,16 @@
     }
   });
 
-  // src/exports.ts
-  var exports_exports = {};
-  __export(exports_exports, {
-    FaustAudioWorkletNode: () => FaustAudioWorkletNode,
-    FaustBaseWebAudioDsp: () => FaustBaseWebAudioDsp,
-    FaustCompiler: () => FaustCompiler_default,
-    FaustDspInstance: () => FaustDspInstance_default,
-    FaustMonoAudioWorkletNode: () => FaustMonoAudioWorkletNode,
-    FaustMonoDspGenerator: () => FaustMonoDspGenerator,
-    FaustMonoScriptProcessorNode: () => FaustMonoScriptProcessorNode,
-    FaustMonoWebAudioDsp: () => FaustMonoWebAudioDsp,
-    FaustOfflineProcessor: () => FaustOfflineProcessor_default,
-    FaustPolyAudioWorkletNode: () => FaustPolyAudioWorkletNode,
-    FaustPolyDspGenerator: () => FaustPolyDspGenerator,
-    FaustPolyScriptProcessorNode: () => FaustPolyScriptProcessorNode,
-    FaustPolyWebAudioDsp: () => FaustPolyWebAudioDsp,
-    FaustScriptProcessorNode: () => FaustScriptProcessorNode,
-    FaustSvgDiagrams: () => FaustSvgDiagrams_default,
-    FaustWasmInstantiator: () => FaustWasmInstantiator_default,
-    FaustWebAudioDspVoice: () => FaustWebAudioDspVoice,
-    LibFaust: () => LibFaust_default,
-    WavDecoder: () => WavDecoder_default,
-    WavEncoder: () => WavEncoder_default,
-    ab2str: () => ab2str,
-    getFaustAudioWorkletProcessor: () => FaustAudioWorkletProcessor_default,
-    instantiateFaustModuleFromFile: () => instantiateFaustModuleFromFile_default,
-    str2ab: () => str2ab
-  });
-
   // src/instantiateFaustModuleFromFile.ts
   var instantiateFaustModuleFromFile = async (jsFile, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
+    var _a, _b;
     let FaustModule;
     let dataBinary;
     let wasmBinary;
     if (typeof globalThis.fetch === "function") {
       let jsCode = await (await fetch(jsFile)).text();
       jsCode = `${jsCode}
-export default FaustModule;
+export default ${(_a = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? void 0 : _a[1]};
 `;
       const jsFileMod = URL.createObjectURL(new Blob([jsCode], { type: "text/javascript" }));
       FaustModule = (await import(
@@ -953,7 +921,7 @@ const require = createRequire(import.meta.url);
 
 ${jsCode}
 
-export default FaustModule;
+export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? void 0 : _b[1]};
 `;
       const jsFileMod = jsFile.replace(/c?js$/, "mjs");
       await fs.writeFile(jsFileMod, jsCode);
@@ -3156,9 +3124,6 @@ const dependencies = {
   };
   var FaustPolyDspGenerator = _FaustPolyDspGenerator;
   FaustPolyDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Set();
-
-  // src/index.ts
-  var src_default = exports_exports;
 })();
 /*! *****************************************************************************
 Copyright (c) Microsoft Corporation.

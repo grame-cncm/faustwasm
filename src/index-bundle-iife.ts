@@ -1,6 +1,7 @@
-import * as FaustWasm from "./exports-bundle";
+import * as faustwasm from "./exports-bundle";
+// export default faustwasm;
+// Bug with dts-bundle-generator
 
 export * from "./exports-bundle";
-export default FaustWasm;
 
-(globalThis as any).faustwasm = FaustWasm;
+(globalThis as any).faustwasm = faustwasm;

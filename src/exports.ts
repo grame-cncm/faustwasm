@@ -1,13 +1,13 @@
-import instantiateFaustModuleFromFile from "./instantiateFaustModuleFromFile";
-import getFaustAudioWorkletProcessor from "./FaustAudioWorkletProcessor";
-import FaustCompiler from "./FaustCompiler";
-import FaustDspInstance from "./FaustDspInstance";
-import FaustWasmInstantiator from "./FaustWasmInstantiator";
-import FaustOfflineProcessor from "./FaustOfflineProcessor";
-import FaustSvgDiagrams from "./FaustSvgDiagrams";
-import LibFaust from "./LibFaust";
-import WavEncoder from "./WavEncoder";
-import WavDecoder from "./WavDecoder";
+export { default as instantiateFaustModuleFromFile } from "./instantiateFaustModuleFromFile";
+export { default as getFaustAudioWorkletProcessor } from "./FaustAudioWorkletProcessor";
+export { default as FaustCompiler } from "./FaustCompiler";
+export { default as FaustDspInstance } from "./FaustDspInstance";
+export { default as FaustWasmInstantiator } from "./FaustWasmInstantiator";
+export { default as FaustOfflineProcessor } from "./FaustOfflineProcessor";
+export { default as FaustSvgDiagrams } from "./FaustSvgDiagrams";
+export { default as LibFaust } from "./LibFaust";
+export { default as WavEncoder } from "./WavEncoder";
+export { default as WavDecoder } from "./WavDecoder";
 
 export * from "./FaustAudioWorkletNode";
 export * from "./FaustAudioWorkletProcessor";
@@ -20,16 +20,3 @@ export * from "./FaustDspGenerator";
 export * from "./LibFaust";
 
 export * from "./types";
-
-export {
-    instantiateFaustModuleFromFile,
-    getFaustAudioWorkletProcessor,
-    FaustDspInstance,
-    FaustCompiler,
-    FaustWasmInstantiator,
-    FaustOfflineProcessor,
-    FaustSvgDiagrams,
-    LibFaust,
-    WavEncoder,
-    WavDecoder,
-};

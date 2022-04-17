@@ -3,10 +3,6 @@
 /// <reference types="emscripten" />
 /// <reference types="node" />
 
-/**
- * Instantiate `FaustModule` using bundled binaries. Module constructor and files can be overriden.
- */
-export declare const instantiateFaustModule: (FaustModuleIn?: any, dataBinaryIn?: Uint8Array, wasmBinaryIn?: Uint8Array) => Promise<any>;
 export declare type FaustModuleFactory = EmscriptenModuleFactory<FaustModule>;
 export interface FaustModule extends EmscriptenModule {
 	ccall: typeof ccall;
@@ -193,6 +189,13 @@ export interface AudioWorkletGlobalScope {
 	sampleRate: number;
 	AudioWorkletProcessor: typeof AudioWorkletProcessor;
 }
+export declare const FaustModuleFactoryFn: FaustModuleFactory;
+export declare const FaustModuleFactoryWasm: Uint8Array;
+export declare const FaustModuleFactoryData: Uint8Array;
+/**
+ * Instantiate `FaustModule` using bundled binaries. Module constructor and files can be overriden.
+ */
+export declare const instantiateFaustModule: (FaustModuleFactoryIn?: FaustModuleFactory, dataBinaryIn?: Uint8Array, wasmBinaryIn?: Uint8Array) => Promise<FaustModule>;
 /**
  * Load libfaust-wasm files, than instantiate libFaust
  * @param jsFile path to `libfaust-wasm.js`
@@ -1111,6 +1114,5 @@ export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 		parameterDescriptors: AudioParamDescriptor[];
 	} | null | undefined>;
 }
-export default FaustWasm;
 
 export {};

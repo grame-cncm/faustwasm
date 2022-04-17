@@ -1,4 +1,5 @@
-import * as FaustWasm from "./exports-bundle";
+// import * as faustwasm from "./exports-bundle";
+// export default faustwasm;
+// Bug with dts-bundle-generator
 
 export * from "./exports-bundle";
-export default FaustWasm;

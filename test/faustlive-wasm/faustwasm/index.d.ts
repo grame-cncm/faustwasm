@@ -1107,6 +1107,5 @@ export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 		parameterDescriptors: AudioParamDescriptor[];
 	} | null | undefined>;
 }
-export default FaustWasm;
 
 export {};
