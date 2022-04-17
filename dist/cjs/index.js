@@ -1044,10 +1044,10 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
     class FaustMonoAudioWorkletProcessor extends FaustAudioWorkletProcessor {
       constructor(options) {
         super(options);
-        const { FaustMonoWebAudioDsp: FaustWebAudioMonoDSP } = dependencies;
+        const { FaustMonoWebAudioDsp: FaustMonoWebAudioDsp2 } = dependencies;
         const { factory, sampleSize } = options.processorOptions;
         const instance = FaustWasmInstantiator2.createSyncMonoDSPInstance(factory);
-        this.fDSPCode = new FaustWebAudioMonoDSP(instance, sampleRate, sampleSize, 128);
+        this.fDSPCode = new FaustMonoWebAudioDsp2(instance, sampleRate, sampleSize, 128);
         this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
         this.fDSPCode.start();
       }
@@ -1069,10 +1069,10 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
               break;
           }
         };
-        const { FaustPolyWebAudioDsp: FaustWebAudioPolyDSP } = dependencies;
+        const { FaustPolyWebAudioDsp: FaustPolyWebAudioDsp2 } = dependencies;
         const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
         const instance = FaustWasmInstantiator2.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
-        this.fDSPCode = new FaustWebAudioPolyDSP(instance, sampleRate, sampleSize, 128);
+        this.fDSPCode = new FaustPolyWebAudioDsp2(instance, sampleRate, sampleSize, 128);
         this.port.onmessage = (e) => this.handleMessageAux(e);
         this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
         this.fDSPCode.start();

@@ -172,12 +172,12 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
         constructor(options: FaustAudioWorkletNodeOptions) {
             super(options);
-            const { FaustMonoWebAudioDsp: FaustWebAudioMonoDSP } = dependencies as FaustAudioWorkletProcessorDependencies<false>;
+            const { FaustMonoWebAudioDsp } = dependencies as FaustAudioWorkletProcessorDependencies<false>;
             const { factory, sampleSize } = options.processorOptions;
 
             const instance = FaustWasmInstantiator.createSyncMonoDSPInstance(factory);
             // Create Monophonic DSP
-            this.fDSPCode = new FaustWebAudioMonoDSP(instance, sampleRate, sampleSize, 128);
+            this.fDSPCode = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, 128);
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
@@ -193,13 +193,13 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
         constructor(options: FaustPolyAudioWorkletNodeOptions) {
             super(options);
-            const { FaustPolyWebAudioDsp: FaustWebAudioPolyDSP } = dependencies as FaustAudioWorkletProcessorDependencies<true>;
+            const { FaustPolyWebAudioDsp } = dependencies as FaustAudioWorkletProcessorDependencies<true>;
 
             const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
 
             const instance = FaustWasmInstantiator.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
             // Create Polyphonic DSP
-            this.fDSPCode = new FaustWebAudioPolyDSP(instance, sampleRate, sampleSize, 128);
+            this.fDSPCode = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, 128);
 
             // Setup port message handling
             this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);

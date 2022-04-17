@@ -747,7 +747,8 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
                 this.fInstance.voiceAPI,
                 this.fInputsItems,
                 this.fPathTable,
-                sampleRate));
+                sampleRate
+            ));
         }
 
         // Init effect
