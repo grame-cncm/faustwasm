@@ -106,9 +106,9 @@ class FaustCompiler implements IFaustCompiler {
      */
     static stringifyDSPFactories() {
         const table: Record<string, { code: string, json: any; poly: boolean }> = {};
-        this.gFactories.forEach((factory, key) => {
+        this.gFactories.forEach((factory, shaKey) => {
             const { code, json, poly } = factory;
-            table[key] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
+            table[shaKey] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
         });
         return JSON.stringify(table);
     }
@@ -118,11 +118,11 @@ class FaustCompiler implements IFaustCompiler {
     static async importDSPFactories(tableStr: string) {
         const table: Record<string, { code: string, json: any; poly: boolean }> = JSON.parse(tableStr);
         const awaited: Promise<Map<string, FaustDspFactory>>[] = [];
-        for (const key in table) {
-            const factory = table[key];
+        for (const shaKey in table) {
+            const factory = table[shaKey];
             const { code, json, poly } = factory;
             const ab = str2ab(atob(code))
-            awaited.push(WebAssembly.compile(ab).then(module => this.gFactories.set(key, { cfactory: -1, code: ab, module, json: JSON.stringify(json), poly })));
+            awaited.push(WebAssembly.compile(ab).then(module => this.gFactories.set(shaKey, { cfactory: 0, code: ab, module, json: JSON.stringify(json), poly })));
         }
         return Promise.all(awaited);
     }
@@ -151,12 +151,12 @@ class FaustCompiler implements IFaustCompiler {
         } else {
             try {
                 // Can possibly raise a C++ exception catched by the second catch()
-                const faustWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
+                const faustDspWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
                 try {
-                    const code = this.intVec2intArray(faustWasm.data);
-                    faustWasm.data.delete();
+                    const code = this.intVec2intArray(faustDspWasm.data);
+                    faustDspWasm.data.delete();
                     const module = await WebAssembly.compile(code);
-                    const factory = { cfactory: faustWasm.cfactory, code, module, json: faustWasm.json, poly }
+                    const factory: FaustDspFactory = { cfactory: faustDspWasm.cfactory, code, module, json: faustDspWasm.json, poly };
                     // Factory C++ side can be deallocated immediately
                     this.deleteDSPFactory(factory);
                     // Keep the compiled factory in the cache

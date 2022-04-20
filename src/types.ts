@@ -27,7 +27,7 @@ export interface IntVector {
     delete(): void;
 }
 
-export interface FaustWasm {
+export interface FaustDspWasm {
     /* The C++ factory pointer as in integer */
     cfactory: number;
     /* The compiled wasm binary code */
@@ -53,7 +53,7 @@ export interface LibFaustWasm {
      * @param useInternalMemory - tell the compiler to generate static embedded memory or not
      * @returns an opaque reference to the factory
      */
-    createDSPFactory(name: string, code: string, args: string, useInternalMemory: boolean): FaustWasm;
+    createDSPFactory(name: string, code: string, args: string, useInternalMemory: boolean): FaustDspWasm;
 
     /**
      * Delete a dsp factory.
