@@ -1097,7 +1097,7 @@ export declare class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
 		new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 		prototype: AudioWorkletProcessor;
 		parameterDescriptors: AudioParamDescriptor[];
-	} | null | undefined>;
+	} | null>;
 	createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory): Promise<IFaustOfflineProcessor | null>;
 }
 export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
@@ -1114,7 +1114,7 @@ export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 		new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 		prototype: AudioWorkletProcessor;
 		parameterDescriptors: AudioParamDescriptor[];
-	} | null | undefined>;
+	} | null>;
 }
 
 export {};

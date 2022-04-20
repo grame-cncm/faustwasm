@@ -2921,6 +2921,7 @@ var _FaustMonoDspGenerator = class {
     return this;
   }
   async createNode(context, name = this.name, factory = this.factory, sp = false, bufferSize = 1024, processorName = factory.shaKey || name) {
+    var _a, _b;
     if (!factory)
       throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
     const meta = JSON.parse(factory.json);
@@ -2933,7 +2934,9 @@ var _FaustMonoDspGenerator = class {
       sp2.init(monoDsp);
       return sp2;
     } else {
-      if (!_FaustMonoDspGenerator.gWorkletProcessors.has(name)) {
+      if (!_FaustMonoDspGenerator.gWorkletProcessors.has(context))
+        _FaustMonoDspGenerator.gWorkletProcessors.set(context, /* @__PURE__ */ new Set());
+      if (!((_a = _FaustMonoDspGenerator.gWorkletProcessors.get(context)) == null ? void 0 : _a.has(processorName))) {
         try {
           const processorCode = `
 // DSP name and JSON string for DSP are generated
@@ -2959,7 +2962,7 @@ const dependencies = {
 `;
           const url = URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
           await context.audioWorklet.addModule(url);
-          _FaustMonoDspGenerator.gWorkletProcessors.add(name);
+          (_b = _FaustMonoDspGenerator.gWorkletProcessors.get(context)) == null ? void 0 : _b.add(processorName);
         } catch (e) {
           console.error(`=> exception raised while running createMonoNode: ${e}`);
           console.error(`=> check that your page is served using https.${e}`);
@@ -2981,22 +2984,19 @@ const dependencies = {
       FaustPolyWebAudioDsp: void 0,
       FaustWebAudioDspVoice: void 0
     };
-    if (!_FaustMonoDspGenerator.gWorkletProcessors.has(name)) {
-      try {
-        const faustData = {
-          processorName,
-          dspName: name,
-          dspMeta: meta,
-          poly: false
-        };
-        const Processor = FaustAudioWorkletProcessor_default(dependencies, faustData);
-        _FaustMonoDspGenerator.gWorkletProcessors.add(name);
-        return Processor;
-      } catch (e) {
-        console.error(`=> exception raised while running createMonoNode: ${e}`);
-        console.error(`=> check that your page is served using https.${e}`);
-        return null;
-      }
+    try {
+      const faustData = {
+        processorName,
+        dspName: name,
+        dspMeta: meta,
+        poly: false
+      };
+      const Processor = FaustAudioWorkletProcessor_default(dependencies, faustData);
+      return Processor;
+    } catch (e) {
+      console.error(`=> exception raised while running createMonoNode: ${e}`);
+      console.error(`=> check that your page is served using https.${e}`);
+      return null;
     }
   }
   async createOfflineProcessor(sampleRate, bufferSize, factory = this.factory) {
@@ -3010,7 +3010,7 @@ const dependencies = {
   }
 };
 var FaustMonoDspGenerator = _FaustMonoDspGenerator;
-FaustMonoDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Set();
+FaustMonoDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Map();
 var _FaustPolyDspGenerator = class {
   constructor() {
     this.voiceFactory = null;
@@ -3034,6 +3034,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
     return this;
   }
   async createNode(context, voices, name = this.name, voiceFactory = this.voiceFactory, mixerModule = this.mixerModule, effectFactory = this.effectFactory, sp = false, bufferSize = 1024, processorName = (voiceFactory.shaKey || "") + ((effectFactory == null ? void 0 : effectFactory.shaKey) || "") || `${name}_poly`) {
+    var _a, _b;
     if (!voiceFactory)
       throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
     const voiceMeta = JSON.parse(voiceFactory.json);
@@ -3047,7 +3048,9 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
       sp2.init(polyDsp);
       return sp2;
     } else {
-      if (!_FaustPolyDspGenerator.gWorkletProcessors.has(name)) {
+      if (!_FaustPolyDspGenerator.gWorkletProcessors.has(context))
+        _FaustPolyDspGenerator.gWorkletProcessors.set(context, /* @__PURE__ */ new Set());
+      if (!((_a = _FaustPolyDspGenerator.gWorkletProcessors.get(context)) == null ? void 0 : _a.has(processorName))) {
         try {
           const processorCode = `
 // DSP name and JSON string for DSP are generated
@@ -3075,7 +3078,7 @@ const dependencies = {
 `;
           const url = URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
           await context.audioWorklet.addModule(url);
-          _FaustPolyDspGenerator.gWorkletProcessors.add(name);
+          (_b = _FaustPolyDspGenerator.gWorkletProcessors.get(context)) == null ? void 0 : _b.add(processorName);
         } catch (e) {
           console.error(`=> exception raised while running createPolyNode: ${e}`);
           console.error(`=> check that your page is served using https.${e}`);
@@ -3092,35 +3095,32 @@ const dependencies = {
     const voiceMeta = JSON.parse(voiceFactory.json);
     const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : void 0;
     const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
-    if (!_FaustPolyDspGenerator.gWorkletProcessors.has(name)) {
-      try {
-        const dependencies = {
-          FaustBaseWebAudioDsp,
-          FaustMonoWebAudioDsp: void 0,
-          FaustWasmInstantiator: FaustWasmInstantiator_default,
-          FaustPolyWebAudioDsp,
-          FaustWebAudioDspVoice
-        };
-        const faustData = {
-          processorName,
-          dspName: name,
-          dspMeta: voiceMeta,
-          poly: true,
-          effectMeta
-        };
-        const Processor = FaustAudioWorkletProcessor_default(dependencies, faustData);
-        _FaustPolyDspGenerator.gWorkletProcessors.add(name);
-        return Processor;
-      } catch (e) {
-        console.error(`=> exception raised while running createPolyNode: ${e}`);
-        console.error(`=> check that your page is served using https.${e}`);
-        return null;
-      }
+    try {
+      const dependencies = {
+        FaustBaseWebAudioDsp,
+        FaustMonoWebAudioDsp: void 0,
+        FaustWasmInstantiator: FaustWasmInstantiator_default,
+        FaustPolyWebAudioDsp,
+        FaustWebAudioDspVoice
+      };
+      const faustData = {
+        processorName,
+        dspName: name,
+        dspMeta: voiceMeta,
+        poly: true,
+        effectMeta
+      };
+      const Processor = FaustAudioWorkletProcessor_default(dependencies, faustData);
+      return Processor;
+    } catch (e) {
+      console.error(`=> exception raised while running createPolyNode: ${e}`);
+      console.error(`=> check that your page is served using https.${e}`);
+      return null;
     }
   }
 };
 var FaustPolyDspGenerator = _FaustPolyDspGenerator;
-FaustPolyDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Set();
+FaustPolyDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Map();
 export {
   FaustAudioWorkletNode,
   FaustBaseWebAudioDsp,

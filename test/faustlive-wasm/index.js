@@ -539,7 +539,7 @@ const compileDSP = async () => {
     deleteDSP();
 
     // Prepare argv list
-    var argv = "-ftz " + ftz_flag.toString() + " -" + sample_format + " -I libraries/";
+    var argv = "-ftz " + ftz_flag.toString() + " -" + sample_format;
     console.log(argv);
 
     if (poly_flag === "ON") {
