@@ -2966,11 +2966,11 @@ const dependencies = {
           return null;
         }
       }
-      const node = new FaustMonoAudioWorkletNode(context, name, factory, sampleSize);
+      const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
       return node;
     }
   }
-  async createAudioWorkletProcessor(name = this.name, factory = this.factory) {
+  async createAudioWorkletProcessor(name = this.name, factory = this.factory, processorName = factory.shaKey || name) {
     if (!factory)
       throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
     const meta = JSON.parse(factory.json);
@@ -2984,6 +2984,7 @@ const dependencies = {
     if (!_FaustMonoDspGenerator.gWorkletProcessors.has(name)) {
       try {
         const faustData = {
+          processorName,
           dspName: name,
           dspMeta: meta,
           poly: false
@@ -3081,11 +3082,11 @@ const dependencies = {
           return null;
         }
       }
-      const node = new FaustPolyAudioWorkletNode(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory || void 0);
+      const node = new FaustPolyAudioWorkletNode(context, processorName, voiceFactory, mixerModule, voices, sampleSize, effectFactory || void 0);
       return node;
     }
   }
-  async createAudioWorkletProcessor(name = this.name, voiceFactory = this.voiceFactory, effectFactory = this.effectFactory) {
+  async createAudioWorkletProcessor(name = this.name, voiceFactory = this.voiceFactory, effectFactory = this.effectFactory, processorName = (voiceFactory.shaKey || "") + ((effectFactory == null ? void 0 : effectFactory.shaKey) || "") || `${name}_poly`) {
     if (!voiceFactory)
       throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
     const voiceMeta = JSON.parse(voiceFactory.json);
@@ -3101,6 +3102,7 @@ const dependencies = {
           FaustWebAudioDspVoice
         };
         const faustData = {
+          processorName,
           dspName: name,
           dspMeta: voiceMeta,
           poly: true,

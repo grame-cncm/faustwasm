@@ -167,13 +167,14 @@ const dependencies = {
                 }
             }
             // Create the AWN
-            const node = new FaustMonoAudioWorkletNode(context, name, factory, sampleSize)
+            const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize)
             return node as SP extends true ? FaustMonoScriptProcessorNode : FaustMonoAudioWorkletNode;
         }
     }
     async createAudioWorkletProcessor(
         name = this.name,
-        factory = this.factory as LooseFaustDspFactory
+        factory = this.factory as LooseFaustDspFactory,
+        processorName = factory.shaKey || name
     ) {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -191,6 +192,7 @@ const dependencies = {
             try {
                 // DSP name and JSON string for DSP are generated
                 const faustData = {
+                    processorName,
                     dspName: name,
                     dspMeta: meta,
                     poly: false
@@ -322,14 +324,15 @@ const dependencies = {
                 }
             }
             // Create the AWN
-            const node = new FaustPolyAudioWorkletNode(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory || undefined);
+            const node = new FaustPolyAudioWorkletNode(context, processorName, voiceFactory, mixerModule, voices, sampleSize, effectFactory || undefined);
             return node as SP extends true ? FaustPolyScriptProcessorNode : FaustPolyAudioWorkletNode;
         }
     }
     async createAudioWorkletProcessor(
         name = this.name,
         voiceFactory = this.voiceFactory as LooseFaustDspFactory,
-        effectFactory = this.effectFactory as LooseFaustDspFactory | null
+        effectFactory = this.effectFactory as LooseFaustDspFactory | null,
+        processorName = ((voiceFactory.shaKey || "") + (effectFactory?.shaKey || "")) || `${name}_poly`
     ) {
         if (!voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -348,6 +351,7 @@ const dependencies = {
                 };
                 // DSP name and JSON string for DSP are generated
                 const faustData = {
+                    processorName,
                     dspName: name,
                     dspMeta: voiceMeta,
                     poly: true,
