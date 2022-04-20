@@ -6,6 +6,7 @@ import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactor
  * Injected in the string to be compiled on AudioWorkletProcessor side
  */
 export interface FaustData {
+    processorName: string;
     dspName: string;
     dspMeta: FaustDspMeta;
     poly: boolean;
@@ -55,6 +56,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
     } = dependencies;
     
     const {
+        processorName,
         dspName,
         dspMeta,
         effectMeta,
@@ -248,7 +250,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
     const Processor = poly ? FaustPolyAudioWorkletProcessor : FaustMonoAudioWorkletProcessor;
     if (register) {
         try {
-            registerProcessor(dspName || (poly ? "mydsp_poly" : "mydsp"), Processor);
+            registerProcessor(processorName || dspName || (poly ? "mydsp_poly" : "mydsp"), Processor);
         } catch (error) {
             console.warn(error);
         }

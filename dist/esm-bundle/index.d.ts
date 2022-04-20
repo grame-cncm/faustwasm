@@ -28,7 +28,7 @@ export interface IntVector {
 	get(i: number): number;
 	delete(): void;
 }
-export interface FaustWasm {
+export interface FaustDspWasm {
 	cfactory: number;
 	data: IntVector;
 	json: string;
@@ -49,7 +49,7 @@ export interface LibFaustWasm {
 	 * @param useInternalMemory - tell the compiler to generate static embedded memory or not
 	 * @returns an opaque reference to the factory
 	 */
-	createDSPFactory(name: string, code: string, args: string, useInternalMemory: boolean): FaustWasm;
+	createDSPFactory(name: string, code: string, args: string, useInternalMemory: boolean): FaustDspWasm;
 	/**
 	 * Delete a dsp factory.
 	 *
@@ -108,6 +108,7 @@ export interface LooseFaustDspFactory {
 	module: WebAssembly.Module;
 	json: string;
 	poly?: boolean;
+	shaKey?: string;
 }
 export interface FaustDspMeta {
 	name: string;
@@ -674,6 +675,7 @@ export declare class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implement
  * Injected in the string to be compiled on AudioWorkletProcessor side
  */
 export interface FaustData {
+	processorName: string;
 	dspName: string;
 	dspMeta: FaustDspMeta;
 	poly: boolean;
@@ -725,7 +727,7 @@ export declare class LibFaust implements ILibFaust {
 	module(): FaustModule;
 	fs(): typeof FS;
 	version(): string;
-	createDSPFactory(name: string, code: string, args: string, useInternalMemory: boolean): FaustWasm;
+	createDSPFactory(name: string, code: string, args: string, useInternalMemory: boolean): FaustDspWasm;
 	deleteDSPFactory(cFactory: number): void;
 	expandDSP(name: string, code: string, args: string): string;
 	generateAuxFiles(name: string, code: string, args: string): boolean;
@@ -1090,7 +1092,7 @@ export declare class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
 	factory: FaustDspFactory | null;
 	constructor();
 	compile(compiler: IFaustCompiler, name: string, code: string, args: string): Promise<this | null>;
-	createNode<SP extends boolean = false>(context: BaseAudioContext, name?: string, factory?: LooseFaustDspFactory, sp?: SP, bufferSize?: number): Promise<SP extends true ? FaustMonoScriptProcessorNode | null : FaustMonoAudioWorkletNode | null>;
+	createNode<SP extends boolean = false>(context: BaseAudioContext, name?: string, factory?: LooseFaustDspFactory, sp?: SP, bufferSize?: number, processorName?: string): Promise<SP extends true ? FaustMonoScriptProcessorNode | null : FaustMonoAudioWorkletNode | null>;
 	createAudioWorkletProcessor(name?: string, factory?: LooseFaustDspFactory): Promise<{
 		new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 		prototype: AudioWorkletProcessor;
@@ -1107,7 +1109,7 @@ export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 	mixerModule: WebAssembly.Module;
 	constructor();
 	compile(compiler: IFaustCompiler, name: string, dspCode: string, args: string, effectCode?: string): Promise<this | null>;
-	createNode<SP extends boolean = false>(context: BaseAudioContext, voices: number, name?: string, voiceFactory?: LooseFaustDspFactory, mixerModule?: WebAssembly.Module, effectFactory?: LooseFaustDspFactory | null, sp?: SP, bufferSize?: number): Promise<SP extends true ? FaustPolyScriptProcessorNode | null : FaustPolyAudioWorkletNode | null>;
+	createNode<SP extends boolean = false>(context: BaseAudioContext, voices: number, name?: string, voiceFactory?: LooseFaustDspFactory, mixerModule?: WebAssembly.Module, effectFactory?: LooseFaustDspFactory | null, sp?: SP, bufferSize?: number, processorName?: string): Promise<SP extends true ? FaustPolyScriptProcessorNode | null : FaustPolyAudioWorkletNode | null>;
 	createAudioWorkletProcessor(name?: string, voiceFactory?: LooseFaustDspFactory, effectFactory?: LooseFaustDspFactory | null): Promise<{
 		new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 		prototype: AudioWorkletProcessor;

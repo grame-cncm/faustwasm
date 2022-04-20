@@ -953,6 +953,7 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
       FaustWasmInstantiator: FaustWasmInstantiator2
     } = dependencies;
     const {
+      processorName,
       dspName,
       dspMeta,
       effectMeta,
@@ -1102,7 +1103,7 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
     const Processor = poly ? FaustPolyAudioWorkletProcessor : FaustMonoAudioWorkletProcessor;
     if (register) {
       try {
-        registerProcessor(dspName || (poly ? "mydsp_poly" : "mydsp"), Processor);
+        registerProcessor(processorName || dspName || (poly ? "mydsp_poly" : "mydsp"), Processor);
       } catch (error) {
         console.warn(error);
       }
@@ -1132,20 +1133,20 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
   var _FaustCompiler = class {
     static stringifyDSPFactories() {
       const table = {};
-      this.gFactories.forEach((factory, key) => {
+      this.gFactories.forEach((factory, shaKey) => {
         const { code, json, poly } = factory;
-        table[key] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
+        table[shaKey] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
       });
       return JSON.stringify(table);
     }
     static async importDSPFactories(tableStr) {
       const table = JSON.parse(tableStr);
       const awaited = [];
-      for (const key in table) {
-        const factory = table[key];
+      for (const shaKey in table) {
+        const factory = table[shaKey];
         const { code, json, poly } = factory;
         const ab = str2ab(atob(code));
-        awaited.push(WebAssembly.compile(ab).then((module) => this.gFactories.set(key, { cfactory: -1, code: ab, module, json: JSON.stringify(json), poly })));
+        awaited.push(WebAssembly.compile(ab).then((module) => this.gFactories.set(shaKey, { shaKey, cfactory: 0, code: ab, module, json: JSON.stringify(json), poly })));
       }
       return Promise.all(awaited);
     }
@@ -1170,12 +1171,12 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
         return _FaustCompiler.gFactories.get(shaKey) || null;
       } else {
         try {
-          const faustWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
+          const faustDspWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
           try {
-            const code2 = this.intVec2intArray(faustWasm.data);
-            faustWasm.data.delete();
+            const code2 = this.intVec2intArray(faustDspWasm.data);
+            faustDspWasm.data.delete();
             const module = await WebAssembly.compile(code2);
-            const factory = { cfactory: faustWasm.cfactory, code: code2, module, json: faustWasm.json, poly };
+            const factory = { shaKey, cfactory: faustDspWasm.cfactory, code: code2, module, json: faustDspWasm.json, poly };
             this.deleteDSPFactory(factory);
             _FaustCompiler.gFactories.set(shaKey, factory);
             return factory;
@@ -2924,10 +2925,10 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
       this.factory = await compiler.createMonoDSPFactory(name, code, args);
       if (!this.factory)
         return null;
-      this.name = name + this.factory.cfactory.toString();
+      this.name = name;
       return this;
     }
-    async createNode(context, name = this.name, factory = this.factory, sp = false, bufferSize = 1024) {
+    async createNode(context, name = this.name, factory = this.factory, sp = false, bufferSize = 1024, processorName = factory.shaKey || name) {
       if (!factory)
         throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
       const meta = JSON.parse(factory.json);
@@ -2945,6 +2946,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
             const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
+              processorName,
               dspName: name,
               dspMeta: meta,
               poly: false
@@ -3030,7 +3032,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
       if (!this.voiceFactory)
         return null;
       this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
-      this.name = name + this.voiceFactory.cfactory.toString() + "_poly";
+      this.name = name;
       const voiceMeta = JSON.parse(this.voiceFactory.json);
       const isDouble = voiceMeta.compile_options.match("-double");
       const { mixerBuffer, mixerModule } = await compiler.getAsyncInternalMixerModule(!!isDouble);
@@ -3038,7 +3040,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
       this.mixerModule = mixerModule;
       return this;
     }
-    async createNode(context, voices, name = this.name, voiceFactory = this.voiceFactory, mixerModule = this.mixerModule, effectFactory = this.effectFactory, sp = false, bufferSize = 1024) {
+    async createNode(context, voices, name = this.name, voiceFactory = this.voiceFactory, mixerModule = this.mixerModule, effectFactory = this.effectFactory, sp = false, bufferSize = 1024, processorName = (voiceFactory.shaKey || "") + ((effectFactory == null ? void 0 : effectFactory.shaKey) || "") || `${name}_poly`) {
       if (!voiceFactory)
         throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
       const voiceMeta = JSON.parse(voiceFactory.json);
@@ -3057,6 +3059,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
             const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
+              processorName,
               dspName: name,
               dspMeta: voiceMeta,
               poly: true,

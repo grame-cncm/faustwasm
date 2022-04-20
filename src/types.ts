@@ -120,6 +120,7 @@ export interface LooseFaustDspFactory {
     module: WebAssembly.Module;
     json: string;
     poly?: boolean;
+    shaKey?: string;
 }
 
 export interface FaustDspMeta {

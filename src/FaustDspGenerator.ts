@@ -107,7 +107,7 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
     async compile(compiler: IFaustCompiler, name: string, code: string, args: string) {
         this.factory = await compiler.createMonoDSPFactory(name, code, args);
         if (!this.factory) return null;
-        this.name = name + this.factory.cfactory.toString();
+        this.name = name;
         return this;
     }
 
@@ -116,7 +116,8 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
         name = this.name,
         factory = this.factory as LooseFaustDspFactory,
         sp = false as SP,
-        bufferSize = 1024
+        bufferSize = 1024,
+        processorName = factory.shaKey || name
     ): Promise<SP extends true ? FaustMonoScriptProcessorNode | null : FaustMonoAudioWorkletNode | null> {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -136,6 +137,7 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
                     const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
+    processorName,
     dspName: name,
     dspMeta: meta,
     poly: false
@@ -249,7 +251,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
         if (!this.voiceFactory) return null;
         // Compile effect, possibly failing since 'compilePolyNode2' can be called by called by 'compilePolyNode'
         this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
-        this.name = name + this.voiceFactory.cfactory.toString() + "_poly";
+        this.name = name;
         const voiceMeta = JSON.parse(this.voiceFactory.json);
         const isDouble = voiceMeta.compile_options.match("-double");
         const { mixerBuffer, mixerModule } = await compiler.getAsyncInternalMixerModule(!!isDouble);
@@ -266,7 +268,8 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
         mixerModule = this.mixerModule,
         effectFactory = this.effectFactory as LooseFaustDspFactory | null,
         sp = false as SP,
-        bufferSize = 1024
+        bufferSize = 1024,
+        processorName = ((voiceFactory.shaKey || "") + (effectFactory?.shaKey || "")) || `${name}_poly`
     ): Promise<SP extends true ? FaustPolyScriptProcessorNode | null : FaustPolyAudioWorkletNode | null> {
         if (!voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -287,6 +290,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
                     const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
+    processorName,
     dspName: name,
     dspMeta: voiceMeta,
     poly: true,
