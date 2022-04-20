@@ -1,6 +1,6 @@
 {
   "name": "@shren/faustwasm",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "WebAssembly version of Faust Compiler",
   "main": "dist/cjs/index.js",
   "types": "dist/esm/index.d.ts",
