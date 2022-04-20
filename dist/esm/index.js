@@ -1136,8 +1136,8 @@ var _FaustCompiler = class {
     for (const key in table) {
       const factory = table[key];
       const { code, json, poly } = factory;
-      const ab = str2ab(btoa(code));
-      awaited.push(WebAssembly.compile(ab).then((module) => this.gFactories.set(key, { cfactory: -1, code: ab, module, json: JSON.parse(json), poly })));
+      const ab = str2ab(atob(code));
+      awaited.push(WebAssembly.compile(ab).then((module) => this.gFactories.set(key, { cfactory: -1, code: ab, module, json: JSON.stringify(json), poly })));
     }
     return Promise.all(awaited);
   }
