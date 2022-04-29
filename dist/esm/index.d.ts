@@ -613,10 +613,10 @@ export declare class FaustWebAudioDspVoice {
 	private fFreqLabel;
 	private fGateLabel;
 	private fGainLabel;
+	private fKeyLabel;
+	private fVelLabel;
 	private fDSP;
 	private fAPI;
-	private fKeyFun;
-	private fVelFun;
 	fCurNote: number;
 	fNextNote: number;
 	fNextVel: number;
@@ -627,6 +627,7 @@ export declare class FaustWebAudioDspVoice {
 		[address: string]: number;
 	}, sampleRate: number);
 	static midiToFreq(note: number): number;
+	static normalizeVelocity(velocity: number): number;
 	private extractPaths;
 	keyOn(pitch: number, velocity: number, legato?: boolean): void;
 	keyOff(hard?: boolean): void;

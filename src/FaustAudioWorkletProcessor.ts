@@ -83,11 +83,25 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             // Analyse voice JSON to generate AudioParam parameters
             const callback = (item: FaustUIItem) => {
                 if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-                    if (!poly || (!item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain"))) {
+                    if (!poly || (
+                        !item.address.endsWith("/gate") &&
+                        !item.address.endsWith("/freq") &&
+                        !item.address.endsWith("/gain") &&
+                        !item.address.endsWith("/key") &&
+                        !item.address.endsWith("/vel") &&
+                        !item.address.endsWith("/velocity")
+                    )) {
                         params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
                     }
                 } else if (item.type === "button" || item.type === "checkbox") {
-                    if (!poly || (!item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain"))) {
+                    if (!poly || (
+                        !item.address.endsWith("/gate") &&
+                        !item.address.endsWith("/freq") &&
+                        !item.address.endsWith("/gain") &&
+                        !item.address.endsWith("/key") &&
+                        !item.address.endsWith("/vel") &&
+                        !item.address.endsWith("/velocity")
+                    )) {
                         params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
                     }
                 }

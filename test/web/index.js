@@ -84,7 +84,7 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 	 * @param {string} effectCode
 	 */
 	const createPolyDsp = async (faust, log, voiceCode, effectCode) => {
-		const mixerModule = await faust.getAsyncInternalMixerModule();
+		const { mixerModule } = await faust.getAsyncInternalMixerModule();
 		log("createPolyDSPFactory for voice: ");
 		let voiceFactory = await faust.createPolyDSPFactory("voice", voiceCode, options);
 		if (voiceFactory) {
@@ -155,10 +155,10 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 		let signal = "import(\"stdfaust.lib\");\nprocess = 0.25,0.33, 0.6;";
 		let factory = await faust.createMonoDSPFactory("test", signal, options);
 		const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
-		const dsp = new FaustMonoWebAudioDsp(instance, 48000, 4, 128);
+		const dsp = new FaustMonoWebAudioDsp(instance, 48000, 4, 33);
 	
 		log("offlineProcessor");
-		let offline = new FaustOfflineProcessor(dsp, 128);
+		let offline = new FaustOfflineProcessor(dsp, 33);
 		let plotted = offline.render(null, 100);
 		for (let chan = 0; chan < plotted.length; chan++) {
 			for (let frame = 0; frame < 100; frame++) {

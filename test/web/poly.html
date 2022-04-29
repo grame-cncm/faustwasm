@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <script src="../../dist/cjs-bundle/index.js"></script>
+    </head>
+    <body style="position: absolute; width: 100%; height: 100%; margin: 0px">
+        <button id="start">Start</button>
+    </body>
+    <script>
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        polycode = `
+import("stdfaust.lib");
+process = ba.pulsen(1, ba.hz2midikey(freq) * 1000) : pm.marimba(freq, 0, 7000, 0.5, 0.8) * gate * gain with {
+freq = hslider("freq", 440, 40, 8000, 1);
+gain = hslider("gain", 0.5, 0, 1, 0.01);
+gate = button("gate");
+};
+effect = dm.freeverb_demo;`;
+        const { instantiateFaustModule, LibFaust, FaustCompiler, FaustPolyDspGenerator } = faustwasm;
+        document.getElementById("start").onclick = async () => {
+            await audioCtx.resume();
+            faustModule = await instantiateFaustModule();
+            libFaust = new LibFaust(faustModule);
+            compiler = new FaustCompiler(libFaust);
+            generator = new FaustPolyDspGenerator();
+            await generator.compile(compiler, "dsp", polycode, "");
+            node = await generator.createNode(audioCtx, 4);
+            // node = await generator.createNode(audioCtx, 4, undefined, undefined, undefined, undefined, true);
+
+            node.connect(audioCtx.destination);
+            node.keyOn(0, 60, 100);
+            setTimeout(() => node.keyOn(0, 64, 40), 500);
+            setTimeout(() => node.keyOn(0, 67, 80), 1000);
+            setTimeout(() => node.keyOn(0, 68, 40), 500);
+            setTimeout(() => node.keyOn(0, 71, 80), 1000);
+            setTimeout(() => node.allNotesOff(), 5000);
+        };
+    </script>
+</html>

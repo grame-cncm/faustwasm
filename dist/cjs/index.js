@@ -968,11 +968,11 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
         const params = [];
         const callback = (item) => {
           if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-            if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain")) {
+            if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain") && !item.address.endsWith("/key") && !item.address.endsWith("/vel") && !item.address.endsWith("/velocity")) {
               params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
             }
           } else if (item.type === "button" || item.type === "checkbox") {
-            if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain")) {
+            if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain") && !item.address.endsWith("/key") && !item.address.endsWith("/vel") && !item.address.endsWith("/velocity")) {
               params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
             }
           }
@@ -2279,8 +2279,6 @@ this.fDSP: ${this.fDSP}`;
       FaustWebAudioDspVoice.kLegatoVoice = -3;
       FaustWebAudioDspVoice.kNoVoice = -4;
       FaustWebAudioDspVoice.VOICE_STOP_LEVEL = 5e-4;
-      this.fKeyFun = (pitch) => FaustWebAudioDspVoice.midiToFreq(pitch);
-      this.fVelFun = (velocity) => velocity / 127;
       this.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
       this.fNextNote = this.fNextVel = -1;
       this.fLevel = 0;
@@ -2290,28 +2288,29 @@ this.fDSP: ${this.fDSP}`;
       this.fGateLabel = [];
       this.fGainLabel = [];
       this.fFreqLabel = [];
+      this.fKeyLabel = [];
+      this.fVelLabel = [];
       this.fAPI.init(this.fDSP, sampleRate);
       this.extractPaths(inputItems, pathTable);
     }
     static midiToFreq(note) {
       return 440 * 2 ** ((note - 69) / 12);
     }
+    static normalizeVelocity(velocity) {
+      return velocity / 127;
+    }
     extractPaths(inputItems, pathTable) {
       inputItems.forEach((item) => {
         if (item.endsWith("/gate")) {
           this.fGateLabel.push(pathTable[item]);
         } else if (item.endsWith("/freq")) {
-          this.fKeyFun = (pitch) => FaustWebAudioDspVoice.midiToFreq(pitch);
           this.fFreqLabel.push(pathTable[item]);
         } else if (item.endsWith("/key")) {
-          this.fKeyFun = (pitch) => pitch;
-          this.fFreqLabel.push(pathTable[item]);
+          this.fKeyLabel.push(pathTable[item]);
         } else if (item.endsWith("/gain")) {
-          this.fVelFun = (velocity) => velocity / 127;
           this.fGainLabel.push(pathTable[item]);
         } else if (item.endsWith("/vel") && item.endsWith("/velocity")) {
-          this.fVelFun = (velocity) => velocity;
-          this.fGainLabel.push(pathTable[item]);
+          this.fVelLabel.push(pathTable[item]);
         }
       });
     }
@@ -2320,9 +2319,11 @@ this.fDSP: ${this.fDSP}`;
         this.fNextNote = pitch;
         this.fNextVel = velocity;
       } else {
-        this.fFreqLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, this.fKeyFun(pitch)));
+        this.fFreqLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, FaustWebAudioDspVoice.midiToFreq(pitch)));
         this.fGateLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, 1));
-        this.fGainLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, this.fVelFun(velocity)));
+        this.fGainLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, FaustWebAudioDspVoice.normalizeVelocity(velocity)));
+        this.fKeyLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, pitch));
+        this.fVelLabel.forEach((index) => this.fAPI.setParamValue(this.fDSP, index, velocity));
         this.fCurNote = pitch;
       }
     }
@@ -2928,7 +2929,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
       this.name = name;
       return this;
     }
-    async createNode(context, name = this.name, factory = this.factory, sp = false, bufferSize = 1024, processorName = factory.shaKey || name) {
+    async createNode(context, name = this.name, factory = this.factory, sp = false, bufferSize = 1024, processorName = (factory == null ? void 0 : factory.shaKey) || name) {
       var _a, _b;
       if (!factory)
         throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
@@ -2981,7 +2982,7 @@ const dependencies = {
         return node;
       }
     }
-    async createAudioWorkletProcessor(name = this.name, factory = this.factory, processorName = factory.shaKey || name) {
+    async createAudioWorkletProcessor(name = this.name, factory = this.factory, processorName = (factory == null ? void 0 : factory.shaKey) || name) {
       if (!factory)
         throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
       const meta = JSON.parse(factory.json);
@@ -3041,7 +3042,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
       this.mixerModule = mixerModule;
       return this;
     }
-    async createNode(context, voices, name = this.name, voiceFactory = this.voiceFactory, mixerModule = this.mixerModule, effectFactory = this.effectFactory, sp = false, bufferSize = 1024, processorName = (voiceFactory.shaKey || "") + ((effectFactory == null ? void 0 : effectFactory.shaKey) || "") || `${name}_poly`) {
+    async createNode(context, voices, name = this.name, voiceFactory = this.voiceFactory, mixerModule = this.mixerModule, effectFactory = this.effectFactory, sp = false, bufferSize = 1024, processorName = ((voiceFactory == null ? void 0 : voiceFactory.shaKey) || "") + ((effectFactory == null ? void 0 : effectFactory.shaKey) || "") || `${name}_poly`) {
       var _a, _b;
       if (!voiceFactory)
         throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
@@ -3097,7 +3098,7 @@ const dependencies = {
         return node;
       }
     }
-    async createAudioWorkletProcessor(name = this.name, voiceFactory = this.voiceFactory, effectFactory = this.effectFactory, processorName = (voiceFactory.shaKey || "") + ((effectFactory == null ? void 0 : effectFactory.shaKey) || "") || `${name}_poly`) {
+    async createAudioWorkletProcessor(name = this.name, voiceFactory = this.voiceFactory, effectFactory = this.effectFactory, processorName = ((voiceFactory == null ? void 0 : voiceFactory.shaKey) || "") + ((effectFactory == null ? void 0 : effectFactory.shaKey) || "") || `${name}_poly`) {
       if (!voiceFactory)
         throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
       const voiceMeta = JSON.parse(voiceFactory.json);

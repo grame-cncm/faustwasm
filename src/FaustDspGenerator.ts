@@ -117,7 +117,7 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
         factory = this.factory as LooseFaustDspFactory,
         sp = false as SP,
         bufferSize = 1024,
-        processorName = factory.shaKey || name
+        processorName = factory?.shaKey || name
     ): Promise<SP extends true ? FaustMonoScriptProcessorNode | null : FaustMonoAudioWorkletNode | null> {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -175,7 +175,7 @@ const dependencies = {
     async createAudioWorkletProcessor(
         name = this.name,
         factory = this.factory as LooseFaustDspFactory,
-        processorName = factory.shaKey || name
+        processorName = factory?.shaKey || name
     ) {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -268,7 +268,7 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
         effectFactory = this.effectFactory as LooseFaustDspFactory | null,
         sp = false as SP,
         bufferSize = 1024,
-        processorName = ((voiceFactory.shaKey || "") + (effectFactory?.shaKey || "")) || `${name}_poly`
+        processorName = ((voiceFactory?.shaKey || "") + (effectFactory?.shaKey || "")) || `${name}_poly`
     ): Promise<SP extends true ? FaustPolyScriptProcessorNode | null : FaustPolyAudioWorkletNode | null> {
         if (!voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -330,7 +330,7 @@ const dependencies = {
         name = this.name,
         voiceFactory = this.voiceFactory as LooseFaustDspFactory,
         effectFactory = this.effectFactory as LooseFaustDspFactory | null,
-        processorName = ((voiceFactory.shaKey || "") + (effectFactory?.shaKey || "")) || `${name}_poly`
+        processorName = ((voiceFactory?.shaKey || "") + (effectFactory?.shaKey || "")) || `${name}_poly`
     ) {
         if (!voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 

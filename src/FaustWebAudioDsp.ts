@@ -587,10 +587,6 @@ this.fDSP: ${this.fDSP}`;
     getUI() { return this.fJSONDsp.ui; }
 }
 
-
-// Voice management
-interface TransformFunction { (val: number): number }
-
 export class FaustWebAudioDspVoice {
 
     static kActiveVoice: number;
@@ -602,10 +598,10 @@ export class FaustWebAudioDspVoice {
     private fFreqLabel: number[];
     private fGateLabel: number[];
     private fGainLabel: number[];
+    private fKeyLabel: number[];
+    private fVelLabel: number[];
     private fDSP: number;         // Voice DSP location in wasm memory
     private fAPI: IFaustDspInstance; // Voice DSP code
-    private fKeyFun: TransformFunction;
-    private fVelFun: TransformFunction;
     // Accessed by PolyDSPImp class
     fCurNote: number;
     fNextNote: number;
@@ -622,9 +618,7 @@ export class FaustWebAudioDspVoice {
         FaustWebAudioDspVoice.kLegatoVoice = -3;
         FaustWebAudioDspVoice.kNoVoice = -4;
         FaustWebAudioDspVoice.VOICE_STOP_LEVEL = 0.0005;
-        // Default versions
-        this.fKeyFun = (pitch: number) => FaustWebAudioDspVoice.midiToFreq(pitch);
-        this.fVelFun = (velocity: number) => velocity / 127.0;
+
         this.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
         this.fNextNote = this.fNextVel = -1;
         this.fLevel = 0;
@@ -634,28 +628,28 @@ export class FaustWebAudioDspVoice {
         this.fGateLabel = [];
         this.fGainLabel = [];
         this.fFreqLabel = [];
+        this.fKeyLabel = [];
+        this.fVelLabel = [];
         this.fAPI.init(this.fDSP, sampleRate);
         this.extractPaths(inputItems, pathTable);
     }
 
     static midiToFreq(note: number) { return 440.0 * 2 ** ((note - 69) / 12); }
 
+    static normalizeVelocity(velocity: number) { return velocity / 127.0; }
+
     private extractPaths(inputItems: string[], pathTable: { [address: string]: number }) {
         inputItems.forEach((item) => {
             if (item.endsWith("/gate")) {
                 this.fGateLabel.push(pathTable[item]);
             } else if (item.endsWith("/freq")) {
-                this.fKeyFun = (pitch: number) => FaustWebAudioDspVoice.midiToFreq(pitch);
                 this.fFreqLabel.push(pathTable[item]);
             } else if (item.endsWith("/key")) {
-                this.fKeyFun = (pitch: number) => pitch;
-                this.fFreqLabel.push(pathTable[item]);
+                this.fKeyLabel.push(pathTable[item]);
             } else if (item.endsWith("/gain")) {
-                this.fVelFun = (velocity: number) => velocity / 127.0;
                 this.fGainLabel.push(pathTable[item]);
             } else if (item.endsWith("/vel") && item.endsWith("/velocity")) {
-                this.fVelFun = (velocity: number) => velocity;
-                this.fGainLabel.push(pathTable[item]);
+                this.fVelLabel.push(pathTable[item]);
             }
         });
     }
@@ -666,9 +660,11 @@ export class FaustWebAudioDspVoice {
             this.fNextNote = pitch;
             this.fNextVel = velocity;
         } else {
-            this.fFreqLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, this.fKeyFun(pitch)));
+            this.fFreqLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, FaustWebAudioDspVoice.midiToFreq(pitch)));
             this.fGateLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, 1));
-            this.fGainLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, this.fVelFun(velocity)));
+            this.fGainLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, FaustWebAudioDspVoice.normalizeVelocity(velocity)));
+            this.fKeyLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, pitch));
+            this.fVelLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, velocity));
             // Keep pitch
             this.fCurNote = pitch;
         }
