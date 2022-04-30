@@ -8,33 +8,55 @@
         <button id="start">Start</button>
     </body>
     <script>
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         polycode = `
 import("stdfaust.lib");
-process = ba.pulsen(1, key * 1000) : pm.marimba(ba.midikey2hz(key), 0, 7000, 0.5, 0.8) * gate * gain with {
+process = ba.pulsen(1, key * 1000) : pm.marimba(ba.midikey2hz(key + 2), 0, 7000, 0.5, 0.8) * (vel / 127) * gate
++ ba.pulsen(1, ba.hz2midikey(freq) * 1000) : pm.marimba(freq, 0, 7000, 0.5, 0.8) * gain * gate with {
 key = hslider("key", 69, 40, 8000, 1);
+freq = hslider("freq", 440, 40, 8000, 1);
+vel = hslider("vel", 100, 0, 127, 1);
 gain = hslider("gain", 0.5, 0, 1, 0.01);
 gate = button("gate");
 };
 effect = dm.freeverb_demo;`;
-        const { instantiateFaustModule, LibFaust, FaustCompiler, FaustPolyDspGenerator } = faustwasm;
-        document.getElementById("start").onclick = async () => {
-            await audioCtx.resume();
-            faustModule = await instantiateFaustModule();
-            libFaust = new LibFaust(faustModule);
-            compiler = new FaustCompiler(libFaust);
-            generator = new FaustPolyDspGenerator();
-            await generator.compile(compiler, "dsp", polycode, "");
-            node = await generator.createNode(audioCtx, 4);
-            // node = await generator.createNode(audioCtx, 4, undefined, undefined, undefined, undefined, true);
-
-            node.connect(audioCtx.destination);
+        const playNote = (node) => {
             node.keyOn(0, 60, 100);
             setTimeout(() => node.keyOn(0, 64, 40), 500);
             setTimeout(() => node.keyOn(0, 67, 80), 1000);
             setTimeout(() => node.keyOn(0, 68, 40), 500);
             setTimeout(() => node.keyOn(0, 71, 80), 1000);
             setTimeout(() => node.allNotesOff(), 5000);
+        };
+        let t0 = performance.now();
+        const time = (str) => {
+            const t = performance.now();
+            if (str) console.log(str, t - t0);
+            t0 = t;
+        }
+        const { instantiateFaustModule, LibFaust, FaustCompiler, FaustPolyDspGenerator } = faustwasm;
+        document.getElementById("start").onclick = async () => {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            await audioCtx.resume();
+            time();
+            faustModule = await instantiateFaustModule();
+            time("Faust WASM Module ready");
+            libFaust = new LibFaust(faustModule);
+            compiler = new FaustCompiler(libFaust);
+            generator = new FaustPolyDspGenerator();
+            time("Faust DSP Generator ready");
+            await generator.compile(compiler, "dsp", polycode, "");
+            time("Faust DSP compiled");
+            node = await generator.createNode(audioCtx, 4);
+            time("Faust AW Node generated");
+            node.connect(audioCtx.destination);
+            playNote(node);
+            setTimeout(async () => {
+                time()
+                node1 = await generator.createNode(audioCtx, 4, undefined, undefined, undefined, undefined, true);
+                time("Faust SP Node generated");
+                node1.connect(audioCtx.destination);
+                playNote(node1);
+            }, 6000);
         };
     </script>
 </html>

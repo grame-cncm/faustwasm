@@ -8,29 +8,16 @@
         <button id="start">Start</button>
     </body>
     <script>
-        polycode = `
+        code = `
 import("stdfaust.lib");
-process = ba.pulsen(1, ba.hz2midikey(freq) * 1000) : pm.marimba(freq, 0, 7000, 0.5, 0.8) * gate * gain with {
-freq = hslider("freq", 440, 40, 8000, 1);
-gain = hslider("gain", 0.5, 0, 1, 0.01);
-gate = button("gate");
-};
-effect = dm.freeverb_demo;`;
-        const playNote = (node) => {
-            node.keyOn(0, 60, 100);
-            setTimeout(() => node.keyOn(0, 64, 40), 500);
-            setTimeout(() => node.keyOn(0, 67, 80), 1000);
-            setTimeout(() => node.keyOn(0, 68, 40), 500);
-            setTimeout(() => node.keyOn(0, 71, 80), 1000);
-            setTimeout(() => node.allNotesOff(), 5000);
-        };
+process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1) <: dm.freeverb_demo;`;
         let t0 = performance.now();
         const time = (str) => {
             const t = performance.now();
             if (str) console.log(str, t - t0);
             t0 = t;
         }
-        const { instantiateFaustModule, LibFaust, FaustCompiler, FaustPolyDspGenerator } = faustwasm;
+        const { instantiateFaustModule, LibFaust, FaustCompiler, FaustMonoDspGenerator } = faustwasm;
         document.getElementById("start").onclick = async () => {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             await audioCtx.resume();
@@ -39,20 +26,20 @@ effect = dm.freeverb_demo;`;
             time("Faust WASM Module ready");
             libFaust = new LibFaust(faustModule);
             compiler = new FaustCompiler(libFaust);
-            generator = new FaustPolyDspGenerator();
+            generator = new FaustMonoDspGenerator();
             time("Faust DSP Generator ready");
-            await generator.compile(compiler, "dsp", polycode, "");
+            await generator.compile(compiler, "dsp", code, "");
             time("Faust DSP compiled");
-            node = await generator.createNode(audioCtx, 4);
+            node = await generator.createNode(audioCtx);
             time("Faust AW Node generated");
             node.connect(audioCtx.destination);
-            playNote(node);
             setTimeout(async () => {
+                node.disconnect();
                 time();
-                node1 = await generator.createNode(audioCtx, 4, undefined, undefined, undefined, undefined, true);
+                node1 = await generator.createNode(audioCtx, undefined, undefined, true);
                 time("Faust SP Node generated");
                 node1.connect(audioCtx.destination);
-                playNote(node1);
+                setTimeout(() => node1.disconnect(), 6000);
             }, 6000);
         };
     </script>
