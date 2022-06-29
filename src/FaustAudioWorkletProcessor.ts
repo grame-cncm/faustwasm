@@ -63,6 +63,34 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         poly
     } = faustData;
 
+    // Analyse voice JSON to generate AudioParam parameters
+    const analysePolyParameters = (item: FaustUIItem): AudioParamDescriptor | null => {
+        if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
+            if (!poly || (
+                !item.address.endsWith("/gate") &&
+                !item.address.endsWith("/freq") &&
+                !item.address.endsWith("/gain") &&
+                !item.address.endsWith("/key") &&
+                !item.address.endsWith("/vel") &&
+                !item.address.endsWith("/velocity")
+            )) {
+                return { name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 };
+            }
+        } else if (item.type === "button" || item.type === "checkbox") {
+            if (!poly || (
+                !item.address.endsWith("/gate") &&
+                !item.address.endsWith("/freq") &&
+                !item.address.endsWith("/gain") &&
+                !item.address.endsWith("/key") &&
+                !item.address.endsWith("/vel") &&
+                !item.address.endsWith("/velocity")
+            )) {
+                return { name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 };
+            }
+        }
+        return null;
+    }
+
     /**
      * Base class for Monophonic and Polyphonic AudioWorkletProcessor
      */
@@ -71,40 +99,26 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         // Use ! syntax when the field is not defined in the constructor
         protected fDSPCode!: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp;
 
+        protected paramValuesCache: Record<string, number> = {};
+
         constructor(options: FaustAudioWorkletNodeOptions<Poly>) {
             super(options);
 
             // Setup port message handling
             this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);
+            
+            const { parameterDescriptors } = (this.constructor as typeof AudioWorkletProcessor);
+            parameterDescriptors.forEach((pd) => {
+                this.paramValuesCache[pd.name] = pd.defaultValue || 0;
+            })
         }
 
         static get parameterDescriptors() {
             const params = [] as AudioParamDescriptor[];
             // Analyse voice JSON to generate AudioParam parameters
             const callback = (item: FaustUIItem) => {
-                if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-                    if (!poly || (
-                        !item.address.endsWith("/gate") &&
-                        !item.address.endsWith("/freq") &&
-                        !item.address.endsWith("/gain") &&
-                        !item.address.endsWith("/key") &&
-                        !item.address.endsWith("/vel") &&
-                        !item.address.endsWith("/velocity")
-                    )) {
-                        params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
-                    }
-                } else if (item.type === "button" || item.type === "checkbox") {
-                    if (!poly || (
-                        !item.address.endsWith("/gate") &&
-                        !item.address.endsWith("/freq") &&
-                        !item.address.endsWith("/gain") &&
-                        !item.address.endsWith("/key") &&
-                        !item.address.endsWith("/vel") &&
-                        !item.address.endsWith("/velocity")
-                    )) {
-                        params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
-                    }
-                }
+                const param = analysePolyParameters(item);
+                if (param) params.push(param);
             }
             FaustBaseWebAudioDsp.parseUI(dspMeta.ui, callback);
             // Analyse effect JSON to generate AudioParam parameters
@@ -116,8 +130,11 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
             // Update controls (possibly needed for sample accurate control)
             for (const path in parameters) {
-                const paramArray = parameters[path];
-                this.fDSPCode.setParamValue(path, paramArray[0]);
+                const [paramValue] = parameters[path];
+                if (paramValue !== this.paramValuesCache[path]) {
+                    this.fDSPCode.setParamValue(path, paramValue);
+                    this.paramValuesCache[path] = paramValue;
+                }
             }
 
             return this.fDSPCode.compute(inputs[0], outputs[0]);
@@ -166,6 +183,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
         protected setParamValue(path: string, value: number) {
             this.fDSPCode.setParamValue(path, value);
+            this.paramValuesCache[path] = value;
         }
 
         protected midiMessage(data: number[] | Uint8Array) {

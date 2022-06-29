@@ -313,20 +313,20 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
 
     // JSON parsing functions
-    static parseUI(ui: FaustUIDescriptor, callback: (...args: any[]) => any) {
+    static parseUI(ui: FaustUIDescriptor, callback: (item: FaustUIItem) => any) {
         ui.forEach(group => this.parseGroup(group, callback));
     }
 
-    static parseGroup(group: FaustUIGroup, callback: (...args: any[]) => any) {
+    static parseGroup(group: FaustUIGroup, callback: (item: FaustUIItem) => any) {
         if (group.items) {
             this.parseItems(group.items, callback);
         }
     }
-    static parseItems(items: FaustUIItem[], callback: (...args: any[]) => any) {
+    static parseItems(items: FaustUIItem[], callback: (item: FaustUIItem) => any) {
         items.forEach(item => this.parseItem(item, callback));
     }
 
-    static parseItem(item: FaustUIItem, callback: (...args: any[]) => any) {
+    static parseItem(item: FaustUIItem, callback: (item: FaustUIItem) => any) {
         if (item.type === "vgroup" || item.type === "hgroup" || item.type === "tgroup") {
             this.parseItems(item.items, callback);
         } else {
@@ -1028,11 +1028,13 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
     }
 
     keyOn(channel: number, pitch: number, velocity: number) {
+        if (this.fPlotHandler) this.fCachedEvents.push({ type: "keyOn", data: [channel, pitch, velocity] });
         const voice = this.getFreeVoice();
         this.fVoiceTable[voice].keyOn(pitch, velocity, this.fVoiceTable[voice].fCurNote == FaustWebAudioDspVoice.kLegatoVoice);
     }
 
     keyOff(channel: number, pitch: number, velocity: number) {
+        if (this.fPlotHandler) this.fCachedEvents.push({ type: "keyOff", data: [channel, pitch, velocity] });
         const voice = this.getPlayingVoice(pitch);
         if (voice !== FaustWebAudioDspVoice.kNoVoice) {
             this.fVoiceTable[voice].keyOff();

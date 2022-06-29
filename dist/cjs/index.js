@@ -959,23 +959,34 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
       effectMeta,
       poly
     } = faustData;
+    const analysePolyParameters = (item) => {
+      if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
+        if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain") && !item.address.endsWith("/key") && !item.address.endsWith("/vel") && !item.address.endsWith("/velocity")) {
+          return { name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 };
+        }
+      } else if (item.type === "button" || item.type === "checkbox") {
+        if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain") && !item.address.endsWith("/key") && !item.address.endsWith("/vel") && !item.address.endsWith("/velocity")) {
+          return { name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 };
+        }
+      }
+      return null;
+    };
     class FaustAudioWorkletProcessor extends AudioWorkletProcessor {
       constructor(options) {
         super(options);
+        this.paramValuesCache = {};
         this.port.onmessage = (e) => this.handleMessageAux(e);
+        const { parameterDescriptors } = this.constructor;
+        parameterDescriptors.forEach((pd) => {
+          this.paramValuesCache[pd.name] = pd.defaultValue || 0;
+        });
       }
       static get parameterDescriptors() {
         const params = [];
         const callback = (item) => {
-          if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-            if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain") && !item.address.endsWith("/key") && !item.address.endsWith("/vel") && !item.address.endsWith("/velocity")) {
-              params.push({ name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 });
-            }
-          } else if (item.type === "button" || item.type === "checkbox") {
-            if (!poly || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain") && !item.address.endsWith("/key") && !item.address.endsWith("/vel") && !item.address.endsWith("/velocity")) {
-              params.push({ name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 });
-            }
-          }
+          const param = analysePolyParameters(item);
+          if (param)
+            params.push(param);
         };
         FaustBaseWebAudioDsp2.parseUI(dspMeta.ui, callback);
         if (effectMeta)
@@ -984,8 +995,11 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
       }
       process(inputs, outputs, parameters) {
         for (const path in parameters) {
-          const paramArray = parameters[path];
-          this.fDSPCode.setParamValue(path, paramArray[0]);
+          const [paramValue] = parameters[path];
+          if (paramValue !== this.paramValuesCache[path]) {
+            this.fDSPCode.setParamValue(path, paramValue);
+            this.paramValuesCache[path] = paramValue;
+          }
         }
         return this.fDSPCode.compute(inputs[0], outputs[0]);
       }
@@ -1031,6 +1045,7 @@ export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? v
       }
       setParamValue(path, value) {
         this.fDSPCode.setParamValue(path, value);
+        this.paramValuesCache[path] = value;
       }
       midiMessage(data) {
         this.fDSPCode.midiMessage(data);
@@ -2594,10 +2609,14 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
       }
     }
     keyOn(channel, pitch, velocity) {
+      if (this.fPlotHandler)
+        this.fCachedEvents.push({ type: "keyOn", data: [channel, pitch, velocity] });
       const voice = this.getFreeVoice();
       this.fVoiceTable[voice].keyOn(pitch, velocity, this.fVoiceTable[voice].fCurNote == FaustWebAudioDspVoice.kLegatoVoice);
     }
     keyOff(channel, pitch, velocity) {
+      if (this.fPlotHandler)
+        this.fCachedEvents.push({ type: "keyOff", data: [channel, pitch, velocity] });
       const voice = this.getPlayingVoice(pitch);
       if (voice !== FaustWebAudioDspVoice.kNoVoice) {
         this.fVoiceTable[voice].keyOff();

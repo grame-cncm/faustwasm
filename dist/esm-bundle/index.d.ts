@@ -564,10 +564,10 @@ export declare class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 	protected fJSONDsp: FaustDspMeta;
 	constructor(sampleSize: number, bufferSize: number);
 	static remap(v: number, mn0: number, mx0: number, mn1: number, mx1: number): number;
-	static parseUI(ui: FaustUIDescriptor, callback: (...args: any[]) => any): void;
-	static parseGroup(group: FaustUIGroup, callback: (...args: any[]) => any): void;
-	static parseItems(items: FaustUIItem[], callback: (...args: any[]) => any): void;
-	static parseItem(item: FaustUIItem, callback: (...args: any[]) => any): void;
+	static parseUI(ui: FaustUIDescriptor, callback: (item: FaustUIItem) => any): void;
+	static parseGroup(group: FaustUIGroup, callback: (item: FaustUIItem) => any): void;
+	static parseItems(items: FaustUIItem[], callback: (item: FaustUIItem) => any): void;
+	static parseItem(item: FaustUIItem, callback: (item: FaustUIItem) => any): void;
 	protected updateOutputs(): void;
 	metadata(handler: MetadataHandler): void;
 	compute(input: Float32Array[], output: Float32Array[]): boolean;
