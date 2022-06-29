@@ -162,9 +162,9 @@ const dependencies = {
                     // Keep the DSP name
                     FaustMonoDspGenerator.gWorkletProcessors.get(context)?.add(processorName);
                 } catch (e) {
-                    console.error(`=> exception raised while running createMonoNode: ${e}`);
-                    console.error(`=> check that your page is served using https.${e}`);
-                    return null;
+                    // console.error(`=> exception raised while running createMonoNode: ${e}`);
+                    // console.error(`=> check that your page is served using https.${e}`);
+                    throw e;
                 }
             }
             // Create the AWN
@@ -201,9 +201,9 @@ const dependencies = {
                 const Processor = getFaustAudioWorkletProcessor(dependencies, faustData);
                 return Processor;
             } catch (e) {
-                console.error(`=> exception raised while running createMonoNode: ${e}`);
-                console.error(`=> check that your page is served using https.${e}`);
-                return null;
+                // console.error(`=> exception raised while running createMonoNode: ${e}`);
+                // console.error(`=> check that your page is served using https.${e}`);
+                throw e;
             }
     }
     async createOfflineProcessor(
@@ -249,7 +249,11 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
         this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCode, args);
         if (!this.voiceFactory) return null;
         // Compile effect, possibly failing since 'compilePolyNode2' can be called by called by 'compilePolyNode'
-        this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
+        try {
+            this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
+        } catch (e) {
+            console.warn(e);
+        }
         this.name = name;
         const voiceMeta = JSON.parse(this.voiceFactory.json);
         const isDouble = voiceMeta.compile_options.match("-double");
@@ -316,9 +320,9 @@ const dependencies = {
                     // Keep the DSP name
                     FaustPolyDspGenerator.gWorkletProcessors.get(context)?.add(processorName);
                 } catch (e) {
-                    console.error(`=> exception raised while running createPolyNode: ${e}`);
-                    console.error(`=> check that your page is served using https.${e}`);
-                    return null;
+                    // console.error(`=> exception raised while running createPolyNode: ${e}`);
+                    // console.error(`=> check that your page is served using https.${e}`);
+                    throw e;
                 }
             }
             // Create the AWN
@@ -358,9 +362,9 @@ const dependencies = {
                 const Processor = getFaustAudioWorkletProcessor<true>(dependencies, faustData);
                 return Processor;
             } catch (e) {
-                console.error(`=> exception raised while running createPolyNode: ${e}`);
-                console.error(`=> check that your page is served using https.${e}`);
-                return null;
+                // console.error(`=> exception raised while running createPolyNode: ${e}`);
+                // console.error(`=> check that your page is served using https.${e}`);
+                throw e;
             }
     }
 }

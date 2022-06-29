@@ -31,13 +31,19 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 	 * @param {string} code
 	 */
 	const misc = (faust, log, code) => {
-		const exp = faust.expandDSP(code, options);
-		let msg = exp || faust.getErrorMessage();
-		log("  expandDSP             " + msg);
+		let exp;
+		try {
+			exp = faust.expandDSP(code, options);
+		} catch (e) {
+			log("  expandDSP             " + exp || e.message);
+		}
 	
-		let res = faust.generateAuxFiles("test", code, options + " -svg");
-		msg = res ? "done" : faust.getErrorMessage();
-		log("  generateAuxFiles      " + msg);
+		let res;
+		try {
+			res = faust.generateAuxFiles("test", code, options + " -svg");
+		} catch (e) {
+			log("  generateAuxFiles      " + res ? "done" : e.message);
+		}
 	}
 	/**
 	 * @param {InstanceType<FaustCompiler>} faust
@@ -189,10 +195,10 @@ const effectCode = 'process = _*(hslider("Left", 0.1, 0, 1, 0.01)), _*(hslider("
 		await createPolyDsp(compiler, log, code, effectCode);
 	
 		log("\n-----------------\nCreating DSP instance with error code:");
-		await createDsp(compiler, log, errCode).catch(e => { log(e); });
+		await createDsp(compiler, log, errCode).catch(e => { log(e.message); });
 	
 		log("\n-----------------\nCreating Poly DSP instance with error code:");
-		await createPolyDsp(compiler, log, errCode, effectCode).catch(e => { log(e); });
+		await createPolyDsp(compiler, log, errCode, effectCode).catch(e => { log(e.message); });
 	
 		log("\n-----------------\nTest SVG diagrams: ");
 		svgdiagrams(compiler, log, code);

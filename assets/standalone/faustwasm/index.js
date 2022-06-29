@@ -1123,16 +1123,18 @@ var sha256 = async (str) => {
   return hashHex;
 };
 var _FaustCompiler = class {
-  static stringifyDSPFactories() {
+  static serializeDSPFactories() {
     const table = {};
     this.gFactories.forEach((factory, shaKey) => {
       const { code, json, poly } = factory;
       table[shaKey] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
     });
-    return JSON.stringify(table);
+    return table;
   }
-  static async importDSPFactories(tableStr) {
-    const table = JSON.parse(tableStr);
+  static stringifyDSPFactories() {
+    return JSON.stringify(this.serializeDSPFactories());
+  }
+  static deserializeDSPFactories(table) {
     const awaited = [];
     for (const shaKey in table) {
       const factory = table[shaKey];
@@ -1141,6 +1143,10 @@ var _FaustCompiler = class {
       awaited.push(WebAssembly.compile(ab).then((module) => this.gFactories.set(shaKey, { shaKey, cfactory: 0, code: ab, module, json: JSON.stringify(json), poly })));
     }
     return Promise.all(awaited);
+  }
+  static importDSPFactories(tableStr) {
+    const table = JSON.parse(tableStr);
+    return this.deserializeDSPFactories(table);
   }
   constructor(libFaust) {
     this.fLibFaust = libFaust;
@@ -1164,23 +1170,17 @@ var _FaustCompiler = class {
     } else {
       try {
         const faustDspWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
-        try {
-          const code2 = this.intVec2intArray(faustDspWasm.data);
-          faustDspWasm.data.delete();
-          const module = await WebAssembly.compile(code2);
-          const factory = { shaKey, cfactory: faustDspWasm.cfactory, code: code2, module, json: faustDspWasm.json, poly };
-          this.deleteDSPFactory(factory);
-          _FaustCompiler.gFactories.set(shaKey, factory);
-          return factory;
-        } catch (e) {
-          console.error(e);
-          return null;
-        }
+        const ui8Code = this.intVec2intArray(faustDspWasm.data);
+        faustDspWasm.data.delete();
+        const module = await WebAssembly.compile(ui8Code);
+        const factory = { shaKey, cfactory: faustDspWasm.cfactory, code: ui8Code, module, json: faustDspWasm.json, poly };
+        this.deleteDSPFactory(factory);
+        _FaustCompiler.gFactories.set(shaKey, factory);
+        return factory;
       } catch (e) {
         this.fErrorMessage = this.fLibFaust.getErrorAfterException();
-        console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`, e);
         this.fLibFaust.cleanupAfterException();
-        return null;
+        throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
       }
     }
   }
@@ -1203,21 +1203,19 @@ var _FaustCompiler = class {
   expandDSP(code, args) {
     try {
       return this.fLibFaust.expandDSP("FaustDSP", code, args);
-    } catch {
+    } catch (e) {
       this.fErrorMessage = this.fLibFaust.getErrorAfterException();
-      console.error(`=> exception raised while running expandDSP: ${this.fErrorMessage}`);
       this.fLibFaust.cleanupAfterException();
-      return null;
+      throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
     }
   }
   generateAuxFiles(name, code, args) {
     try {
       return this.fLibFaust.generateAuxFiles(name, code, args);
-    } catch {
+    } catch (e) {
       this.fErrorMessage = this.fLibFaust.getErrorAfterException();
-      console.error(`=> exception raised while running generateAuxFiles: ${this.fErrorMessage}`);
       this.fLibFaust.cleanupAfterException();
-      return false;
+      throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
     }
   }
   deleteAllDSPFactories() {
@@ -1404,8 +1402,7 @@ var FaustWasmInstantiator = class {
   static async loadDSPFactory(wasmPath, jsonPath) {
     const wasmFile = await fetch(wasmPath);
     if (!wasmFile.ok) {
-      console.error(`=> exception raised while running loadDSPFactory, file not found: ${wasmPath}`);
-      return null;
+      throw new Error(`=> exception raised while running loadDSPFactory, file not found: ${wasmPath}`);
     }
     try {
       const wasmBuffer = await wasmFile.arrayBuffer();
@@ -1417,8 +1414,7 @@ var FaustWasmInstantiator = class {
       const poly = cOptions.indexOf("wasm-e") !== -1;
       return { cfactory: 0, code: new Uint8Array(wasmBuffer), module, json, poly };
     } catch (e) {
-      console.error(`=> exception raised while running loadDSPFactory: ${e}`);
-      return null;
+      throw e;
     }
   }
   static async loadDSPMixer(mixerPath, fs) {
@@ -1432,8 +1428,7 @@ var FaustWasmInstantiator = class {
       }
       return WebAssembly.compile(mixerBuffer);
     } catch (e) {
-      console.error(`=> exception raised while running loadMixer: ${e}`);
-      return null;
+      throw e;
     }
   }
   static async createAsyncMonoDSPInstance(factory) {
@@ -2741,7 +2736,6 @@ var FaustMonoAudioWorkletNode = class extends FaustAudioWorkletNode {
   constructor(context, name, factory, sampleSize) {
     super(context, name, factory, { name, factory, sampleSize });
     this.onprocessorerror = (e) => {
-      console.error("Error from " + this.fJSONDsp.name + " FaustMonoAudioWorkletNode");
       throw e;
     };
   }
@@ -2757,7 +2751,6 @@ var FaustPolyAudioWorkletNode = class extends FaustAudioWorkletNode {
       effectFactory
     });
     this.onprocessorerror = (e) => {
-      console.error("Error from " + this.fJSONDsp.name + " FaustPolyAudioWorkletNode");
       throw e;
     };
     this.fJSONEffect = effectFactory ? JSON.parse(effectFactory.json) : null;
@@ -2965,9 +2958,7 @@ const dependencies = {
           await context.audioWorklet.addModule(url);
           (_b = _FaustMonoDspGenerator.gWorkletProcessors.get(context)) == null ? void 0 : _b.add(processorName);
         } catch (e) {
-          console.error(`=> exception raised while running createMonoNode: ${e}`);
-          console.error(`=> check that your page is served using https.${e}`);
-          return null;
+          throw e;
         }
       }
       const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
@@ -2995,9 +2986,7 @@ const dependencies = {
       const Processor = FaustAudioWorkletProcessor_default(dependencies, faustData);
       return Processor;
     } catch (e) {
-      console.error(`=> exception raised while running createMonoNode: ${e}`);
-      console.error(`=> check that your page is served using https.${e}`);
-      return null;
+      throw e;
     }
   }
   async createOfflineProcessor(sampleRate, bufferSize, factory = this.factory) {
@@ -3025,7 +3014,11 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`) {
     this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCode, args);
     if (!this.voiceFactory)
       return null;
-    this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
+    try {
+      this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
+    } catch (e) {
+      console.warn(e);
+    }
     this.name = name;
     const voiceMeta = JSON.parse(this.voiceFactory.json);
     const isDouble = voiceMeta.compile_options.match("-double");
@@ -3081,9 +3074,7 @@ const dependencies = {
           await context.audioWorklet.addModule(url);
           (_b = _FaustPolyDspGenerator.gWorkletProcessors.get(context)) == null ? void 0 : _b.add(processorName);
         } catch (e) {
-          console.error(`=> exception raised while running createPolyNode: ${e}`);
-          console.error(`=> check that your page is served using https.${e}`);
-          return null;
+          throw e;
         }
       }
       const node = new FaustPolyAudioWorkletNode(context, processorName, voiceFactory, mixerModule, voices, sampleSize, effectFactory || void 0);
@@ -3114,9 +3105,7 @@ const dependencies = {
       const Processor = FaustAudioWorkletProcessor_default(dependencies, faustData);
       return Processor;
     } catch (e) {
-      console.error(`=> exception raised while running createPolyNode: ${e}`);
-      console.error(`=> check that your page is served using https.${e}`);
-      return null;
+      throw e;
     }
   }
 };

@@ -326,8 +326,8 @@ export declare class FaustWasmInstantiator {
 	private static createMonoDSPInstanceAux;
 	private static createMemoryAux;
 	private static createMixerAux;
-	static loadDSPFactory(wasmPath: string, jsonPath: string): Promise<FaustDspFactory | null>;
-	static loadDSPMixer(mixerPath: string, fs?: typeof FS): Promise<WebAssembly.Module | null>;
+	static loadDSPFactory(wasmPath: string, jsonPath: string): Promise<FaustDspFactory>;
+	static loadDSPMixer(mixerPath: string, fs?: typeof FS): Promise<WebAssembly.Module>;
 	static createAsyncMonoDSPInstance(factory: LooseFaustDspFactory): Promise<FaustMonoDspInstance>;
 	static createSyncMonoDSPInstance(factory: LooseFaustDspFactory): FaustMonoDspInstance;
 	static createAsyncPolyDSPInstance(voiceFactory: LooseFaustDspFactory, mixerModule: WebAssembly.Module, voices: number, effectFactory?: LooseFaustDspFactory): Promise<FaustPolyDspInstance>;
@@ -812,7 +812,23 @@ export declare class FaustCompiler implements IFaustCompiler {
 	/**
 	 * Get a stringified DSP factories table
 	 */
+	static serializeDSPFactories(): Record<string, {
+		code: string;
+		json: any;
+		poly: boolean;
+	}>;
+	/**
+	 * Get a stringified DSP factories table as string
+	 */
 	static stringifyDSPFactories(): string;
+	/**
+	 * Import a DSP factories table
+	 */
+	static deserializeDSPFactories(table: Record<string, {
+		code: string;
+		json: any;
+		poly: boolean;
+	}>): Promise<Map<string, FaustDspFactory>[]>;
 	/**
 	 * Import a stringified DSP factories table
 	 */
@@ -825,7 +841,7 @@ export declare class FaustCompiler implements IFaustCompiler {
 	createMonoDSPFactory(name: string, code: string, args: string): Promise<FaustDspFactory | null>;
 	createPolyDSPFactory(name: string, code: string, args: string): Promise<FaustDspFactory | null>;
 	deleteDSPFactory(factory: FaustDspFactory): void;
-	expandDSP(code: string, args: string): string | null;
+	expandDSP(code: string, args: string): string;
 	generateAuxFiles(name: string, code: string, args: string): boolean;
 	deleteAllDSPFactories(): void;
 	fs(): typeof FS;
@@ -1091,7 +1107,7 @@ export declare class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
 		new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 		prototype: AudioWorkletProcessor;
 		parameterDescriptors: AudioParamDescriptor[];
-	} | null>;
+	}>;
 	createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory): Promise<IFaustOfflineProcessor | null>;
 }
 export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
@@ -1108,7 +1124,7 @@ export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 		new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 		prototype: AudioWorkletProcessor;
 		parameterDescriptors: AudioParamDescriptor[];
-	} | null>;
+	}>;
 }
 
 export {};

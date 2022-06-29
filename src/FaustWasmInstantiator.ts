@@ -86,8 +86,7 @@ class FaustWasmInstantiator {
     static async loadDSPFactory(wasmPath: string, jsonPath: string) {
         const wasmFile = await fetch(wasmPath);
         if (!wasmFile.ok) {
-            console.error(`=> exception raised while running loadDSPFactory, file not found: ${wasmPath}`);
-            return null;
+            throw new Error(`=> exception raised while running loadDSPFactory, file not found: ${wasmPath}`);
         }
         try {
             const wasmBuffer = await wasmFile.arrayBuffer();
@@ -99,8 +98,8 @@ class FaustWasmInstantiator {
             const poly = cOptions.indexOf('wasm-e') !== -1;
             return { cfactory: 0, code: new Uint8Array(wasmBuffer), module, json, poly } as FaustDspFactory;
         } catch (e) {
-            console.error(`=> exception raised while running loadDSPFactory: ${e}`);
-            return null;
+            // console.error(`=> exception raised while running loadDSPFactory: ${e}`);
+            throw e;
         }
     }
     
@@ -116,8 +115,8 @@ class FaustWasmInstantiator {
             // Compile mixer
             return WebAssembly.compile(mixerBuffer);
         } catch (e) {
-            console.error(`=> exception raised while running loadMixer: ${e}`);
-            return null;
+            // console.error(`=> exception raised while running loadMixer: ${e}`);
+            throw e;
         }
     }
     

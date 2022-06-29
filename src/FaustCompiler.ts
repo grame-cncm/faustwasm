@@ -104,19 +104,24 @@ class FaustCompiler implements IFaustCompiler {
     /**
      * Get a stringified DSP factories table
      */
-    static stringifyDSPFactories() {
+    static serializeDSPFactories() {
         const table: Record<string, { code: string, json: any; poly: boolean }> = {};
         this.gFactories.forEach((factory, shaKey) => {
             const { code, json, poly } = factory;
             table[shaKey] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
         });
-        return JSON.stringify(table);
+        return table;
     }
     /**
-     * Import a stringified DSP factories table
+     * Get a stringified DSP factories table as string
      */
-    static async importDSPFactories(tableStr: string) {
-        const table: Record<string, { code: string, json: any; poly: boolean }> = JSON.parse(tableStr);
+    static stringifyDSPFactories() {
+        return JSON.stringify(this.serializeDSPFactories());
+    }
+    /**
+     * Import a DSP factories table
+     */
+    static deserializeDSPFactories(table: Record<string, { code: string, json: any; poly: boolean }>) {
         const awaited: Promise<Map<string, FaustDspFactory>>[] = [];
         for (const shaKey in table) {
             const factory = table[shaKey];
@@ -125,6 +130,13 @@ class FaustCompiler implements IFaustCompiler {
             awaited.push(WebAssembly.compile(ab).then(module => this.gFactories.set(shaKey, { shaKey, cfactory: 0, code: ab, module, json: JSON.stringify(json), poly })));
         }
         return Promise.all(awaited);
+    }
+    /**
+     * Import a stringified DSP factories table
+     */
+    static importDSPFactories(tableStr: string) {
+        const table: Record<string, { code: string, json: any; poly: boolean }> = JSON.parse(tableStr);
+        return this.deserializeDSPFactories(table);
     }
     constructor(libFaust: ILibFaust) {
         this.fLibFaust = libFaust;
@@ -152,25 +164,20 @@ class FaustCompiler implements IFaustCompiler {
             try {
                 // Can possibly raise a C++ exception catched by the second catch()
                 const faustDspWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
-                try {
-                    const code = this.intVec2intArray(faustDspWasm.data);
-                    faustDspWasm.data.delete();
-                    const module = await WebAssembly.compile(code);
-                    const factory: FaustDspFactory = { shaKey, cfactory: faustDspWasm.cfactory, code, module, json: faustDspWasm.json, poly };
-                    // Factory C++ side can be deallocated immediately
-                    this.deleteDSPFactory(factory);
-                    // Keep the compiled factory in the cache
-                    FaustCompiler.gFactories.set(shaKey, factory);
-                    return factory;
-                } catch (e) {
-                    console.error(e);
-                    return null;
-                }
+                const ui8Code = this.intVec2intArray(faustDspWasm.data);
+                faustDspWasm.data.delete();
+                const module = await WebAssembly.compile(ui8Code);
+                const factory: FaustDspFactory = { shaKey, cfactory: faustDspWasm.cfactory, code: ui8Code, module, json: faustDspWasm.json, poly };
+                // Factory C++ side can be deallocated immediately
+                this.deleteDSPFactory(factory);
+                // Keep the compiled factory in the cache
+                FaustCompiler.gFactories.set(shaKey, factory);
+                return factory;
             } catch (e) {
                 this.fErrorMessage = this.fLibFaust.getErrorAfterException();
-                console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`, e);
+                // console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`, e);
                 this.fLibFaust.cleanupAfterException();
-                return null;
+                throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
             }
         }
     }
@@ -193,21 +200,21 @@ class FaustCompiler implements IFaustCompiler {
     expandDSP(code: string, args: string) {
         try {
             return this.fLibFaust.expandDSP("FaustDSP", code, args);
-        } catch {
+        } catch (e) {
             this.fErrorMessage = this.fLibFaust.getErrorAfterException();
-            console.error(`=> exception raised while running expandDSP: ${this.fErrorMessage}`);
+            // console.error(`=> exception raised while running expandDSP: ${this.fErrorMessage}`);
             this.fLibFaust.cleanupAfterException();
-            return null;
+            throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
         }
     }
     generateAuxFiles(name: string, code: string, args: string) {
         try {
             return this.fLibFaust.generateAuxFiles(name, code, args);
-        } catch {
+        } catch (e) {
             this.fErrorMessage = this.fLibFaust.getErrorAfterException();
-            console.error(`=> exception raised while running generateAuxFiles: ${this.fErrorMessage}`);
+            // console.error(`=> exception raised while running generateAuxFiles: ${this.fErrorMessage}`);
             this.fLibFaust.cleanupAfterException();
-            return false;
+            throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
         }
     }
     deleteAllDSPFactories(): void {

@@ -165,7 +165,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
 export class FaustMonoAudioWorkletNode extends FaustAudioWorkletNode<false> implements IFaustMonoWebAudioDsp {
 
     onprocessorerror = (e: Event) => {
-        console.error("Error from " + this.fJSONDsp.name + " FaustMonoAudioWorkletNode");
+        // console.error("Error from " + this.fJSONDsp.name + " FaustMonoAudioWorkletNode");
         throw e;
     }
 
@@ -182,7 +182,7 @@ export class FaustPolyAudioWorkletNode extends FaustAudioWorkletNode<true> imple
     private fJSONEffect: FaustDspMeta | null;
 
     onprocessorerror = (e: Event) => {
-        console.error("Error from " + this.fJSONDsp.name + " FaustPolyAudioWorkletNode");
+        // console.error("Error from " + this.fJSONDsp.name + " FaustPolyAudioWorkletNode");
         throw e;
     }
 
