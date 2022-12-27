@@ -810,10 +810,10 @@ class Group extends _AbstractComponent__WEBPACK_IMPORTED_MODULE_0__["default"] {
       return { metaObject };
     metaIn.forEach((m) => Object.assign(metaObject, m));
     if (metaObject.style) {
-      const enumsRegex = /\{(?:(?:'|_)(.+?)(?:'|_):([-+]?[0-9]*\.?[0-9]+?);)+(?:(?:'|_)(.+?)(?:'|_):([-+]?[0-9]*\.?[0-9]+?))\}/;
+      const enumsRegex = /\{(?:(?:'|_|-)(.+?)(?:'|_|-):([-+]?[0-9]*\.?[0-9]+?);)+(?:(?:'|_|-)(.+?)(?:'|_|-):([-+]?[0-9]*\.?[0-9]+?))\}/;
       const matched = metaObject.style.match(enumsRegex);
       if (matched) {
-        const itemsRegex = /(?:(?:'|_)(.+?)(?:'|_):([-+]?[0-9]*\.?[0-9]+?))/g;
+        const itemsRegex = /(?:(?:'|_|-)(.+?)(?:'|_|-):([-+]?[0-9]*\.?[0-9]+?))/g;
         const enums = {};
         let item;
         while (item = itemsRegex.exec(matched[0])) {
@@ -2351,18 +2351,18 @@ class VSlider extends _AbstractItem__WEBPACK_IMPORTED_MODULE_0__["default"] {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   "toMIDI": () => (/* binding */ toMIDI),
-/* harmony export */   "toRad": () => (/* binding */ toRad),
 /* harmony export */   "atodb": () => (/* binding */ atodb),
 /* harmony export */   "dbtoa": () => (/* binding */ dbtoa),
 /* harmony export */   "denormalize": () => (/* binding */ denormalize),
-/* harmony export */   "normalize": () => (/* binding */ normalize),
-/* harmony export */   "normLog": () => (/* binding */ normLog),
+/* harmony export */   "fillRoundedRect": () => (/* binding */ fillRoundedRect),
+/* harmony export */   "iNormExp": () => (/* binding */ iNormExp),
 /* harmony export */   "iNormLog": () => (/* binding */ iNormLog),
 /* harmony export */   "normExp": () => (/* binding */ normExp),
-/* harmony export */   "iNormExp": () => (/* binding */ iNormExp),
+/* harmony export */   "normLog": () => (/* binding */ normLog),
+/* harmony export */   "normalize": () => (/* binding */ normalize),
 /* harmony export */   "roundedRect": () => (/* binding */ roundedRect),
-/* harmony export */   "fillRoundedRect": () => (/* binding */ fillRoundedRect)
+/* harmony export */   "toMIDI": () => (/* binding */ toMIDI),
+/* harmony export */   "toRad": () => (/* binding */ toRad)
 /* harmony export */ });
 const toMIDI = (f) => ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][(f % 12 + 12) % 12] + Math.round(f / 12 - 2);
 const toRad = (degrees) => degrees * Math.PI / 180;
@@ -2719,6 +2719,7 @@ class HGroup extends _AbstractGroup__WEBPACK_IMPORTED_MODULE_0__["default"] {
       }
       item.expand(dX$, dY$);
     });
+    this.layout.width += dX;
     return this;
   }
   offset() {
@@ -3165,6 +3166,7 @@ class VGroup extends _AbstractGroup__WEBPACK_IMPORTED_MODULE_0__["default"] {
       }
       item.expand(dX$, dY$);
     });
+    this.layout.height += dY;
     return this;
   }
   offset() {

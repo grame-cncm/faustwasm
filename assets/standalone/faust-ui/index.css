@@ -393,10 +393,10 @@
   background-color: rgba(255, 255, 255, 0.5);
 }
 .faust-ui-group .faust-ui-tgroup-tabs .faust-ui-tgroup-tab:hover {
-  background-color: white;
+  background-color: rgb(255, 255, 255);
 }
 .faust-ui-group .faust-ui-tgroup-tabs .faust-ui-tgroup-tab.active {
-  background-color: #282828;
+  background-color: rgb(40, 40, 40);
   color: white;
 }
 /*!*********************************************************************************************************!*\
