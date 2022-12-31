@@ -10,10 +10,11 @@ const instantiateFaustModuleFromFile = async (jsFile: string, dataFile = jsFile.
     let FaustModule: FaustModuleFactory;
     let dataBinary: ArrayBuffer;
     let wasmBinary: Uint8Array | ArrayBuffer;
+    const jsCodeHead = /var (.+) = \(\(\) => \{/;
     if (typeof globalThis.fetch === "function") {
         let jsCode = await (await fetch(jsFile)).text();
         jsCode = `${jsCode}
-export default ${jsCode.match(/var (.+) = \(function\(\) \{/)?.[1]};
+export default ${jsCode.match(jsCodeHead)?.[1]};
 `;
         const jsFileMod = URL.createObjectURL(new Blob([jsCode], { type: "text/javascript" }));
         FaustModule = (await import(/* webpackIgnore: true */jsFileMod)).default;
@@ -35,7 +36,7 @@ const require = createRequire(import.meta.url);
 
 ${jsCode}
 
-export default ${jsCode.match(/var (.+) = \(function\(\) \{/)?.[1]};
+export default ${jsCode.match(jsCodeHead)?.[1]};
 `;
         const jsFileMod = jsFile.replace(/c?js$/, "mjs");
         await fs.writeFile(jsFileMod, jsCode);

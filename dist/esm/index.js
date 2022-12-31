@@ -885,10 +885,11 @@ var instantiateFaustModuleFromFile = async (jsFile, dataFile = jsFile.replace(/c
   let FaustModule;
   let dataBinary;
   let wasmBinary;
+  const jsCodeHead = /var (.+) = \(\(\) => \{/;
   if (typeof globalThis.fetch === "function") {
     let jsCode = await (await fetch(jsFile)).text();
     jsCode = `${jsCode}
-export default ${(_a = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? void 0 : _a[1]};
+export default ${(_a = jsCode.match(jsCodeHead)) == null ? void 0 : _a[1]};
 `;
     const jsFileMod = URL.createObjectURL(new Blob([jsCode], { type: "text/javascript" }));
     FaustModule = (await import(
@@ -913,7 +914,7 @@ const require = createRequire(import.meta.url);
 
 ${jsCode}
 
-export default ${(_b = jsCode.match(/var (.+) = \(function\(\) \{/)) == null ? void 0 : _b[1]};
+export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
 `;
     const jsFileMod = jsFile.replace(/c?js$/, "mjs");
     await fs.writeFile(jsFileMod, jsCode);
