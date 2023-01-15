@@ -858,6 +858,38 @@ export declare class FaustCompiler implements IFaustCompiler {
  *  For offline rendering.
  */
 export interface IFaustOfflineProcessor {
+	render(inputs?: Float32Array[], length?: number, onUpdate?: (sample: number) => any): Float32Array[];
+}
+export declare class FaustOfflineProcessor<Poly extends boolean = false> {
+	protected fDSPCode: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp;
+	protected fBufferSize: number;
+	protected fInputs: Float32Array[];
+	protected fOutputs: Float32Array[];
+	constructor(instance: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp, bufferSize: number);
+	getParameterDescriptors(): AudioParamDescriptor[];
+	compute(input: Float32Array[], output: Float32Array[]): boolean;
+	setOutputParamHandler(handler: OutputParamHandler): void;
+	getOutputParamHandler(): OutputParamHandler | null;
+	setComputeHandler(handler: ComputeHandler): void;
+	getComputeHandler(): ComputeHandler | null;
+	setPlotHandler(handler: PlotHandler): void;
+	getPlotHandler(): PlotHandler | null;
+	getNumInputs(): number;
+	getNumOutputs(): number;
+	metadata(handler: MetadataHandler): void;
+	midiMessage(data: number[] | Uint8Array): void;
+	ctrlChange(chan: number, ctrl: number, value: number): void;
+	pitchWheel(chan: number, value: number): void;
+	setParamValue(path: string, value: number): void;
+	getParamValue(path: string): number;
+	getParams(): string[];
+	getMeta(): FaustDspMeta;
+	getJSON(): string;
+	getDescriptors(): FaustUIInputItem[];
+	getUI(): FaustUIDescriptor;
+	start(): void;
+	stop(): void;
+	destroy(): void;
 	/**
 	 * Render frames in an array.
 	 *
@@ -868,13 +900,12 @@ export interface IFaustOfflineProcessor {
 	 */
 	render(inputs?: Float32Array[], length?: number, onUpdate?: (sample: number) => any): Float32Array[];
 }
-export declare class FaustOfflineProcessor implements IFaustOfflineProcessor {
-	private fDSPCode;
-	private fBufferSize;
-	private fInputs;
-	private fOutputs;
-	constructor(instance: IFaustMonoWebAudioDsp, bufferSize: number);
-	render(inputs?: Float32Array[], length?: number, onUpdate?: (sample: number) => any): Float32Array[];
+export declare class FaustMonoOfflineProcessor extends FaustOfflineProcessor<false> implements IFaustMonoWebAudioDsp {
+}
+export declare class FaustPolyOfflineProcessor extends FaustOfflineProcessor<true> implements IFaustPolyWebAudioDsp {
+	keyOn(channel: number, pitch: number, velocity: number): void;
+	keyOff(channel: number, pitch: number, velocity: number): void;
+	allNotesOff(hard: boolean): void;
 }
 export interface IFaustSvgDiagrams {
 	/**
@@ -1125,6 +1156,7 @@ export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 		prototype: AudioWorkletProcessor;
 		parameterDescriptors: AudioParamDescriptor[];
 	}>;
+	createOfflineProcessor(sampleRate: number, bufferSize: number, voices: number, voiceFactory?: LooseFaustDspFactory, mixerModule?: WebAssembly.Module, effectFactory?: LooseFaustDspFactory | null): Promise<IFaustOfflineProcessor | null>;
 }
 
 export {};

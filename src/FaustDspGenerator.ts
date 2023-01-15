@@ -2,7 +2,7 @@ import { FaustMonoAudioWorkletNode, FaustPolyAudioWorkletNode } from "./FaustAud
 import getFaustAudioWorkletProcessor, { FaustData } from "./FaustAudioWorkletProcessor";
 import FaustDspInstance from "./FaustDspInstance";
 import FaustWasmInstantiator from "./FaustWasmInstantiator";
-import FaustOfflineProcessor, { IFaustOfflineProcessor } from "./FaustOfflineProcessor";
+import FaustOfflineProcessor, { FaustMonoOfflineProcessor, FaustPolyOfflineProcessor, IFaustOfflineProcessor } from "./FaustOfflineProcessor";
 import { FaustMonoScriptProcessorNode, FaustPolyScriptProcessorNode } from "./FaustScriptProcessorNode";
 import { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, FaustWebAudioDspVoice, IFaustMonoWebAudioNode, IFaustPolyWebAudioNode } from "./FaustWebAudioDsp";
 import type { IFaustCompiler } from "./FaustCompiler";
@@ -217,7 +217,7 @@ const dependencies = {
         const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
         const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
         const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
-        return new FaustOfflineProcessor(monoDsp, bufferSize);
+        return new FaustMonoOfflineProcessor(monoDsp, bufferSize);
     }
 }
 
@@ -366,5 +366,22 @@ const dependencies = {
                 // console.error(`=> check that your page is served using https.${e}`);
                 throw e;
             }
+    }
+    async createOfflineProcessor(
+        sampleRate: number,
+        bufferSize: number,
+        voices: number,
+        voiceFactory = this.voiceFactory as LooseFaustDspFactory,
+        mixerModule = this.mixerModule,
+        effectFactory = this.effectFactory as LooseFaustDspFactory | null,
+    ): Promise<IFaustOfflineProcessor | null> {
+        if (!voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+
+        const voiceMeta = JSON.parse(voiceFactory.json);
+        const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : undefined;
+        const instance = await FaustWasmInstantiator.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || undefined);
+        const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
+        const polyDsp = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
+        return new FaustPolyOfflineProcessor(polyDsp, bufferSize);
     }
 }

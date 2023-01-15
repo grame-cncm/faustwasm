@@ -1078,10 +1078,10 @@ var getFaustAudioWorkletProcessor = (dependencies, faustData, register = true) =
             break;
         }
       };
-      const { FaustPolyWebAudioDsp: FaustPolyWebAudioDsp2 } = dependencies;
+      const { FaustPolyWebAudioDsp: FaustPolyWebAudioDsp3 } = dependencies;
       const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
       const instance = FaustWasmInstantiator2.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
-      this.fDSPCode = new FaustPolyWebAudioDsp2(instance, sampleRate, sampleSize, 128);
+      this.fDSPCode = new FaustPolyWebAudioDsp3(instance, sampleRate, sampleSize, 128);
       this.port.onmessage = (e) => this.handleMessageAux(e);
       this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
       this.fDSPCode.start();
@@ -1515,478 +1515,6 @@ var FaustWasmInstantiator = class {
   }
 };
 var FaustWasmInstantiator_default = FaustWasmInstantiator;
-
-// src/FaustOfflineProcessor.ts
-var FaustOfflineProcessor = class {
-  constructor(instance, bufferSize) {
-    this.fDSPCode = instance;
-    this.fBufferSize = bufferSize;
-    this.fInputs = new Array(this.fDSPCode.getNumInputs()).fill(null).map(() => new Float32Array(bufferSize));
-    this.fOutputs = new Array(this.fDSPCode.getNumOutputs()).fill(null).map(() => new Float32Array(bufferSize));
-  }
-  render(inputs = [], length = this.fBufferSize, onUpdate) {
-    let l = 0;
-    const outputs = new Array(this.fDSPCode.getNumOutputs()).fill(null).map(() => new Float32Array(length));
-    this.fDSPCode.start();
-    while (l < length) {
-      const sliceLength = Math.min(length - l, this.fBufferSize);
-      for (let i = 0; i < this.fDSPCode.getNumInputs(); i++) {
-        let input;
-        if (inputs[i]) {
-          if (inputs[i].length <= l) {
-            input = new Float32Array(sliceLength);
-          } else if (inputs[i].length > l + sliceLength) {
-            input = inputs[i].subarray(l, l + sliceLength);
-          } else {
-            input = inputs[i].subarray(l, inputs[i].length);
-          }
-        } else {
-          input = new Float32Array(sliceLength);
-        }
-        this.fInputs[i] = input;
-      }
-      this.fDSPCode.compute(this.fInputs, this.fOutputs);
-      for (let i = 0; i < this.fDSPCode.getNumOutputs(); i++) {
-        const output = this.fOutputs[i];
-        if (sliceLength < this.fBufferSize) {
-          outputs[i].set(output.subarray(0, sliceLength), l);
-        } else {
-          outputs[i].set(output, l);
-        }
-      }
-      l += this.fBufferSize;
-      onUpdate == null ? void 0 : onUpdate(l);
-    }
-    this.fDSPCode.stop();
-    return outputs;
-  }
-};
-var FaustOfflineProcessor_default = FaustOfflineProcessor;
-
-// src/FaustSvgDiagrams.ts
-var FaustSvgDiagrams = class {
-  constructor(compiler) {
-    this.compiler = compiler;
-  }
-  from(name, code, args) {
-    const fs = this.compiler.fs();
-    try {
-      const files2 = fs.readdir(`/${name}-svg/`);
-      files2.filter((file) => file !== "." && file !== "..").forEach((file) => fs.unlink(`/${name}-svg/${file}`));
-    } catch {
-    }
-    const success = this.compiler.generateAuxFiles(name, code, `-lang wasm -svg ${args}`);
-    if (!success)
-      throw new Error(this.compiler.getErrorMessage());
-    const svgs = {};
-    const files = fs.readdir(`/${name}-svg/`);
-    files.filter((file) => file !== "." && file !== "..").forEach((file) => svgs[file] = fs.readFile(`/${name}-svg/${file}`, { encoding: "utf8" }));
-    return svgs;
-  }
-};
-var FaustSvgDiagrams_default = FaustSvgDiagrams;
-
-// src/LibFaust.ts
-var LibFaust = class {
-  constructor(module) {
-    this.fModule = module;
-    this.fCompiler = new module.libFaustWasm();
-    this.fFileSystem = this.fModule.FS;
-  }
-  module() {
-    return this.fModule;
-  }
-  fs() {
-    return this.fFileSystem;
-  }
-  version() {
-    return this.fCompiler.version();
-  }
-  createDSPFactory(name, code, args, useInternalMemory) {
-    return this.fCompiler.createDSPFactory(name, code, args, useInternalMemory);
-  }
-  deleteDSPFactory(cFactory) {
-    return this.fCompiler.deleteDSPFactory(cFactory);
-  }
-  expandDSP(name, code, args) {
-    return this.fCompiler.expandDSP(name, code, args);
-  }
-  generateAuxFiles(name, code, args) {
-    return this.fCompiler.generateAuxFiles(name, code, args);
-  }
-  deleteAllDSPFactories() {
-    return this.fCompiler.deleteAllDSPFactories();
-  }
-  getErrorAfterException() {
-    return this.fCompiler.getErrorAfterException();
-  }
-  cleanupAfterException() {
-    return this.fCompiler.cleanupAfterException();
-  }
-  getInfos(what) {
-    return this.fCompiler.getInfos(what);
-  }
-  toString() {
-    return `LibFaust module: ${this.fModule}, compiler: ${this.fCompiler}`;
-  }
-};
-var LibFaust_default = LibFaust;
-
-// src/WavEncoder.ts
-var WavEncoder = class {
-  static encode(audioBuffer, options) {
-    const numberOfChannels = audioBuffer.length;
-    const length = audioBuffer[0].length;
-    const { shared, float } = options;
-    const bitDepth = float ? 32 : options.bitDepth | 0 || 16;
-    const byteDepth = bitDepth >> 3;
-    const byteLength = length * numberOfChannels * byteDepth;
-    const AB = shared ? globalThis.SharedArrayBuffer || globalThis.ArrayBuffer : globalThis.ArrayBuffer;
-    const ab = new AB((44 + byteLength) * Uint8Array.BYTES_PER_ELEMENT);
-    const dataView = new DataView(ab);
-    const writer = new Writer(dataView);
-    const format = {
-      formatId: float ? 3 : 1,
-      float: !!float,
-      numberOfChannels,
-      sampleRate: options.sampleRate,
-      symmetric: !!options.symmetric,
-      length,
-      bitDepth,
-      byteDepth
-    };
-    this.writeHeader(writer, format);
-    this.writeData(writer, audioBuffer, format);
-    return ab;
-  }
-  static writeHeader(writer, format) {
-    const { formatId, sampleRate, bitDepth, numberOfChannels, length, byteDepth } = format;
-    writer.string("RIFF");
-    writer.uint32(writer.dataView.byteLength - 8);
-    writer.string("WAVE");
-    writer.string("fmt ");
-    writer.uint32(16);
-    writer.uint16(formatId);
-    writer.uint16(numberOfChannels);
-    writer.uint32(sampleRate);
-    writer.uint32(sampleRate * numberOfChannels * byteDepth);
-    writer.uint16(numberOfChannels * byteDepth);
-    writer.uint16(bitDepth);
-    writer.string("data");
-    writer.uint32(length * numberOfChannels * byteDepth);
-    return writer.pos;
-  }
-  static writeData(writer, audioBuffer, format) {
-    const { bitDepth, float, length, numberOfChannels, symmetric } = format;
-    if (bitDepth === 32 && float) {
-      const { dataView, pos } = writer;
-      const ab = dataView.buffer;
-      const f32View = new Float32Array(ab, pos);
-      if (numberOfChannels === 1) {
-        f32View.set(audioBuffer[0]);
-        return;
-      }
-      for (let ch = 0; ch < numberOfChannels; ch++) {
-        const channel = audioBuffer[ch];
-        for (let i = 0; i < length; i++) {
-          f32View[i * numberOfChannels + ch] = channel[i];
-        }
-      }
-      return;
-    }
-    const encoderOption = float ? "f" : symmetric ? "s" : "";
-    const methodName = "pcm" + bitDepth + encoderOption;
-    if (!writer[methodName]) {
-      throw new TypeError("Not supported bit depth: " + bitDepth);
-    }
-    const write = writer[methodName].bind(writer);
-    for (let i = 0; i < length; i++) {
-      for (let j = 0; j < numberOfChannels; j++) {
-        write(audioBuffer[j][i]);
-      }
-    }
-  }
-};
-var Writer = class {
-  constructor(dataView) {
-    this.pos = 0;
-    this.dataView = dataView;
-  }
-  int16(value) {
-    this.dataView.setInt16(this.pos, value, true);
-    this.pos += 2;
-  }
-  uint16(value) {
-    this.dataView.setUint16(this.pos, value, true);
-    this.pos += 2;
-  }
-  uint32(value) {
-    this.dataView.setUint32(this.pos, value, true);
-    this.pos += 4;
-  }
-  string(value) {
-    for (let i = 0, imax = value.length; i < imax; i++) {
-      this.dataView.setUint8(this.pos++, value.charCodeAt(i));
-    }
-  }
-  pcm8(valueIn) {
-    let value = valueIn;
-    value = Math.max(-1, Math.min(value, 1));
-    value = (value * 0.5 + 0.5) * 255;
-    value = Math.round(value) | 0;
-    this.dataView.setUint8(this.pos, value);
-    this.pos += 1;
-  }
-  pcm8s(valueIn) {
-    let value = valueIn;
-    value = Math.round(value * 128) + 128;
-    value = Math.max(0, Math.min(value, 255));
-    this.dataView.setUint8(this.pos, value);
-    this.pos += 1;
-  }
-  pcm16(valueIn) {
-    let value = valueIn;
-    value = Math.max(-1, Math.min(value, 1));
-    value = value < 0 ? value * 32768 : value * 32767;
-    value = Math.round(value) | 0;
-    this.dataView.setInt16(this.pos, value, true);
-    this.pos += 2;
-  }
-  pcm16s(valueIn) {
-    let value = valueIn;
-    value = Math.round(value * 32768);
-    value = Math.max(-32768, Math.min(value, 32767));
-    this.dataView.setInt16(this.pos, value, true);
-    this.pos += 2;
-  }
-  pcm24(valueIn) {
-    let value = valueIn;
-    value = Math.max(-1, Math.min(value, 1));
-    value = value < 0 ? 16777216 + value * 8388608 : value * 8388607;
-    value = Math.round(value) | 0;
-    const x0 = value >> 0 & 255;
-    const x1 = value >> 8 & 255;
-    const x2 = value >> 16 & 255;
-    this.dataView.setUint8(this.pos + 0, x0);
-    this.dataView.setUint8(this.pos + 1, x1);
-    this.dataView.setUint8(this.pos + 2, x2);
-    this.pos += 3;
-  }
-  pcm24s(valueIn) {
-    let value = valueIn;
-    value = Math.round(value * 8388608);
-    value = Math.max(-8388608, Math.min(value, 8388607));
-    const x0 = value >> 0 & 255;
-    const x1 = value >> 8 & 255;
-    const x2 = value >> 16 & 255;
-    this.dataView.setUint8(this.pos + 0, x0);
-    this.dataView.setUint8(this.pos + 1, x1);
-    this.dataView.setUint8(this.pos + 2, x2);
-    this.pos += 3;
-  }
-  pcm32(valueIn) {
-    let value = valueIn;
-    value = Math.max(-1, Math.min(value, 1));
-    value = value < 0 ? value * 2147483648 : value * 2147483647;
-    value = Math.round(value) | 0;
-    this.dataView.setInt32(this.pos, value, true);
-    this.pos += 4;
-  }
-  pcm32s(valueIn) {
-    let value = valueIn;
-    value = Math.round(value * 2147483648);
-    value = Math.max(-2147483648, Math.min(value, 2147483647));
-    this.dataView.setInt32(this.pos, value, true);
-    this.pos += 4;
-  }
-  pcm32f(value) {
-    this.dataView.setFloat32(this.pos, value, true);
-    this.pos += 4;
-  }
-};
-var WavEncoder_default = WavEncoder;
-
-// src/WavDecoder.ts
-var WavDecoder = class {
-  static decode(buffer, options) {
-    const dataView = new DataView(buffer);
-    const reader = new Reader(dataView);
-    if (reader.string(4) !== "RIFF") {
-      throw new TypeError("Invalid WAV file");
-    }
-    reader.uint32();
-    if (reader.string(4) !== "WAVE") {
-      throw new TypeError("Invalid WAV file");
-    }
-    let format = null;
-    let audioData = null;
-    do {
-      const chunkType = reader.string(4);
-      const chunkSize = reader.uint32();
-      if (chunkType === "fmt ") {
-        format = this.decodeFormat(reader, chunkSize);
-      } else if (chunkType === "data") {
-        audioData = this.decodeData(reader, chunkSize, format, options || {});
-      } else {
-        reader.skip(chunkSize);
-      }
-    } while (audioData === null);
-    return audioData;
-  }
-  static decodeFormat(reader, chunkSize) {
-    const formats = {
-      1: "lpcm",
-      3: "lpcm"
-    };
-    const formatId = reader.uint16();
-    if (!formats.hasOwnProperty(formatId)) {
-      throw new TypeError("Unsupported format in WAV file: 0x" + formatId.toString(16));
-    }
-    const format = {
-      formatId,
-      float: formatId === 3,
-      numberOfChannels: reader.uint16(),
-      sampleRate: reader.uint32(),
-      byteRate: reader.uint32(),
-      blockSize: reader.uint16(),
-      bitDepth: reader.uint16()
-    };
-    reader.skip(chunkSize - 16);
-    return format;
-  }
-  static decodeData(reader, chunkSizeIn, format, options) {
-    const chunkSize = Math.min(chunkSizeIn, reader.remain());
-    const length = Math.floor(chunkSize / format.blockSize);
-    const numberOfChannels = format.numberOfChannels;
-    const sampleRate = format.sampleRate;
-    const channelData = new Array(numberOfChannels);
-    for (let ch = 0; ch < numberOfChannels; ch++) {
-      const AB = options.shared ? globalThis.SharedArrayBuffer || globalThis.ArrayBuffer : globalThis.ArrayBuffer;
-      const ab = new AB(length * Float32Array.BYTES_PER_ELEMENT);
-      channelData[ch] = new Float32Array(ab);
-    }
-    this.readPCM(reader, channelData, length, format, options);
-    return {
-      numberOfChannels,
-      length,
-      sampleRate,
-      channelData
-    };
-  }
-  static readPCM(reader, channelData, length, format, options) {
-    const bitDepth = format.bitDepth;
-    const decoderOption = format.float ? "f" : options.symmetric ? "s" : "";
-    const methodName = "pcm" + bitDepth + decoderOption;
-    if (!reader[methodName]) {
-      throw new TypeError("Not supported bit depth: " + format.bitDepth);
-    }
-    const read = reader[methodName].bind(reader);
-    const numberOfChannels = format.numberOfChannels;
-    for (let i = 0; i < length; i++) {
-      for (let ch = 0; ch < numberOfChannels; ch++) {
-        channelData[ch][i] = read();
-      }
-    }
-  }
-};
-var Reader = class {
-  constructor(dataView) {
-    this.pos = 0;
-    this.dataView = dataView;
-  }
-  remain() {
-    return this.dataView.byteLength - this.pos;
-  }
-  skip(n) {
-    this.pos += n;
-  }
-  uint8() {
-    const data = this.dataView.getUint8(this.pos);
-    this.pos += 1;
-    return data;
-  }
-  int16() {
-    const data = this.dataView.getInt16(this.pos, true);
-    this.pos += 2;
-    return data;
-  }
-  uint16() {
-    const data = this.dataView.getUint16(this.pos, true);
-    this.pos += 2;
-    return data;
-  }
-  uint32() {
-    const data = this.dataView.getUint32(this.pos, true);
-    this.pos += 4;
-    return data;
-  }
-  string(n) {
-    let data = "";
-    for (let i = 0; i < n; i++) {
-      data += String.fromCharCode(this.uint8());
-    }
-    return data;
-  }
-  pcm8() {
-    const data = this.dataView.getUint8(this.pos) - 128;
-    this.pos += 1;
-    return data < 0 ? data / 128 : data / 127;
-  }
-  pcm8s() {
-    const data = this.dataView.getUint8(this.pos) - 127.5;
-    this.pos += 1;
-    return data / 127.5;
-  }
-  pcm16() {
-    const data = this.dataView.getInt16(this.pos, true);
-    this.pos += 2;
-    return data < 0 ? data / 32768 : data / 32767;
-  }
-  pcm16s() {
-    const data = this.dataView.getInt16(this.pos, true);
-    this.pos += 2;
-    return data / 32768;
-  }
-  pcm24() {
-    const x0 = this.dataView.getUint8(this.pos + 0);
-    const x1 = this.dataView.getUint8(this.pos + 1);
-    const x2 = this.dataView.getUint8(this.pos + 2);
-    const xx = x0 + (x1 << 8) + (x2 << 16);
-    const data = xx > 8388608 ? xx - 16777216 : xx;
-    this.pos += 3;
-    return data < 0 ? data / 8388608 : data / 8388607;
-  }
-  pcm24s() {
-    const x0 = this.dataView.getUint8(this.pos + 0);
-    const x1 = this.dataView.getUint8(this.pos + 1);
-    const x2 = this.dataView.getUint8(this.pos + 2);
-    const xx = x0 + (x1 << 8) + (x2 << 16);
-    const data = xx > 8388608 ? xx - 16777216 : xx;
-    this.pos += 3;
-    return data / 8388608;
-  }
-  pcm32() {
-    const data = this.dataView.getInt32(this.pos, true);
-    this.pos += 4;
-    return data < 0 ? data / 2147483648 : data / 2147483647;
-  }
-  pcm32s() {
-    const data = this.dataView.getInt32(this.pos, true);
-    this.pos += 4;
-    return data / 2147483648;
-  }
-  pcm32f() {
-    const data = this.dataView.getFloat32(this.pos, true);
-    this.pos += 4;
-    return data;
-  }
-  pcm64f() {
-    const data = this.dataView.getFloat64(this.pos, true);
-    this.pos += 8;
-    return data;
-  }
-};
-var WavDecoder_default = WavDecoder;
 
 // src/FaustWebAudioDsp.ts
 var FaustBaseWebAudioDsp = class {
@@ -2623,6 +2151,578 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
   }
 };
 
+// src/FaustOfflineProcessor.ts
+var FaustOfflineProcessor = class {
+  constructor(instance, bufferSize) {
+    this.fDSPCode = instance;
+    this.fBufferSize = bufferSize;
+    this.fInputs = new Array(this.fDSPCode.getNumInputs()).fill(null).map(() => new Float32Array(bufferSize));
+    this.fOutputs = new Array(this.fDSPCode.getNumOutputs()).fill(null).map(() => new Float32Array(bufferSize));
+  }
+  getParameterDescriptors() {
+    const params = [];
+    const callback = (item) => {
+      let param = null;
+      if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
+        if (this.fDSPCode instanceof FaustMonoWebAudioDsp || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain") && !item.address.endsWith("/key") && !item.address.endsWith("/vel") && !item.address.endsWith("/velocity")) {
+          param = { name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 };
+        }
+      } else if (item.type === "button" || item.type === "checkbox") {
+        if (this.fDSPCode instanceof FaustMonoWebAudioDsp || !item.address.endsWith("/gate") && !item.address.endsWith("/freq") && !item.address.endsWith("/gain") && !item.address.endsWith("/key") && !item.address.endsWith("/vel") && !item.address.endsWith("/velocity")) {
+          param = { name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 };
+        }
+      }
+      if (param)
+        params.push(param);
+    };
+    FaustBaseWebAudioDsp.parseUI(this.fDSPCode.getUI(), callback);
+    return params;
+  }
+  compute(input, output) {
+    return this.fDSPCode.compute(input, output);
+  }
+  setOutputParamHandler(handler) {
+    this.fDSPCode.setOutputParamHandler(handler);
+  }
+  getOutputParamHandler() {
+    return this.fDSPCode.getOutputParamHandler();
+  }
+  setComputeHandler(handler) {
+    this.fDSPCode.setComputeHandler(handler);
+  }
+  getComputeHandler() {
+    return this.fDSPCode.getComputeHandler();
+  }
+  setPlotHandler(handler) {
+    this.fDSPCode.setPlotHandler(handler);
+  }
+  getPlotHandler() {
+    return this.fDSPCode.getPlotHandler();
+  }
+  getNumInputs() {
+    return this.fDSPCode.getNumInputs();
+  }
+  getNumOutputs() {
+    return this.fDSPCode.getNumOutputs();
+  }
+  metadata(handler) {
+  }
+  midiMessage(data) {
+    this.fDSPCode.midiMessage(data);
+  }
+  ctrlChange(chan, ctrl, value) {
+    this.fDSPCode.ctrlChange(chan, ctrl, value);
+  }
+  pitchWheel(chan, value) {
+    this.fDSPCode.pitchWheel(chan, value);
+  }
+  setParamValue(path, value) {
+    this.fDSPCode.setParamValue(path, value);
+  }
+  getParamValue(path) {
+    return this.fDSPCode.getParamValue(path);
+  }
+  getParams() {
+    return this.fDSPCode.getParams();
+  }
+  getMeta() {
+    return this.fDSPCode.getMeta();
+  }
+  getJSON() {
+    return this.fDSPCode.getJSON();
+  }
+  getDescriptors() {
+    return this.fDSPCode.getDescriptors();
+  }
+  getUI() {
+    return this.fDSPCode.getUI();
+  }
+  start() {
+    this.fDSPCode.start();
+  }
+  stop() {
+    this.fDSPCode.stop();
+  }
+  destroy() {
+    this.fDSPCode.destroy();
+  }
+  render(inputs = [], length = this.fBufferSize, onUpdate) {
+    let l = 0;
+    const outputs = new Array(this.fDSPCode.getNumOutputs()).fill(null).map(() => new Float32Array(length));
+    this.fDSPCode.start();
+    while (l < length) {
+      const sliceLength = Math.min(length - l, this.fBufferSize);
+      for (let i = 0; i < this.fDSPCode.getNumInputs(); i++) {
+        let input;
+        if (inputs[i]) {
+          if (inputs[i].length <= l) {
+            input = new Float32Array(sliceLength);
+          } else if (inputs[i].length > l + sliceLength) {
+            input = inputs[i].subarray(l, l + sliceLength);
+          } else {
+            input = inputs[i].subarray(l, inputs[i].length);
+          }
+        } else {
+          input = new Float32Array(sliceLength);
+        }
+        this.fInputs[i] = input;
+      }
+      this.fDSPCode.compute(this.fInputs, this.fOutputs);
+      for (let i = 0; i < this.fDSPCode.getNumOutputs(); i++) {
+        const output = this.fOutputs[i];
+        if (sliceLength < this.fBufferSize) {
+          outputs[i].set(output.subarray(0, sliceLength), l);
+        } else {
+          outputs[i].set(output, l);
+        }
+      }
+      l += this.fBufferSize;
+      onUpdate == null ? void 0 : onUpdate(l);
+    }
+    this.fDSPCode.stop();
+    return outputs;
+  }
+};
+var FaustMonoOfflineProcessor = class extends FaustOfflineProcessor {
+};
+var FaustPolyOfflineProcessor = class extends FaustOfflineProcessor {
+  keyOn(channel, pitch, velocity) {
+    this.fDSPCode.keyOn(channel, pitch, velocity);
+  }
+  keyOff(channel, pitch, velocity) {
+    this.fDSPCode.keyOff(channel, pitch, velocity);
+  }
+  allNotesOff(hard) {
+    this.fDSPCode.allNotesOff(hard);
+  }
+};
+var FaustOfflineProcessor_default = FaustOfflineProcessor;
+
+// src/FaustSvgDiagrams.ts
+var FaustSvgDiagrams = class {
+  constructor(compiler) {
+    this.compiler = compiler;
+  }
+  from(name, code, args) {
+    const fs = this.compiler.fs();
+    try {
+      const files2 = fs.readdir(`/${name}-svg/`);
+      files2.filter((file) => file !== "." && file !== "..").forEach((file) => fs.unlink(`/${name}-svg/${file}`));
+    } catch {
+    }
+    const success = this.compiler.generateAuxFiles(name, code, `-lang wasm -svg ${args}`);
+    if (!success)
+      throw new Error(this.compiler.getErrorMessage());
+    const svgs = {};
+    const files = fs.readdir(`/${name}-svg/`);
+    files.filter((file) => file !== "." && file !== "..").forEach((file) => svgs[file] = fs.readFile(`/${name}-svg/${file}`, { encoding: "utf8" }));
+    return svgs;
+  }
+};
+var FaustSvgDiagrams_default = FaustSvgDiagrams;
+
+// src/LibFaust.ts
+var LibFaust = class {
+  constructor(module) {
+    this.fModule = module;
+    this.fCompiler = new module.libFaustWasm();
+    this.fFileSystem = this.fModule.FS;
+  }
+  module() {
+    return this.fModule;
+  }
+  fs() {
+    return this.fFileSystem;
+  }
+  version() {
+    return this.fCompiler.version();
+  }
+  createDSPFactory(name, code, args, useInternalMemory) {
+    return this.fCompiler.createDSPFactory(name, code, args, useInternalMemory);
+  }
+  deleteDSPFactory(cFactory) {
+    return this.fCompiler.deleteDSPFactory(cFactory);
+  }
+  expandDSP(name, code, args) {
+    return this.fCompiler.expandDSP(name, code, args);
+  }
+  generateAuxFiles(name, code, args) {
+    return this.fCompiler.generateAuxFiles(name, code, args);
+  }
+  deleteAllDSPFactories() {
+    return this.fCompiler.deleteAllDSPFactories();
+  }
+  getErrorAfterException() {
+    return this.fCompiler.getErrorAfterException();
+  }
+  cleanupAfterException() {
+    return this.fCompiler.cleanupAfterException();
+  }
+  getInfos(what) {
+    return this.fCompiler.getInfos(what);
+  }
+  toString() {
+    return `LibFaust module: ${this.fModule}, compiler: ${this.fCompiler}`;
+  }
+};
+var LibFaust_default = LibFaust;
+
+// src/WavEncoder.ts
+var WavEncoder = class {
+  static encode(audioBuffer, options) {
+    const numberOfChannels = audioBuffer.length;
+    const length = audioBuffer[0].length;
+    const { shared, float } = options;
+    const bitDepth = float ? 32 : options.bitDepth | 0 || 16;
+    const byteDepth = bitDepth >> 3;
+    const byteLength = length * numberOfChannels * byteDepth;
+    const AB = shared ? globalThis.SharedArrayBuffer || globalThis.ArrayBuffer : globalThis.ArrayBuffer;
+    const ab = new AB((44 + byteLength) * Uint8Array.BYTES_PER_ELEMENT);
+    const dataView = new DataView(ab);
+    const writer = new Writer(dataView);
+    const format = {
+      formatId: float ? 3 : 1,
+      float: !!float,
+      numberOfChannels,
+      sampleRate: options.sampleRate,
+      symmetric: !!options.symmetric,
+      length,
+      bitDepth,
+      byteDepth
+    };
+    this.writeHeader(writer, format);
+    this.writeData(writer, audioBuffer, format);
+    return ab;
+  }
+  static writeHeader(writer, format) {
+    const { formatId, sampleRate, bitDepth, numberOfChannels, length, byteDepth } = format;
+    writer.string("RIFF");
+    writer.uint32(writer.dataView.byteLength - 8);
+    writer.string("WAVE");
+    writer.string("fmt ");
+    writer.uint32(16);
+    writer.uint16(formatId);
+    writer.uint16(numberOfChannels);
+    writer.uint32(sampleRate);
+    writer.uint32(sampleRate * numberOfChannels * byteDepth);
+    writer.uint16(numberOfChannels * byteDepth);
+    writer.uint16(bitDepth);
+    writer.string("data");
+    writer.uint32(length * numberOfChannels * byteDepth);
+    return writer.pos;
+  }
+  static writeData(writer, audioBuffer, format) {
+    const { bitDepth, float, length, numberOfChannels, symmetric } = format;
+    if (bitDepth === 32 && float) {
+      const { dataView, pos } = writer;
+      const ab = dataView.buffer;
+      const f32View = new Float32Array(ab, pos);
+      if (numberOfChannels === 1) {
+        f32View.set(audioBuffer[0]);
+        return;
+      }
+      for (let ch = 0; ch < numberOfChannels; ch++) {
+        const channel = audioBuffer[ch];
+        for (let i = 0; i < length; i++) {
+          f32View[i * numberOfChannels + ch] = channel[i];
+        }
+      }
+      return;
+    }
+    const encoderOption = float ? "f" : symmetric ? "s" : "";
+    const methodName = "pcm" + bitDepth + encoderOption;
+    if (!writer[methodName]) {
+      throw new TypeError("Not supported bit depth: " + bitDepth);
+    }
+    const write = writer[methodName].bind(writer);
+    for (let i = 0; i < length; i++) {
+      for (let j = 0; j < numberOfChannels; j++) {
+        write(audioBuffer[j][i]);
+      }
+    }
+  }
+};
+var Writer = class {
+  constructor(dataView) {
+    this.pos = 0;
+    this.dataView = dataView;
+  }
+  int16(value) {
+    this.dataView.setInt16(this.pos, value, true);
+    this.pos += 2;
+  }
+  uint16(value) {
+    this.dataView.setUint16(this.pos, value, true);
+    this.pos += 2;
+  }
+  uint32(value) {
+    this.dataView.setUint32(this.pos, value, true);
+    this.pos += 4;
+  }
+  string(value) {
+    for (let i = 0, imax = value.length; i < imax; i++) {
+      this.dataView.setUint8(this.pos++, value.charCodeAt(i));
+    }
+  }
+  pcm8(valueIn) {
+    let value = valueIn;
+    value = Math.max(-1, Math.min(value, 1));
+    value = (value * 0.5 + 0.5) * 255;
+    value = Math.round(value) | 0;
+    this.dataView.setUint8(this.pos, value);
+    this.pos += 1;
+  }
+  pcm8s(valueIn) {
+    let value = valueIn;
+    value = Math.round(value * 128) + 128;
+    value = Math.max(0, Math.min(value, 255));
+    this.dataView.setUint8(this.pos, value);
+    this.pos += 1;
+  }
+  pcm16(valueIn) {
+    let value = valueIn;
+    value = Math.max(-1, Math.min(value, 1));
+    value = value < 0 ? value * 32768 : value * 32767;
+    value = Math.round(value) | 0;
+    this.dataView.setInt16(this.pos, value, true);
+    this.pos += 2;
+  }
+  pcm16s(valueIn) {
+    let value = valueIn;
+    value = Math.round(value * 32768);
+    value = Math.max(-32768, Math.min(value, 32767));
+    this.dataView.setInt16(this.pos, value, true);
+    this.pos += 2;
+  }
+  pcm24(valueIn) {
+    let value = valueIn;
+    value = Math.max(-1, Math.min(value, 1));
+    value = value < 0 ? 16777216 + value * 8388608 : value * 8388607;
+    value = Math.round(value) | 0;
+    const x0 = value >> 0 & 255;
+    const x1 = value >> 8 & 255;
+    const x2 = value >> 16 & 255;
+    this.dataView.setUint8(this.pos + 0, x0);
+    this.dataView.setUint8(this.pos + 1, x1);
+    this.dataView.setUint8(this.pos + 2, x2);
+    this.pos += 3;
+  }
+  pcm24s(valueIn) {
+    let value = valueIn;
+    value = Math.round(value * 8388608);
+    value = Math.max(-8388608, Math.min(value, 8388607));
+    const x0 = value >> 0 & 255;
+    const x1 = value >> 8 & 255;
+    const x2 = value >> 16 & 255;
+    this.dataView.setUint8(this.pos + 0, x0);
+    this.dataView.setUint8(this.pos + 1, x1);
+    this.dataView.setUint8(this.pos + 2, x2);
+    this.pos += 3;
+  }
+  pcm32(valueIn) {
+    let value = valueIn;
+    value = Math.max(-1, Math.min(value, 1));
+    value = value < 0 ? value * 2147483648 : value * 2147483647;
+    value = Math.round(value) | 0;
+    this.dataView.setInt32(this.pos, value, true);
+    this.pos += 4;
+  }
+  pcm32s(valueIn) {
+    let value = valueIn;
+    value = Math.round(value * 2147483648);
+    value = Math.max(-2147483648, Math.min(value, 2147483647));
+    this.dataView.setInt32(this.pos, value, true);
+    this.pos += 4;
+  }
+  pcm32f(value) {
+    this.dataView.setFloat32(this.pos, value, true);
+    this.pos += 4;
+  }
+};
+var WavEncoder_default = WavEncoder;
+
+// src/WavDecoder.ts
+var WavDecoder = class {
+  static decode(buffer, options) {
+    const dataView = new DataView(buffer);
+    const reader = new Reader(dataView);
+    if (reader.string(4) !== "RIFF") {
+      throw new TypeError("Invalid WAV file");
+    }
+    reader.uint32();
+    if (reader.string(4) !== "WAVE") {
+      throw new TypeError("Invalid WAV file");
+    }
+    let format = null;
+    let audioData = null;
+    do {
+      const chunkType = reader.string(4);
+      const chunkSize = reader.uint32();
+      if (chunkType === "fmt ") {
+        format = this.decodeFormat(reader, chunkSize);
+      } else if (chunkType === "data") {
+        audioData = this.decodeData(reader, chunkSize, format, options || {});
+      } else {
+        reader.skip(chunkSize);
+      }
+    } while (audioData === null);
+    return audioData;
+  }
+  static decodeFormat(reader, chunkSize) {
+    const formats = {
+      1: "lpcm",
+      3: "lpcm"
+    };
+    const formatId = reader.uint16();
+    if (!formats.hasOwnProperty(formatId)) {
+      throw new TypeError("Unsupported format in WAV file: 0x" + formatId.toString(16));
+    }
+    const format = {
+      formatId,
+      float: formatId === 3,
+      numberOfChannels: reader.uint16(),
+      sampleRate: reader.uint32(),
+      byteRate: reader.uint32(),
+      blockSize: reader.uint16(),
+      bitDepth: reader.uint16()
+    };
+    reader.skip(chunkSize - 16);
+    return format;
+  }
+  static decodeData(reader, chunkSizeIn, format, options) {
+    const chunkSize = Math.min(chunkSizeIn, reader.remain());
+    const length = Math.floor(chunkSize / format.blockSize);
+    const numberOfChannels = format.numberOfChannels;
+    const sampleRate = format.sampleRate;
+    const channelData = new Array(numberOfChannels);
+    for (let ch = 0; ch < numberOfChannels; ch++) {
+      const AB = options.shared ? globalThis.SharedArrayBuffer || globalThis.ArrayBuffer : globalThis.ArrayBuffer;
+      const ab = new AB(length * Float32Array.BYTES_PER_ELEMENT);
+      channelData[ch] = new Float32Array(ab);
+    }
+    this.readPCM(reader, channelData, length, format, options);
+    return {
+      numberOfChannels,
+      length,
+      sampleRate,
+      channelData
+    };
+  }
+  static readPCM(reader, channelData, length, format, options) {
+    const bitDepth = format.bitDepth;
+    const decoderOption = format.float ? "f" : options.symmetric ? "s" : "";
+    const methodName = "pcm" + bitDepth + decoderOption;
+    if (!reader[methodName]) {
+      throw new TypeError("Not supported bit depth: " + format.bitDepth);
+    }
+    const read = reader[methodName].bind(reader);
+    const numberOfChannels = format.numberOfChannels;
+    for (let i = 0; i < length; i++) {
+      for (let ch = 0; ch < numberOfChannels; ch++) {
+        channelData[ch][i] = read();
+      }
+    }
+  }
+};
+var Reader = class {
+  constructor(dataView) {
+    this.pos = 0;
+    this.dataView = dataView;
+  }
+  remain() {
+    return this.dataView.byteLength - this.pos;
+  }
+  skip(n) {
+    this.pos += n;
+  }
+  uint8() {
+    const data = this.dataView.getUint8(this.pos);
+    this.pos += 1;
+    return data;
+  }
+  int16() {
+    const data = this.dataView.getInt16(this.pos, true);
+    this.pos += 2;
+    return data;
+  }
+  uint16() {
+    const data = this.dataView.getUint16(this.pos, true);
+    this.pos += 2;
+    return data;
+  }
+  uint32() {
+    const data = this.dataView.getUint32(this.pos, true);
+    this.pos += 4;
+    return data;
+  }
+  string(n) {
+    let data = "";
+    for (let i = 0; i < n; i++) {
+      data += String.fromCharCode(this.uint8());
+    }
+    return data;
+  }
+  pcm8() {
+    const data = this.dataView.getUint8(this.pos) - 128;
+    this.pos += 1;
+    return data < 0 ? data / 128 : data / 127;
+  }
+  pcm8s() {
+    const data = this.dataView.getUint8(this.pos) - 127.5;
+    this.pos += 1;
+    return data / 127.5;
+  }
+  pcm16() {
+    const data = this.dataView.getInt16(this.pos, true);
+    this.pos += 2;
+    return data < 0 ? data / 32768 : data / 32767;
+  }
+  pcm16s() {
+    const data = this.dataView.getInt16(this.pos, true);
+    this.pos += 2;
+    return data / 32768;
+  }
+  pcm24() {
+    const x0 = this.dataView.getUint8(this.pos + 0);
+    const x1 = this.dataView.getUint8(this.pos + 1);
+    const x2 = this.dataView.getUint8(this.pos + 2);
+    const xx = x0 + (x1 << 8) + (x2 << 16);
+    const data = xx > 8388608 ? xx - 16777216 : xx;
+    this.pos += 3;
+    return data < 0 ? data / 8388608 : data / 8388607;
+  }
+  pcm24s() {
+    const x0 = this.dataView.getUint8(this.pos + 0);
+    const x1 = this.dataView.getUint8(this.pos + 1);
+    const x2 = this.dataView.getUint8(this.pos + 2);
+    const xx = x0 + (x1 << 8) + (x2 << 16);
+    const data = xx > 8388608 ? xx - 16777216 : xx;
+    this.pos += 3;
+    return data / 8388608;
+  }
+  pcm32() {
+    const data = this.dataView.getInt32(this.pos, true);
+    this.pos += 4;
+    return data < 0 ? data / 2147483648 : data / 2147483647;
+  }
+  pcm32s() {
+    const data = this.dataView.getInt32(this.pos, true);
+    this.pos += 4;
+    return data / 2147483648;
+  }
+  pcm32f() {
+    const data = this.dataView.getFloat32(this.pos, true);
+    this.pos += 4;
+    return data;
+  }
+  pcm64f() {
+    const data = this.dataView.getFloat64(this.pos, true);
+    this.pos += 8;
+    return data;
+  }
+};
+var WavDecoder_default = WavDecoder;
+
 // src/FaustAudioWorkletNode.ts
 var FaustAudioWorkletNode = class extends (globalThis.AudioWorkletNode || null) {
   constructor(context, name, factory, options) {
@@ -3016,7 +3116,7 @@ const dependencies = {
     const instance = await FaustWasmInstantiator_default.createAsyncMonoDSPInstance(factory);
     const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
     const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
-    return new FaustOfflineProcessor_default(monoDsp, bufferSize);
+    return new FaustMonoOfflineProcessor(monoDsp, bufferSize);
   }
 };
 var FaustMonoDspGenerator = _FaustMonoDspGenerator;
@@ -3128,6 +3228,16 @@ const dependencies = {
       throw e;
     }
   }
+  async createOfflineProcessor(sampleRate, bufferSize, voices, voiceFactory = this.voiceFactory, mixerModule = this.mixerModule, effectFactory = this.effectFactory) {
+    if (!voiceFactory)
+      throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+    const voiceMeta = JSON.parse(voiceFactory.json);
+    const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : void 0;
+    const instance = await FaustWasmInstantiator_default.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || void 0);
+    const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
+    const polyDsp = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
+    return new FaustPolyOfflineProcessor(polyDsp, bufferSize);
+  }
 };
 var FaustPolyDspGenerator = _FaustPolyDspGenerator;
 FaustPolyDspGenerator.gWorkletProcessors = /* @__PURE__ */ new Map();
@@ -3138,11 +3248,13 @@ export {
   FaustDspInstance_default as FaustDspInstance,
   FaustMonoAudioWorkletNode,
   FaustMonoDspGenerator,
+  FaustMonoOfflineProcessor,
   FaustMonoScriptProcessorNode,
   FaustMonoWebAudioDsp,
   FaustOfflineProcessor_default as FaustOfflineProcessor,
   FaustPolyAudioWorkletNode,
   FaustPolyDspGenerator,
+  FaustPolyOfflineProcessor,
   FaustPolyScriptProcessorNode,
   FaustPolyWebAudioDsp,
   FaustScriptProcessorNode,
