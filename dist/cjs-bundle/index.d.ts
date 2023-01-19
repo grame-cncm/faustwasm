@@ -864,8 +864,12 @@ export declare class FaustCompiler implements IFaustCompiler {
 /**
  *  For offline rendering.
  */
-export interface IFaustOfflineProcessor {
+export interface IFaustOfflineProcessor extends IFaustBaseWebAudioDsp {
 	render(inputs?: Float32Array[], length?: number, onUpdate?: (sample: number) => any): Float32Array[];
+}
+export interface IFaustMonoOfflineProcessor extends IFaustOfflineProcessor, IFaustMonoWebAudioDsp {
+}
+export interface IFaustPolyOfflineProcessor extends IFaustOfflineProcessor, IFaustPolyWebAudioDsp {
 }
 export declare class FaustOfflineProcessor<Poly extends boolean = false> {
 	protected fDSPCode: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp;
@@ -1102,7 +1106,7 @@ export interface IFaustMonoDspGenerator {
 	* @param factory - default is the compiled factory
 	* @returns the compiled processor or 'null' if failure
 	*/
-	createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory, meta?: FaustDspMeta): Promise<IFaustOfflineProcessor | null>;
+	createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory, meta?: FaustDspMeta): Promise<IFaustMonoOfflineProcessor | null>;
 }
 export interface IFaustPolyDspGenerator {
 	/**
@@ -1133,6 +1137,17 @@ export interface IFaustPolyDspGenerator {
 	 * @returns the compiled WebAudio node or 'null' if failure
 	 */
 	createNode(context: BaseAudioContext, voices: number, name?: string, voiceFactory?: LooseFaustDspFactory, mixerModule?: WebAssembly.Module, effectFactory?: LooseFaustDspFactory | null, sp?: boolean, bufferSize?: number): Promise<IFaustPolyWebAudioNode | null>;
+	/**
+	 * Create a monophonic Offline processor.
+	 *
+	 * @param sampleRate - the sample rate in Hz
+	 * @param bufferSize - the buffer size in frames
+	 * @param voiceFactory - the Faust factory for voices, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
+	 * @param mixerModule - the wasm Mixer module (loaded from 'mixer32.wasm' or 'mixer64.wasm' files)
+	 * @param effectFactory - the Faust factory for the effect, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
+	 * @returns the compiled processor or 'null' if failure
+	 */
+	createOfflineProcessor(sampleRate: number, bufferSize: number, voices: number, voiceFactory?: LooseFaustDspFactory, mixerModule?: WebAssembly.Module, effectFactory?: LooseFaustDspFactory | null): Promise<IFaustPolyOfflineProcessor | null>;
 }
 export declare class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
 	private static gWorkletProcessors;
@@ -1146,7 +1161,7 @@ export declare class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
 		prototype: AudioWorkletProcessor;
 		parameterDescriptors: AudioParamDescriptor[];
 	}>;
-	createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory): Promise<IFaustOfflineProcessor | null>;
+	createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory): Promise<FaustMonoOfflineProcessor>;
 }
 export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 	private static gWorkletProcessors;
@@ -1163,7 +1178,7 @@ export declare class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
 		prototype: AudioWorkletProcessor;
 		parameterDescriptors: AudioParamDescriptor[];
 	}>;
-	createOfflineProcessor(sampleRate: number, bufferSize: number, voices: number, voiceFactory?: LooseFaustDspFactory, mixerModule?: WebAssembly.Module, effectFactory?: LooseFaustDspFactory | null): Promise<IFaustOfflineProcessor | null>;
+	createOfflineProcessor(sampleRate: number, bufferSize: number, voices: number, voiceFactory?: LooseFaustDspFactory, mixerModule?: WebAssembly.Module, effectFactory?: LooseFaustDspFactory | null): Promise<FaustPolyOfflineProcessor>;
 }
 
 export {};

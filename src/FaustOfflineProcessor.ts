@@ -1,12 +1,15 @@
-import { ComputeHandler, FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, IFaustMonoWebAudioDsp, IFaustPolyWebAudioDsp, MetadataHandler, OutputParamHandler, PlotHandler } from "./FaustWebAudioDsp";
+import { ComputeHandler, FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, IFaustBaseWebAudioDsp, IFaustMonoWebAudioDsp, IFaustPolyWebAudioDsp, MetadataHandler, OutputParamHandler, PlotHandler } from "./FaustWebAudioDsp";
 import { AudioParamDescriptor, FaustUIItem } from "./types";
 
 /**
  *  For offline rendering.
  */
-export interface IFaustOfflineProcessor {
+export interface IFaustOfflineProcessor extends IFaustBaseWebAudioDsp {
     render(inputs?: Float32Array[], length?: number, onUpdate?: (sample: number) => any): Float32Array[];
 }
+
+export interface IFaustMonoOfflineProcessor extends IFaustOfflineProcessor, IFaustMonoWebAudioDsp {}
+export interface IFaustPolyOfflineProcessor extends IFaustOfflineProcessor, IFaustPolyWebAudioDsp {}
 
 export class FaustOfflineProcessor<Poly extends boolean = false> {
     protected fDSPCode!: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp;
