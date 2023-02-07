@@ -22,15 +22,12 @@ export interface FaustAudioWorkletProcessorDependencies<Poly extends boolean = f
 export interface FaustAudioWorkletNodeOptions<Poly extends boolean = false> extends AudioWorkletNodeOptions {
     processorOptions: Poly extends true ? FaustPolyAudioWorkletProcessorOptions : FaustMonoAudioWorkletProcessorOptions;
 }
-
 export interface FaustMonoAudioWorkletNodeOptions extends AudioWorkletNodeOptions {
     processorOptions: FaustMonoAudioWorkletProcessorOptions;
 }
-
 export interface FaustPolyAudioWorkletNodeOptions extends AudioWorkletNodeOptions {
     processorOptions: FaustPolyAudioWorkletProcessorOptions;
 }
-
 export interface FaustAudioWorkletProcessorOptions {
     name: string;
     sampleSize: number;
@@ -65,28 +62,13 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
     // Analyse voice JSON to generate AudioParam parameters
     const analysePolyParameters = (item: FaustUIItem): AudioParamDescriptor | null => {
+        const polyKeywords = ["/gate", "/freq", "/gain", "/key", "/vel", "/velocity"];
+        const isPolyReserved = "address" in item && !!polyKeywords.find(k => item.address.endsWith(k));
+        if (poly && isPolyReserved) return null;
         if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-            if (!poly || (
-                !item.address.endsWith("/gate") &&
-                !item.address.endsWith("/freq") &&
-                !item.address.endsWith("/gain") &&
-                !item.address.endsWith("/key") &&
-                !item.address.endsWith("/vel") &&
-                !item.address.endsWith("/velocity")
-            )) {
-                return { name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 };
-            }
+            return { name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 };
         } else if (item.type === "button" || item.type === "checkbox") {
-            if (!poly || (
-                !item.address.endsWith("/gate") &&
-                !item.address.endsWith("/freq") &&
-                !item.address.endsWith("/gain") &&
-                !item.address.endsWith("/key") &&
-                !item.address.endsWith("/vel") &&
-                !item.address.endsWith("/velocity")
-            )) {
-                return { name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 };
-            }
+            return { name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 };
         }
         return null;
     }
@@ -160,17 +142,14 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
                     }
                     break;
                 }
-
                 case "start": {
                     this.fDSPCode.start();
                     break;
                 }
-
                 case "stop": {
                     this.fDSPCode.stop();
                     break;
                 }
-
                 case "destroy": {
                     this.port.close();
                     this.fDSPCode.destroy();

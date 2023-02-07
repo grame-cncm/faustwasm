@@ -1,12 +1,13 @@
 import { FaustMonoAudioWorkletNode, FaustPolyAudioWorkletNode } from "./FaustAudioWorkletNode";
 import getFaustAudioWorkletProcessor, { FaustData } from "./FaustAudioWorkletProcessor";
+import getFaustFFTAudioWorkletProcessor, { FaustFFTData, FaustFFTOptionsData } from "./FaustFFTAudioWorkletProcessor";
 import FaustDspInstance from "./FaustDspInstance";
 import FaustWasmInstantiator from "./FaustWasmInstantiator";
 import { FaustMonoOfflineProcessor, FaustPolyOfflineProcessor, IFaustMonoOfflineProcessor, IFaustPolyOfflineProcessor } from "./FaustOfflineProcessor";
 import { FaustMonoScriptProcessorNode, FaustPolyScriptProcessorNode } from "./FaustScriptProcessorNode";
 import { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, FaustWebAudioDspVoice, IFaustMonoWebAudioNode, IFaustPolyWebAudioNode } from "./FaustWebAudioDsp";
 import type { IFaustCompiler } from "./FaustCompiler";
-import type { FaustDspFactory, FaustDspMeta, LooseFaustDspFactory } from "./types";
+import type { FaustDspFactory, FaustDspMeta, FFTUtils, LooseFaustDspFactory } from "./types";
 
 export interface IFaustMonoDspGenerator {
     /**
@@ -28,28 +29,50 @@ export interface IFaustMonoDspGenerator {
      * Create a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
      *
      * @param context - the WebAudio context
-     * @param name - AudioWorklet Processor name
+     * @param name - DSP name, can be used for processorName
      * @param factory - default is the compiled factory
      * @param sp - whether to compile a ScriptProcessorNode or an AudioWorkletNode
-     * @param bufferSize - the buffer size in frames to be used in ScriptProcessorNode only, since AudioWorkletNode always uses 128 frames  
+     * @param bufferSize - the buffer size in frames to be used in ScriptProcessorNode only, since AudioWorkletNode always uses 128 frames
+     * @param processorName - AudioWorklet Processor name
      * @returns the compiled WebAudio node or 'null' if failure
-    */
+     */
     createNode(
         context: BaseAudioContext,
         name?: string,
         factory?: LooseFaustDspFactory,
         sp?: boolean,
-        bufferSize?: number
+        bufferSize?: number,
+        processorName?: string
     ): Promise<IFaustMonoWebAudioNode | null>;
-
+    
     /**
-    * Create a monophonic Offline processor.
-    *
-    * @param sampleRate - the sample rate in Hz
-    * @param bufferSize - the buffer size in frames
-    * @param factory - default is the compiled factory
-    * @returns the compiled processor or 'null' if failure
-    */
+     * Create a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
+     *
+     * @param context - the WebAudio context
+     * @param fftUtils - should be an anonymous class with static methods, without any import from outside
+     * @param name - DSP name, can be used for processorName
+     * @param factory - default is the compiled factory
+     * @param fftOptions - initial FFT options
+     * @param processorName - AudioWorklet Processor name
+     * @returns the compiled WebAudio node or 'null' if failure
+     */
+    createFFTNode(
+        context: BaseAudioContext,
+        fftUtils: typeof FFTUtils,
+        name?: string,
+        factory?: LooseFaustDspFactory,
+        fftOptions?: Partial<FaustFFTOptionsData>,
+        processorName?: string
+    ): Promise<FaustMonoAudioWorkletNode | null>;
+    
+    /**
+     * Create a monophonic Offline processor.
+     *
+     * @param sampleRate - the sample rate in Hz
+     * @param bufferSize - the buffer size in frames
+     * @param factory - default is the compiled factory
+     * @returns the compiled processor or 'null' if failure
+     */
     createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory, meta?: FaustDspMeta): Promise<IFaustMonoOfflineProcessor | null>;
 }
 
@@ -189,6 +212,60 @@ const dependencies = {
             const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize)
             return node as SP extends true ? FaustMonoScriptProcessorNode : FaustMonoAudioWorkletNode;
         }
+    }
+    async createFFTNode(
+        context: BaseAudioContext,
+        fftUtils: typeof FFTUtils,
+        name = this.name,
+        factory = this.factory as LooseFaustDspFactory,
+        fftOptions: Partial<FaustFFTOptionsData> = {},
+        processorName = factory?.shaKey ? `${factory.shaKey}_fft` : name
+    ): Promise<FaustMonoAudioWorkletNode | null> {
+        if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
+
+        const meta = JSON.parse(factory.json);
+        const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
+        // Dynamically create AudioWorkletProcessor if code not yet created
+        if (!FaustMonoDspGenerator.gWorkletProcessors.has(context)) FaustMonoDspGenerator.gWorkletProcessors.set(context, new Set());
+        if (!FaustMonoDspGenerator.gWorkletProcessors.get(context)?.has(processorName)) {
+            try {
+                const processorCode = `
+// DSP name and JSON string for DSP are generated
+const faustData = ${JSON.stringify({
+    processorName,
+    dspName: name,
+    dspMeta: meta,
+    fftOptions
+} as FaustFFTData)};
+// Implementation needed classes of functions
+const ${FaustDspInstance.name}_default = ${FaustDspInstance.toString()}
+const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
+const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
+const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
+const FFTUtils = ${fftUtils.toString()}
+// Put them in dependencies
+const dependencies = {
+    ${FaustBaseWebAudioDsp.name},
+    ${FaustMonoWebAudioDsp.name},
+    ${FaustWasmInstantiator.name},
+    FFTUtils
+};
+// Generate the actual AudioWorkletProcessor code
+(${getFaustFFTAudioWorkletProcessor.toString()})(dependencies, faustData);
+`;
+                const url = URL.createObjectURL(new Blob([processorCode], { type: "text/javascript" }));
+                await context.audioWorklet.addModule(url);
+                // Keep the DSP name
+                FaustMonoDspGenerator.gWorkletProcessors.get(context)?.add(processorName);
+            } catch (e) {
+                // console.error(`=> exception raised while running createMonoNode: ${e}`);
+                // console.error(`=> check that your page is served using https.${e}`);
+                throw e;
+            }
+        }
+        // Create the AWN
+        const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize)
+        return node;
     }
     async createAudioWorkletProcessor(
         name = this.name,

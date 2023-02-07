@@ -205,3 +205,30 @@ export interface AudioWorkletGlobalScope {
     sampleRate: number;
     AudioWorkletProcessor: typeof AudioWorkletProcessor;
 }
+
+export interface InterfaceFFT {
+    forward(arr: ArrayLike<number>): Float32Array;
+    inverse(arr: ArrayLike<number>): Float32Array;
+    dispose(): void;
+}
+export declare const InterfaceFFT: {
+    new (size: number): InterfaceFFT;
+}
+
+export type TWindowFunction = (index: number, length: number, ...args: any[]) => number;
+export type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+export type TypedArray = Int8Array | Uint8Array | Int16Array | Uint16Array | Int32Array | Uint32Array | Uint8ClampedArray | Float32Array | Float64Array;
+export type TypedArrayConstructor = typeof Int8Array | typeof Uint8Array | typeof Int16Array | typeof Uint16Array | typeof Int32Array | typeof Uint32Array | typeof Uint8ClampedArray | typeof Float32Array | typeof Float64Array;
+
+export declare const FFTUtils: {
+    /** Inject window functions as array, no need to add rectangular (no windowing) */
+    windowFunctions?: TWindowFunction[];
+    /** Get a FFT interface constructor */
+    getFFT: () => Promise<typeof InterfaceFFT>;
+    /** Convert from FFTed (spectral) signal to three arrays for Faust processor's input */
+    fftToSignal: (ffted: Float32Array) => [real: Float32Array, imag: Float32Array, index: Float32Array];
+    /** Convert from Faust processor's output to spectral data for Inversed FFT */
+    signalToFFT: (real: Float32Array, imag: Float32Array) => Float32Array;
+    /** Convert from Faust processor's output to direct audio output */
+    signalToNoFFT: (real: Float32Array, imag: Float32Array) => Float32Array;
+}

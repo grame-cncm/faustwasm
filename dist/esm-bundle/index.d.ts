@@ -190,6 +190,36 @@ export interface AudioWorkletGlobalScope {
 	sampleRate: number;
 	AudioWorkletProcessor: typeof AudioWorkletProcessor;
 }
+export interface InterfaceFFT {
+	forward(arr: ArrayLike<number>): Float32Array;
+	inverse(arr: ArrayLike<number>): Float32Array;
+	dispose(): void;
+}
+export declare const InterfaceFFT: {
+	new (size: number): InterfaceFFT;
+};
+export declare type TWindowFunction = (index: number, length: number, ...args: any[]) => number;
+export declare type Writeable<T> = {
+	-readonly [P in keyof T]: T[P];
+};
+export declare type TypedArray = Int8Array | Uint8Array | Int16Array | Uint16Array | Int32Array | Uint32Array | Uint8ClampedArray | Float32Array | Float64Array;
+export declare type TypedArrayConstructor = typeof Int8Array | typeof Uint8Array | typeof Int16Array | typeof Uint16Array | typeof Int32Array | typeof Uint32Array | typeof Uint8ClampedArray | typeof Float32Array | typeof Float64Array;
+export declare const FFTUtils: {
+	/** Inject window functions as array, no need to add rectangular (no windowing) */
+	windowFunctions?: TWindowFunction[];
+	/** Get a FFT interface constructor */
+	getFFT: () => Promise<typeof InterfaceFFT>;
+	/** Convert from FFTed (spectral) signal to three arrays for Faust processor's input */
+	fftToSignal: (ffted: Float32Array) => [
+		real: Float32Array,
+		imag: Float32Array,
+		index: Float32Array
+	];
+	/** Convert from Faust processor's output to spectral data for Inversed FFT */
+	signalToFFT: (real: Float32Array, imag: Float32Array) => Float32Array;
+	/** Convert from Faust processor's output to direct audio output */
+	signalToNoFFT: (real: Float32Array, imag: Float32Array) => Float32Array;
+};
 export declare const FaustModuleFactoryFn: FaustModuleFactory;
 export declare const FaustModuleFactoryWasm: Uint8Array;
 export declare const FaustModuleFactoryData: Uint8Array;
@@ -716,6 +746,41 @@ export declare const getFaustAudioWorkletProcessor: <Poly extends boolean = fals
 	prototype: AudioWorkletProcessor;
 	parameterDescriptors: AudioParamDescriptor[];
 };
+export interface FaustFFTOptionsData {
+	fftSize: number;
+	fftOverlap: number;
+	noIFFT: boolean;
+	/** Index number of the default window function, leave undefined or -1 for rectangular (no windowing) */
+	defaultWindowFunction: number;
+}
+/**
+ * Injected in the string to be compiled on AudioWorkletProcessor side
+ */
+export interface FaustFFTData {
+	processorName: string;
+	dspName: string;
+	dspMeta: FaustDspMeta;
+	fftOptions?: Partial<FaustFFTOptionsData>;
+}
+export interface FaustFFTAudioWorkletProcessorDependencies {
+	FaustBaseWebAudioDsp: typeof FaustBaseWebAudioDsp;
+	FaustMonoWebAudioDsp: typeof FaustMonoWebAudioDsp;
+	FaustWasmInstantiator: typeof FaustWasmInstantiator;
+	FFTUtils: typeof FFTUtils;
+}
+export interface FaustFFTAudioWorkletNodeOptions extends AudioWorkletNodeOptions {
+	processorOptions: FaustFFTAudioWorkletProcessorOptions;
+}
+export interface FaustFFTAudioWorkletProcessorOptions {
+	name: string;
+	sampleSize: number;
+	factory: LooseFaustDspFactory;
+}
+export declare const getFaustFFTAudioWorkletProcessor: (dependencies: FaustFFTAudioWorkletProcessorDependencies, faustData: FaustFFTData, register?: boolean) => {
+	new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
+	prototype: AudioWorkletProcessor;
+	parameterDescriptors: AudioParamDescriptor[];
+};
 export interface ILibFaust extends LibFaustWasm {
 	module(): FaustModule;
 	fs(): typeof FS;
@@ -1091,21 +1156,34 @@ export interface IFaustMonoDspGenerator {
 	 * Create a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
 	 *
 	 * @param context - the WebAudio context
-	 * @param name - AudioWorklet Processor name
+	 * @param name - DSP name, can be used for processorName
 	 * @param factory - default is the compiled factory
 	 * @param sp - whether to compile a ScriptProcessorNode or an AudioWorkletNode
 	 * @param bufferSize - the buffer size in frames to be used in ScriptProcessorNode only, since AudioWorkletNode always uses 128 frames
+	 * @param processorName - AudioWorklet Processor name
 	 * @returns the compiled WebAudio node or 'null' if failure
-	*/
-	createNode(context: BaseAudioContext, name?: string, factory?: LooseFaustDspFactory, sp?: boolean, bufferSize?: number): Promise<IFaustMonoWebAudioNode | null>;
+	 */
+	createNode(context: BaseAudioContext, name?: string, factory?: LooseFaustDspFactory, sp?: boolean, bufferSize?: number, processorName?: string): Promise<IFaustMonoWebAudioNode | null>;
 	/**
-	* Create a monophonic Offline processor.
-	*
-	* @param sampleRate - the sample rate in Hz
-	* @param bufferSize - the buffer size in frames
-	* @param factory - default is the compiled factory
-	* @returns the compiled processor or 'null' if failure
-	*/
+	 * Create a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
+	 *
+	 * @param context - the WebAudio context
+	 * @param fftUtils - should be an anonymous class with static methods, without any import from outside
+	 * @param name - DSP name, can be used for processorName
+	 * @param factory - default is the compiled factory
+	 * @param fftOptions - initial FFT options
+	 * @param processorName - AudioWorklet Processor name
+	 * @returns the compiled WebAudio node or 'null' if failure
+	 */
+	createFFTNode(context: BaseAudioContext, fftUtils: typeof FFTUtils, name?: string, factory?: LooseFaustDspFactory, fftOptions?: Partial<FaustFFTOptionsData>, processorName?: string): Promise<FaustMonoAudioWorkletNode | null>;
+	/**
+	 * Create a monophonic Offline processor.
+	 *
+	 * @param sampleRate - the sample rate in Hz
+	 * @param bufferSize - the buffer size in frames
+	 * @param factory - default is the compiled factory
+	 * @returns the compiled processor or 'null' if failure
+	 */
 	createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory, meta?: FaustDspMeta): Promise<IFaustMonoOfflineProcessor | null>;
 }
 export interface IFaustPolyDspGenerator {
@@ -1156,6 +1234,7 @@ export declare class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
 	constructor();
 	compile(compiler: IFaustCompiler, name: string, code: string, args: string): Promise<this | null>;
 	createNode<SP extends boolean = false>(context: BaseAudioContext, name?: string, factory?: LooseFaustDspFactory, sp?: SP, bufferSize?: number, processorName?: string): Promise<SP extends true ? FaustMonoScriptProcessorNode | null : FaustMonoAudioWorkletNode | null>;
+	createFFTNode(context: BaseAudioContext, fftUtils: typeof FFTUtils, name?: string, factory?: LooseFaustDspFactory, fftOptions?: Partial<FaustFFTOptionsData>, processorName?: string): Promise<FaustMonoAudioWorkletNode | null>;
 	createAudioWorkletProcessor(name?: string, factory?: LooseFaustDspFactory, processorName?: string): Promise<{
 		new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 		prototype: AudioWorkletProcessor;

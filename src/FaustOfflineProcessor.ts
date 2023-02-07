@@ -32,26 +32,12 @@ export class FaustOfflineProcessor<Poly extends boolean = false> {
         // Analyse voice JSON to generate AudioParam parameters
         const callback = (item: FaustUIItem) => {
             let param: AudioParamDescriptor | null = null;
-            if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-                if (this.fDSPCode instanceof FaustMonoWebAudioDsp || (
-                    !item.address.endsWith("/gate") &&
-                    !item.address.endsWith("/freq") &&
-                    !item.address.endsWith("/gain") &&
-                    !item.address.endsWith("/key") &&
-                    !item.address.endsWith("/vel") &&
-                    !item.address.endsWith("/velocity")
-                )) {
+            const polyKeywords = ["/gate", "/freq", "/gain", "/key", "/vel", "/velocity"];
+            const isPolyReserved = "address" in item && !!polyKeywords.find(k => item.address.endsWith(k));
+            if (this.fDSPCode instanceof FaustMonoWebAudioDsp || !isPolyReserved) {
+                if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
                     param = { name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 };
-                }
-            } else if (item.type === "button" || item.type === "checkbox") {
-                if (this.fDSPCode instanceof FaustMonoWebAudioDsp || (
-                    !item.address.endsWith("/gate") &&
-                    !item.address.endsWith("/freq") &&
-                    !item.address.endsWith("/gain") &&
-                    !item.address.endsWith("/key") &&
-                    !item.address.endsWith("/vel") &&
-                    !item.address.endsWith("/velocity")
-                )) {
+                } else if (item.type === "button" || item.type === "checkbox") {
                     param = { name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 };
                 }
             }
