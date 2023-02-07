@@ -10,7 +10,7 @@
     <script>
         code = `
 import("stdfaust.lib");
-process = _, _;`;
+process(r, i, b) = (b == 19) * 0.01, (b == 19) * 0.01, (b == 19) * 0.01, (b == 19) * 0.01;`;
         let t0 = performance.now();
         const time = (str) => {
             const t = performance.now();
@@ -35,7 +35,7 @@ process = _, _;`;
             };
             static fftToSignal = (f) => {
                 const fftSize = f.length;
-                const len = fftSize / 2 + 1;
+                const len = fftSize / 2;
                 const invFFTSize = 1 / fftSize;
                 const r = new Float32Array(len);
                 const i = new Float32Array(len);
@@ -48,7 +48,7 @@ process = _, _;`;
                 return [r, i, b];
             };
             static signalToFFT = (r, i) => {
-                const len = (r.length - 1) * 2;
+                const len = r.length * 2;
                 const f = new Float32Array(len);
                 for (let j = 0; j < r.length; j++) {
                     f[2 * j] = r[j];
@@ -68,6 +68,9 @@ process = _, _;`;
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             await audioCtx.audioWorklet.addModule("./kissfft.js");
             await audioCtx.resume();
+            // const osc = audioCtx.createOscillator();
+            // osc.frequency.value = 440;
+            // osc.start();
             time();
             faustModule = await instantiateFaustModule();
             time("Faust WASM Module ready");
@@ -79,6 +82,9 @@ process = _, _;`;
             time("Faust DSP compiled");
             node = await generator.createFFTNode(audioCtx, FFTUtils);
             time("Faust FFT AW Node generated");
+            // osc.connect(node);
+            node.parameters.get("windowFunction").value = 1;
+            node.parameters.get("fftOverlap").value = 2;
             node.connect(audioCtx.destination);
         };
     </script>

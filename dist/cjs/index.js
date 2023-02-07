@@ -1151,7 +1151,7 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
     const mod = (x, y) => (x % y + y) % y;
     const apply = (array, windowFunction) => {
       for (let i = 0; i < array.length; i++) {
-        array[i] = windowFunction(array[i], array.length);
+        array[i] *= windowFunction(i, array.length);
       }
     };
     const fftParamKeywords = ["/fftSize", "/fftHopSize", "/fftOverlap", "/windowFunction", "/noIFFT"];
@@ -1275,6 +1275,13 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
             const ffted = this.rfft.forward(fftBuffer);
             fftProcessorInputs.push(...fftToSignal(ffted));
           }
+          for (let i = 0; i < this.fDSPCode.getNumInputs(); i++) {
+            if (!fftProcessorInputs[i]) {
+              fftProcessorInputs[i] = new Float32Array(this.fftProcessorBufferSize);
+              if (i % 3 === 2)
+                fftProcessorInputs[i] = fftProcessorInputs[i].map((v, j) => j + 1);
+            }
+          }
           this.$inputRead += this.fftHopSize;
           this.$inputRead %= this.fftBufferSize;
           samplesForFFT -= this.fftHopSize;
@@ -1317,9 +1324,7 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
         const output = outputs[0];
         const inputChannels = input.length;
         const outputChannels = output.length;
-        if (input.length === 0)
-          return true;
-        const bufferSize = Math.max(...input.map((c) => c.length)) || 128;
+        const bufferSize = input.length ? Math.max(...input.map((c) => c.length)) || 128 : 128;
         this.noIFFT = !!parameters.noIFFT[0];
         this.resetFFT(~~parameters.fftSize[0], ~~parameters.fftOverlap[0], ~~parameters.windowFunction[0], inputChannels, outputChannels, bufferSize);
         if (!this.fDSPCode)
@@ -1333,13 +1338,18 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
             this.paramValuesCache[path] = paramValue;
           }
         }
-        let $inputWrite = 0;
-        for (let i = 0; i < input.length; i++) {
-          const inputWindow = this.fftInput[i];
-          const channel = input[i].length ? input[i] : new Float32Array(bufferSize);
-          $inputWrite = setTypedArray(inputWindow, channel, this.$inputWrite);
+        if (input.length) {
+          let $inputWrite = 0;
+          for (let i = 0; i < input.length; i++) {
+            const inputWindow = this.fftInput[i];
+            const channel = input[i].length ? input[i] : new Float32Array(bufferSize);
+            $inputWrite = setTypedArray(inputWindow, channel, this.$inputWrite);
+          }
+          this.$inputWrite = $inputWrite;
+        } else {
+          this.$inputWrite += bufferSize;
+          this.$inputWrite %= this.fftBufferSize;
         }
-        this.$inputWrite = $inputWrite;
         this.processFFT();
         for (let i = 0; i < output.length; i++) {
           setTypedArray(output[i], this.fftOutput[i], 0, this.$outputRead);
