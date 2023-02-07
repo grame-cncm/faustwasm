@@ -360,30 +360,30 @@ const dependencies = {
         const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : undefined;
         const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
         // Dynamically create AudioWorkletProcessor if code not yet created
-            try {
-                const dependencies = {
-                    FaustBaseWebAudioDsp,
-                    FaustMonoWebAudioDsp: undefined,
-                    FaustWasmInstantiator,
-                    FaustPolyWebAudioDsp,
-                    FaustWebAudioDspVoice,
-                };
-                // DSP name and JSON string for DSP are generated
-                const faustData = {
-                    processorName,
-                    dspName: name,
-                    dspMeta: voiceMeta,
-                    poly: true,
-                    effectMeta
-                } as FaustData;
-                // Generate the actual AudioWorkletProcessor code
-                const Processor = getFaustAudioWorkletProcessor<true>(dependencies, faustData);
-                return Processor;
-            } catch (e) {
-                // console.error(`=> exception raised while running createPolyNode: ${e}`);
-                // console.error(`=> check that your page is served using https.${e}`);
-                throw e;
-            }
+        try {
+            const dependencies = {
+                FaustBaseWebAudioDsp,
+                FaustMonoWebAudioDsp: undefined,
+                FaustWasmInstantiator,
+                FaustPolyWebAudioDsp,
+                FaustWebAudioDspVoice,
+            };
+            // DSP name and JSON string for DSP are generated
+            const faustData = {
+                processorName,
+                dspName: name,
+                dspMeta: voiceMeta,
+                poly: true,
+                effectMeta
+            } as FaustData;
+            // Generate the actual AudioWorkletProcessor code
+            const Processor = getFaustAudioWorkletProcessor<true>(dependencies, faustData);
+            return Processor;
+        } catch (e) {
+            // console.error(`=> exception raised while running createPolyNode: ${e}`);
+            // console.error(`=> check that your page is served using https.${e}`);
+            throw e;
+        }
     }
     async createOfflineProcessor(
         sampleRate: number,
