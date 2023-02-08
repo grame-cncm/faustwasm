@@ -1,6 +1,6 @@
 import type { FaustMonoDspInstance } from "./FaustDspInstance";
 import type FaustWasmInstantiator from "./FaustWasmInstantiator";
-import type { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp } from "./FaustWebAudioDsp";
+import type { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, PlotHandler } from "./FaustWebAudioDsp";
 import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem, InterfaceFFT, TWindowFunction, Writeable, TypedArray, FFTUtils } from "./types";
 
 export interface FaustFFTOptionsData {
@@ -43,6 +43,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
     const {
         FaustBaseWebAudioDsp,
         FaustWasmInstantiator,
+        FaustMonoWebAudioDsp,
         FFTUtils
     } = dependencies;
     
@@ -157,6 +158,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         private fftBufferSize = 0;
         private fftProcessorZeros: Float32Array;
         private noIFFTBuffer: Float32Array;
+        private plotHandler: PlotHandler | null;
         get fftProcessorBufferSize() {
             return this.fftSize / 2 + 1;
         }
@@ -323,7 +325,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             if (!this.fDSPCode) return true;
     
             for (const path in parameters) {
-                if (!!fftParamKeywords.find(k => path.endsWith(k))) continue;
+                if (!!fftParamKeywords.find(k => `/${path}`.endsWith(k))) continue;
                 const [paramValue] = parameters[path];
                 if (paramValue !== this.paramValuesCache[path]) {
                     this.fDSPCode.setParamValue(path, paramValue);
@@ -378,10 +380,11 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 // Plot handler set on demand
                 case "setPlotHandler": {
                     if (msg.data) {
-                        this.fDSPCode?.setPlotHandler((output, index, events) => this.port.postMessage({ type: "plot", value: output, index: index, events: events }));
+                        this.plotHandler = (output, index, events) => this.port.postMessage({ type: "plot", value: output, index: index, events: events });
                     } else {
-                        this.fDSPCode?.setPlotHandler(null);
+                        this.plotHandler = null;
                     }
+                    this.fDSPCode?.setPlotHandler(this.plotHandler);
                     break;
                 }
                 case "start": {
@@ -432,8 +435,9 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             }
             const fftSizeChanged = fftSize !== this.fftSize;
 
+            const fftOverlapChanged = fftOverlap !== this.fftOverlap;
             // Reset FFT vars if the size is changed
-            if (fftSizeChanged || fftOverlap !== this.fftOverlap) {
+            if (fftSizeChanged || fftOverlapChanged) {
                 this.fftSize = fftSize;
                 this.fftOverlap = fftOverlap;
                 this.fftHopSize = fftHopSize;
@@ -454,7 +458,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             }
             
             // Calculate a window from the window function, prepare the windowSumSquare buffer 
-            if (fftSizeChanged || windowFunction !== this.windowFunction) {
+            if (fftSizeChanged || fftOverlapChanged || windowFunction !== this.windowFunction) {
                 this.windowFunction = windowFunction;
                 this.window = new Float32Array(fftSize);
                 this.window.fill(1);
@@ -469,7 +473,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             if (this.fftOutput.length > outputChannels) {
                 this.fftOutput.splice(outputChannels);
             }
-            if (fftSizeChanged) {
+            if (fftSizeChanged || fftOverlapChanged) {
                 for (let i = 0; i < inputChannels; i++) {
                     this.fftInput[i] = new Float32Array(this.fftBufferSize);
                 }
@@ -493,15 +497,19 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             this.fDSPCode?.stop();
             this.fDSPCode?.destroy();
 
-            const { FaustMonoWebAudioDsp } = dependencies as FaustFFTAudioWorkletProcessorDependencies;
-
             // Create Monophonic DSP
             this.fDSPCode = new FaustMonoWebAudioDsp(this.dspInstance, sampleRate, this.sampleSize, this.fftProcessorBufferSize);
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+            this.fDSPCode.setPlotHandler(this.plotHandler);
             const params = this.fDSPCode.getParams();
             this.fDSPCode.start();
+            // Write the cached parameters
+            for (const path in this.paramValuesCache) {
+                if (!!fftParamKeywords.find(k => `/${path}`.endsWith(k))) continue;
+                this.fDSPCode.setParamValue(path, this.paramValuesCache[path])
+            }
             // Write the FFT reverved parameters
             const fftSizeParam = params.find(s => s.endsWith("/fftSize"));
             if (fftSizeParam) this.fDSPCode.setParamValue(fftSizeParam, this.fftSize);

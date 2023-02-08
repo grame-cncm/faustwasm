@@ -1134,6 +1134,7 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
     const {
       FaustBaseWebAudioDsp: FaustBaseWebAudioDsp2,
       FaustWasmInstantiator: FaustWasmInstantiator2,
+      FaustMonoWebAudioDsp: FaustMonoWebAudioDsp2,
       FFTUtils
     } = dependencies;
     const {
@@ -1331,7 +1332,7 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
         if (!this.fDSPCode)
           return true;
         for (const path in parameters) {
-          if (!!fftParamKeywords.find((k) => path.endsWith(k)))
+          if (!!fftParamKeywords.find((k) => `/${path}`.endsWith(k)))
             continue;
           const [paramValue] = parameters[path];
           if (paramValue !== this.paramValuesCache[path]) {
@@ -1365,7 +1366,7 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
         return true;
       }
       handleMessageAux(e) {
-        var _a, _b, _c, _d;
+        var _a, _b, _c;
         const msg = e.data;
         switch (msg.type) {
           case "midi":
@@ -1382,18 +1383,19 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
             break;
           case "setPlotHandler": {
             if (msg.data) {
-              (_a = this.fDSPCode) == null ? void 0 : _a.setPlotHandler((output, index, events) => this.port.postMessage({ type: "plot", value: output, index, events }));
+              this.plotHandler = (output, index, events) => this.port.postMessage({ type: "plot", value: output, index, events });
             } else {
-              (_b = this.fDSPCode) == null ? void 0 : _b.setPlotHandler(null);
+              this.plotHandler = null;
             }
+            (_a = this.fDSPCode) == null ? void 0 : _a.setPlotHandler(this.plotHandler);
             break;
           }
           case "start": {
-            (_c = this.fDSPCode) == null ? void 0 : _c.start();
+            (_b = this.fDSPCode) == null ? void 0 : _b.start();
             break;
           }
           case "stop": {
-            (_d = this.fDSPCode) == null ? void 0 : _d.stop();
+            (_c = this.fDSPCode) == null ? void 0 : _c.stop();
             break;
           }
           case "destroy": {
@@ -1433,7 +1435,8 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
           windowFunction = typeof windowFunctions === "object" ? windowFunctions[~~windowFunctionIn - 1] || null : null;
         }
         const fftSizeChanged = fftSize !== this.fftSize;
-        if (fftSizeChanged || fftOverlap !== this.fftOverlap) {
+        const fftOverlapChanged = fftOverlap !== this.fftOverlap;
+        if (fftSizeChanged || fftOverlapChanged) {
           this.fftSize = fftSize;
           this.fftOverlap = fftOverlap;
           this.fftHopSize = fftHopSize;
@@ -1451,7 +1454,7 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
           this.noIFFTBuffer = new Float32Array(this.fftSize);
           this.createFFTProcessor();
         }
-        if (fftSizeChanged || windowFunction !== this.windowFunction) {
+        if (fftSizeChanged || fftOverlapChanged || windowFunction !== this.windowFunction) {
           this.windowFunction = windowFunction;
           this.window = new Float32Array(fftSize);
           this.window.fill(1);
@@ -1465,7 +1468,7 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
         if (this.fftOutput.length > outputChannels) {
           this.fftOutput.splice(outputChannels);
         }
-        if (fftSizeChanged) {
+        if (fftSizeChanged || fftOverlapChanged) {
           for (let i = 0; i < inputChannels; i++) {
             this.fftInput[i] = new Float32Array(this.fftBufferSize);
           }
@@ -1489,11 +1492,16 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
         var _a, _b;
         (_a = this.fDSPCode) == null ? void 0 : _a.stop();
         (_b = this.fDSPCode) == null ? void 0 : _b.destroy();
-        const { FaustMonoWebAudioDsp: FaustMonoWebAudioDsp2 } = dependencies;
         this.fDSPCode = new FaustMonoWebAudioDsp2(this.dspInstance, sampleRate, this.sampleSize, this.fftProcessorBufferSize);
         this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+        this.fDSPCode.setPlotHandler(this.plotHandler);
         const params = this.fDSPCode.getParams();
         this.fDSPCode.start();
+        for (const path in this.paramValuesCache) {
+          if (!!fftParamKeywords.find((k) => `/${path}`.endsWith(k)))
+            continue;
+          this.fDSPCode.setParamValue(path, this.paramValuesCache[path]);
+        }
         const fftSizeParam = params.find((s) => s.endsWith("/fftSize"));
         if (fftSizeParam)
           this.fDSPCode.setParamValue(fftSizeParam, this.fftSize);
@@ -3537,6 +3545,26 @@ const dependencies = {
         }
       }
       const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
+      if (fftOptions.fftSize) {
+        const param = node.parameters.get("fftSize");
+        if (param)
+          param.value = fftOptions.fftSize;
+      }
+      if (fftOptions.fftOverlap) {
+        const param = node.parameters.get("fftOverlap");
+        if (param)
+          param.value = fftOptions.fftOverlap;
+      }
+      if (typeof fftOptions.defaultWindowFunction === "number") {
+        const param = node.parameters.get("windowFunction");
+        if (param)
+          param.value = fftOptions.defaultWindowFunction + 1;
+      }
+      if (typeof fftOptions.noIFFT === "boolean") {
+        const param = node.parameters.get("noIFFT");
+        if (param)
+          param.value = +fftOptions.noIFFT;
+      }
       return node;
     }
     async createAudioWorkletProcessor(name = this.name, factory = this.factory, processorName = (factory == null ? void 0 : factory.shaKey) || name) {

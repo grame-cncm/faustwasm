@@ -767,8 +767,8 @@ export interface FaustFFTAudioWorkletProcessorOptions {
 }
 export declare const getFaustFFTAudioWorkletProcessor: (dependencies: FaustFFTAudioWorkletProcessorDependencies, faustData: FaustFFTData, register?: boolean) => {
 	new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
-	prototype: AudioWorkletProcessor;
-	parameterDescriptors: AudioParamDescriptor[]; /** Generated from the current window's rolling sum square */
+	prototype: AudioWorkletProcessor; /** Generated from the current window function */
+	parameterDescriptors: AudioParamDescriptor[];
 };
 export interface ILibFaust extends LibFaustWasm {
 	module(): FaustModule;

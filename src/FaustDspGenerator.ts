@@ -264,7 +264,23 @@ const dependencies = {
             }
         }
         // Create the AWN
-        const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize)
+        const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
+        if (fftOptions.fftSize) {
+            const param = node.parameters.get("fftSize");
+            if (param) param.value = fftOptions.fftSize;
+        }
+        if (fftOptions.fftOverlap) {
+            const param = node.parameters.get("fftOverlap");
+            if (param) param.value = fftOptions.fftOverlap;
+        }
+        if (typeof fftOptions.defaultWindowFunction === "number") {
+            const param = node.parameters.get("windowFunction");
+            if (param) param.value = fftOptions.defaultWindowFunction + 1;
+        }
+        if (typeof fftOptions.noIFFT === "boolean") {
+            const param = node.parameters.get("noIFFT");
+            if (param) param.value = +fftOptions.noIFFT;
+        }
         return node;
     }
     async createAudioWorkletProcessor(
