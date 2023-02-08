@@ -1210,14 +1210,10 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
         parameterDescriptors.forEach((pd) => {
           this.paramValuesCache[pd.name] = pd.defaultValue || 0;
         });
-        const { FaustMonoWebAudioDsp: FaustMonoWebAudioDsp2 } = dependencies;
         const { factory, sampleSize } = options.processorOptions;
         this.dspInstance = FaustWasmInstantiator2.createSyncMonoDSPInstance(factory);
         this.sampleSize = sampleSize;
         this.initFFT();
-      }
-      get fftBins() {
-        return this.fftSize / 2;
       }
       get fftProcessorBufferSize() {
         return this.fftSize / 2 + 1;

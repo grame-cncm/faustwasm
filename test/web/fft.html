@@ -22,6 +22,7 @@ process(r, i, b) = a, a, a, a with {
         }
         const { instantiateFaustModule, LibFaust, FaustCompiler, FaustMonoDspGenerator } = faustwasm;
         
+        // Use KissFFT implementation
         const FFTUtils = class {
             static windowFunctions = [
                 (i, N) => {

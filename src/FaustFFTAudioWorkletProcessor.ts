@@ -121,17 +121,17 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
 
         protected paramValuesCache: Record<string, number> = {};
 
-        private dspInstance: FaustMonoDspInstance;
-        private sampleSize: number;
+        private dspInstance!: FaustMonoDspInstance;
+        private sampleSize!: number;
 
         private destroyed = false;
-        /** Pointer of next start sample to write of the input window */
+        /** Pointer of next start sample to write of the FFT input window */
         private $inputWrite = 0;
-        /** Pointer of next start sample to read of the input window */
+        /** Pointer of next start sample to read of the FFT input window */
         private $inputRead = 0;
-        /** Pointer of next start sample to write of the output window */
+        /** Pointer of next start sample to write of the FFT output window */
         private $outputWrite = 0;
-        /** Pointer of next start sample to read of the output window */
+        /** Pointer of next start sample to read of the FFT output window */
         private $outputRead = 0;
         /** Not perform in IFFT when reconstruct the audio signal */
         private noIFFT = false;
@@ -144,18 +144,19 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         /** Generated from the current window's rolling sum square */
         private windowSumSquare: Float32Array;
         
+        /** FFT constructor */
         private FFT: typeof InterfaceFFT;
+        /** Real FFT interface */
         private rfft: InterfaceFFT;
+        /** Faust param name of fftHopSize */
         private fftHopSizeParam: string | undefined;
+        /** FFT Overlaps, 1 means no overlap */
         private fftOverlap = 0;
         private fftHopSize = 0;
         private fftSize = 0;
         private fftBufferSize = 0;
         private fftProcessorZeros: Float32Array;
         private noIFFTBuffer: Float32Array;
-        get fftBins() {
-            return this.fftSize / 2;
-        }
         get fftProcessorBufferSize() {
             return this.fftSize / 2 + 1;
         }
@@ -171,17 +172,20 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             parameterDescriptors.forEach((pd) => {
                 this.paramValuesCache[pd.name] = pd.defaultValue || 0;
             })
-            const { FaustMonoWebAudioDsp } = dependencies as FaustFFTAudioWorkletProcessorDependencies;
+
             const { factory, sampleSize } = options.processorOptions;
 
             this.dspInstance = FaustWasmInstantiator.createSyncMonoDSPInstance(factory);
             this.sampleSize = sampleSize;
 
+            // Init the FFT constructor and the Faust FFT Processor
             this.initFFT();
         }
 
         async initFFT(): Promise<true> {
+            // Use injected function to instantiate the FFT constructor
             this.FFT = await getFFT();
+            // Init Faust FFT Processor
             await this.createFFTProcessor();
             return true;
         }
@@ -194,6 +198,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 if (param) params.push(param);
             }
             FaustBaseWebAudioDsp.parseUI(dspMeta.ui, callback);
+            // Add to Faust parameters, FFT specified parameters
             return [
                 ...params,
                 {
@@ -221,60 +226,84 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         }
 
         processFFT() {
+            // Get the number of samples that need to proceed, from the input r/w pointers
             let samplesForFFT = mod(this.$inputWrite - this.$inputRead, this.fftBufferSize) || this.fftBufferSize;
+            // Start process, until no more enough samples
             while (samplesForFFT >= this.fftSize) {
                 let fftProcessorOutputs: Float32Array[] = [];
+                // Faust processing, use a callback to avoid extra data copy
                 this.fDSPCode.compute((inputs) => {
+                    // for each audio input channel, three Faust FFT input buffers can be generated (real, imag, FFT bin index)
                     for (let i = 0; i < Math.min(this.fftInput.length, Math.ceil(inputs.length / 3)); i++) {
+                        // FFT forward, use a callback to avoid extra data copy
                         const ffted = this.rfft.forward((fftBuffer) => {
                             setTypedArray(fftBuffer, this.fftInput[i], 0, this.$inputRead);
+                            // Windowing the input
                             for (let j = 0; j < fftBuffer.length; j++) {
                                 fftBuffer[j] *= this.window[j];
                             }
+                            // data for FFT (fftBuffer) is prepared
                         });
-                        fftToSignal(ffted, inputs[i * 3], inputs[i * 3 + 1], inputs[i * 3 + 2])
+                        // write FFTed spectral data to three Faust FFT input buffers (real, imag, FFT bin index)
+                        fftToSignal(ffted, inputs[i * 3], inputs[i * 3 + 1], inputs[i * 3 + 2]);
+                        // Faust inputs are prepared
                     }
+                    // If the Faust DSP has more inputs, fill them (zeros or real/imag, fill FFT bin indexes)
                     for (let i = this.fftInput.length * 3; i < inputs.length; i++) {
                         if (i % 3 === 2) inputs[i].forEach((v, j) => inputs[i][j] = j);
                         else inputs[i].fill(0);
                     }
                 }, (outputs) => {
+                    // Get the Faust DSP outputs
                     fftProcessorOutputs = outputs as Float32Array[];
                 });
 
+                // Advance FFT input read pointers
                 this.$inputRead += this.fftHopSize;
                 this.$inputRead %= this.fftBufferSize;
+
                 samplesForFFT -= this.fftHopSize;
 
+                // Do inverse FFT on the processed data by Faust DSP, and write the reconstructed signal to the output buffer
                 for (let i = 0; i < this.fftOutput.length; i++) {
                     let iffted: Float32Array;
+                    // If noIFFT option in enabled, then no need to do inverse IFFT, use the injected function to convert
                     if (this.noIFFT) {
                         iffted = this.noIFFTBuffer;
                         signalToNoFFT(fftProcessorOutputs[i * 2] || this.fftProcessorZeros, fftProcessorOutputs[i * 2 + 1] || this.fftProcessorZeros, iffted);
                     } else {
+                        // FFT inverse, use a callback to avoid extra data copy
                         iffted = this.rfft.inverse((ifftBuffer) => {
+                            // Convert the Faust DSP output (real/imag plans) to an array for inverse FFT
                             signalToFFT(fftProcessorOutputs[i * 2] || this.fftProcessorZeros, fftProcessorOutputs[i * 2 + 1] || this.fftProcessorZeros, ifftBuffer);
+                            // ifftBuffer is prepared
                         });
                     }
+                    // Windowing the output
                     for (let j = 0; j < iffted.length; j++) {
                         iffted[j] *= this.window[j];
                     }
+                    // Overlap-add, preparing the windowSumSquare array for reverse the windowing effect when output the audio
                     let $: number;
+                    // First part, add the part that is overlaped with the previous window
                     for (let j = 0; j < iffted.length - this.fftHopSize; j++) {
                         $ = mod(this.$outputWrite + j, this.fftBufferSize);
                         this.fftOutput[i][$] += iffted[j];
                         if (i === 0) this.windowSumSquare[$] += this.noIFFT ? this.window[j] : this.window[j] ** 2;
                     }
+                    // Second part, write directly to the output buffer
                     for (let j = iffted.length - this.fftHopSize; j < iffted.length; j++) {
                         $ = mod(this.$outputWrite + j, this.fftBufferSize);
                         this.fftOutput[i][$] = iffted[j];
                         if (i === 0) this.windowSumSquare[$] = this.noIFFT ? this.window[j] : this.window[j] ** 2;
                     }
                 }
+                // Advance FFT output write pointers
                 this.$outputWrite += this.fftHopSize;
                 this.$outputWrite %= this.fftBufferSize;
             }
         }
+
         process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: { [key: string]: Float32Array }) {
 
             if (this.destroyed) return false;
@@ -287,6 +316,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
     
             const bufferSize = input.length ? Math.max(...input.map(c => c.length)) || 128 : 128;
     
+            // Reset FFT and related buffers if necessary (checks in the resetFFT method)
             this.noIFFT = !!parameters.noIFFT[0];
             this.resetFFT(~~parameters.fftSize[0], ~~parameters.fftOverlap[0], ~~parameters.windowFunction[0], inputChannels, outputChannels, bufferSize);
     
@@ -301,6 +331,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 }
             }
 
+            // Write audio input into fftInput buffer, advance pointers
             if (input.length) {
                 let $inputWrite = 0;
                 for (let i = 0; i < input.length; i++) {
@@ -314,8 +345,10 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 this.$inputWrite %= this.fftBufferSize;
             }
     
+            // Do FFT if necessary
             this.processFFT();
     
+            // Read from fftOutput buffer for audio output, applying windowSumSquare to reverse the doubled windowing effect
             for (let i = 0; i < output.length; i++) {
                 setTypedArray(output[i], this.fftOutput[i], 0, this.$outputRead);
                 // let a = 0;
@@ -323,11 +356,9 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 for (let j = 0; j < bufferSize; j++) {
                     div = this.windowSumSquare[mod(this.$outputRead + j, this.fftBufferSize)];
                     output[i][j] /= div < Number.EPSILON ? 1 : div;
-                    // a = output[i][j];
-                    // b = this.windowSumSquare[mod(this.$outputRead + j, this.fftBufferSize)];
-                    // output[i][j] = Math.abs(a - b) < Number.EPSILON ? Math.sign(a * b) : b < Number.EPSILON ? Math.sign(a * b) : a / b;
                 }
             }
+            // Advance pointers
             this.$outputRead += bufferSize;
             this.$outputRead %= this.fftBufferSize;
             return true;
@@ -394,10 +425,14 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             const fftHopSize = ~~Math.max(1, fftSize / fftOverlap);
             const latency = fftSize - Math.min(fftHopSize, bufferSize);
             let windowFunction: TWindowFunction | null = null;
+            
+            // set the window function from the injected list
             if (windowFunctionIn !== 0) {
                 windowFunction = typeof windowFunctions === "object" ? windowFunctions[~~windowFunctionIn - 1] || null : null;
             }
             const fftSizeChanged = fftSize !== this.fftSize;
+
+            // Reset FFT vars if the size is changed
             if (fftSizeChanged || fftOverlap !== this.fftOverlap) {
                 this.fftSize = fftSize;
                 this.fftOverlap = fftOverlap;
@@ -409,12 +444,16 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 this.fftBufferSize = Math.max(fftSize * 2 - this.fftHopSize, bufferSize * 2);
                 if (!fftSizeChanged && this.fftHopSizeParam) this.fDSPCode?.setParamValue(this.fftHopSizeParam, this.fftHopSize);
             }
+
+            // Reset the FFT interface and the Faust Processor
             if (fftSizeChanged) {
                 this.rfft?.dispose();
                 this.rfft = new this.FFT(fftSize);
                 this.noIFFTBuffer = new Float32Array(this.fftSize);
                 this.createFFTProcessor();
             }
+            
+            // Calculate a window from the window function, prepare the windowSumSquare buffer 
             if (fftSizeChanged || windowFunction !== this.windowFunction) {
                 this.windowFunction = windowFunction;
                 this.window = new Float32Array(fftSize);
@@ -422,6 +461,8 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 if (windowFunction) apply(this.window, windowFunction);
                 this.windowSumSquare = new Float32Array(this.fftBufferSize);
             }
+
+            // Reset FFT I/O buffers if necessary
             if (this.fftInput.length > inputChannels) {
                 this.fftInput.splice(inputChannels);
             }
@@ -461,10 +502,12 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
             const params = this.fDSPCode.getParams();
             this.fDSPCode.start();
+            // Write the FFT reverved parameters
             const fftSizeParam = params.find(s => s.endsWith("/fftSize"));
             if (fftSizeParam) this.fDSPCode.setParamValue(fftSizeParam, this.fftSize);
             this.fftHopSizeParam = params.find(s => s.endsWith("/fftHopSize"));
             if (this.fftHopSizeParam) this.fDSPCode.setParamValue(this.fftHopSizeParam, this.fftHopSize);
+            // Prepare a array of zeros for furthur usage
             this.fftProcessorZeros = new Float32Array(this.fftProcessorBufferSize);
         }
         destroy() {

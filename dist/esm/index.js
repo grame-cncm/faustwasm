@@ -1202,14 +1202,10 @@ var getFaustFFTAudioWorkletProcessor = (dependencies, faustData, register = true
       parameterDescriptors.forEach((pd) => {
         this.paramValuesCache[pd.name] = pd.defaultValue || 0;
       });
-      const { FaustMonoWebAudioDsp: FaustMonoWebAudioDsp2 } = dependencies;
       const { factory, sampleSize } = options.processorOptions;
       this.dspInstance = FaustWasmInstantiator2.createSyncMonoDSPInstance(factory);
       this.sampleSize = sampleSize;
       this.initFFT();
-    }
-    get fftBins() {
-      return this.fftSize / 2;
     }
     get fftProcessorBufferSize() {
       return this.fftSize / 2 + 1;

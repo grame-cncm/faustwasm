@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <script src="../../dist/cjs-bundle/index.js"></script>
+    </head>
+    <body style="position: absolute; width: 100%; height: 100%; margin: 0px">
+        <button id="start">Start</button>
+    </body>
+    <script>
+        code = `
+import("stdfaust.lib");
+process(r, i, b) = a, a, a, a with {
+    k = (b == 0) : + ~ %(20);
+    a = (b == k) * 0.01;
+};`;
+        let t0 = performance.now();
+        const time = (str) => {
+            const t = performance.now();
+            if (str) console.log(str, t - t0);
+            t0 = t;
+        }
+        const { instantiateFaustModule, LibFaust, FaustCompiler, FaustMonoDspGenerator } = faustwasm;
+        
+        // Use FFTW implementation
+        const FFTUtils = class {
+            static windowFunctions = [
+                (i, N) => {
+                    const a0 = 0.42, a1 = 0.5, a2 = 0.08, f = 6.283185307179586*i/(N-1);
+                    return a0 - a1 * Math.cos(f) + a2 * Math.cos(2 * f);
+                },
+                (i, N) => 1 - Math.abs(2 * (i - 0.5 * (N - 1)) / N)
+            ];
+            static getFFT = async () => {
+                const { instantiateFFTWModule, FFTW } = globalThis.fftwwasm;
+                const Module = await instantiateFFTWModule();
+                const fftw = new FFTW(Module);
+                return fftw.r2r.FFT1D;
+            };
+            static fftToSignal = (f, r, i, b) => {
+                const fftSize = f.length;
+                const len = fftSize / 2 + 1;
+                const invFFTSize = 1 / fftSize;
+                for (let j = 0; j < len; j++) {
+                    r[j] = f[j] * invFFTSize;
+                    i[j] = (j === 0 || j === len - 1) ? 0 : f[fftSize - j] * invFFTSize;
+                    b[j] = j;
+                }
+            };
+            static signalToFFT = (r, i, f) => {
+                const len = (r.length - 1) * 2;
+                f.set(r);
+                for (let j = 0; j < r.length; j++) {
+                    if (j === 0 || j === r.length - 1) continue;
+                    f[len - j] = i[j];
+                }
+            };
+            static signalToNoFFT = (r, i, f) => {
+                const len = (r.length - 1) * 2;
+                f.set(r.subarray(1, r.length));
+                f.set(i.subarray(0, i.length - 1), r.length - 1);
+            };
+        }
+        document.getElementById("start").onclick = async () => {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            await audioCtx.audioWorklet.addModule("./fftw.js");
+            await audioCtx.resume();
+            // const osc = audioCtx.createOscillator();
+            // osc.frequency.value = 440;
+            // osc.start();
+            time();
+            faustModule = await instantiateFaustModule();
+            time("Faust WASM Module ready");
+            libFaust = new LibFaust(faustModule);
+            compiler = new FaustCompiler(libFaust);
+            generator = new FaustMonoDspGenerator();
+            time("Faust DSP Generator ready");
+            await generator.compile(compiler, "dsp", code, "");
+            time("Faust DSP compiled");
+            node = await generator.createFFTNode(audioCtx, FFTUtils);
+            time("Faust FFT AW Node generated");
+            // osc.connect(node);
+            node.parameters.get("windowFunction").value = 1;
+            node.parameters.get("fftOverlap").value = 2;
+            node.connect(audioCtx.destination);
+        };
+    </script>
+</html>
