@@ -4,7 +4,7 @@ import type { FaustDspMeta, FaustUIDescriptor, FaustUIGroup, FaustUIInputItem, F
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;
 export type ComputeHandler = (buffer_size: number) => void;
-export type PlotHandler = (plotted: Float32Array[], index: number, events?: { type: string; data: any }[]) => void;
+export type PlotHandler = (plotted: Float32Array[] | Float64Array[], index: number, events?: { type: string; data: any }[]) => void;
 export type MetadataHandler = (key: string, value: string) => void;
 
 // Implementation API
@@ -511,7 +511,7 @@ this.fDSP: ${this.fDSP}`;
     }
 
     // Public API
-    compute(input: Float32Array[], output: Float32Array[]) {
+    compute(input: Float32Array[] | ((input: Float32Array[] | Float64Array[]) => any), output: Float32Array[] | ((output: Float32Array[] | Float64Array[]) => any)) {
 
         // Check DSP state
         if (this.fDestroyed) return false;
@@ -519,26 +519,30 @@ this.fDSP: ${this.fDSP}`;
         // Check Processing state: the node returns 'true' to stay in the graph, even if not processing
         if (!this.fProcessing) return true;
 
-        // Check inputs
-        if (this.getNumInputs() > 0 && (!input || !input[0] || input[0].length === 0)) {
-            // console.log("Process input error");
-            return true;
-        }
-
-        // Check outputs
-        if (this.getNumOutputs() > 0 && (!output || !output[0] || output[0].length === 0)) {
-            // console.log("Process output error");
-            return true;
-        }
-
-        // Copy inputs
-        if (input !== undefined) {
-            for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); ++chan) {
-                const dspInput = this.fInChannels[chan];
-                dspInput.set(input[chan]);
+        if (typeof input === "function") {
+            // Call input callback to avoid array copy
+            input(this.fInChannels);
+        } else {
+            // Check inputs
+            if (this.getNumInputs() > 0 && (!input || !input[0] || input[0].length === 0)) {
+                // console.log("Process input error");
+                return true;
             }
+    
+            // Check outputs
+            if (this.getNumOutputs() > 0 && typeof output !== "function" && (!output || !output[0] || output[0].length === 0)) {
+                // console.log("Process output error");
+                return true;
+            }
+    
+            // Copy inputs
+            if (input !== undefined) {
+                for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); chan++) {
+                    const dspInput = this.fInChannels[chan];
+                    dspInput.set(input[chan]);
+                }
+            }    
         }
-
         // Possibly call an externally given callback (for instance to synchronize playing a MIDIFile...)
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
 
@@ -548,17 +552,23 @@ this.fDSP: ${this.fDSP}`;
         // Update bargraph
         this.updateOutputs();
 
-        if (output !== undefined) {
+        let forPlot = this.fOutChannels;
+        if (typeof output === "function") {
+            // Call output callback to avoid array copy
+            output(this.fOutChannels);
+        } else {
             // Copy outputs
             for (let chan = 0; chan < Math.min(this.getNumOutputs(), output.length); chan++) {
                 const dspOutput = this.fOutChannels[chan];
                 output[chan].set(dspOutput);
             }
-            // PlotHandler handling 
-            if (this.fPlotHandler) {
-                this.fPlotHandler(output, this.fBufferNum++, (this.fCachedEvents.length ? this.fCachedEvents : undefined));
-                this.fCachedEvents = [];
-            }
+            forPlot = output;
+        }
+
+        // PlotHandler handling 
+        if (this.fPlotHandler) {
+            this.fPlotHandler(forPlot, this.fBufferNum++, (this.fCachedEvents.length ? this.fCachedEvents : undefined));
+            this.fCachedEvents = [];
         }
 
         return true;

@@ -191,8 +191,8 @@ export interface AudioWorkletGlobalScope {
 	AudioWorkletProcessor: typeof AudioWorkletProcessor;
 }
 export interface InterfaceFFT {
-	forward(arr: ArrayLike<number>): Float32Array;
-	inverse(arr: ArrayLike<number>): Float32Array;
+	forward(arr: ArrayLike<number> | ((arr: Float32Array) => any)): Float32Array;
+	inverse(arr: ArrayLike<number> | ((arr: Float32Array) => any)): Float32Array;
 	dispose(): void;
 }
 export declare const InterfaceFFT: {
@@ -209,16 +209,12 @@ export declare const FFTUtils: {
 	windowFunctions?: TWindowFunction[];
 	/** Get a FFT interface constructor */
 	getFFT: () => Promise<typeof InterfaceFFT>;
-	/** Convert from FFTed (spectral) signal to three arrays for Faust processor's input */
-	fftToSignal: (ffted: Float32Array) => [
-		real: Float32Array,
-		imag: Float32Array,
-		index: Float32Array
-	];
-	/** Convert from Faust processor's output to spectral data for Inversed FFT */
-	signalToFFT: (real: Float32Array, imag: Float32Array) => Float32Array;
-	/** Convert from Faust processor's output to direct audio output */
-	signalToNoFFT: (real: Float32Array, imag: Float32Array) => Float32Array;
+	/** Convert from FFTed (spectral) signal to three arrays for Faust processor's input, fft is readonly, real/imag/index length = *fftSize* / 2 + 1; fft length depends on the FFT implementation */
+	fftToSignal: (fft: Float32Array | Float64Array, real: Float32Array | Float64Array, imag?: Float32Array | Float64Array, index?: Float32Array | Float64Array) => any;
+	/** Convert from Faust processor's output to spectral data for Inversed FFT, real/imag are readonly, real/imag length = *fftSize* / 2 + 1; fft length depends on the FFT implementation */
+	signalToFFT: (real: Float32Array | Float64Array, imag: Float32Array | Float64Array, fft: Float32Array | Float64Array) => any;
+	/** Convert from Faust processor's output to direct audio output, real/imag are readonly, fft length = fftSize = (real/imag length - 1) * 2 */
+	signalToNoFFT: (real: Float32Array | Float64Array, imag: Float32Array | Float64Array, fft: Float32Array | Float64Array) => any;
 };
 /**
  * Load libfaust-wasm files, than instantiate libFaust
@@ -365,7 +361,7 @@ export declare class FaustWasmInstantiator {
 }
 export declare type OutputParamHandler = (path: string, value: number) => void;
 export declare type ComputeHandler = (buffer_size: number) => void;
-export declare type PlotHandler = (plotted: Float32Array[], index: number, events?: {
+export declare type PlotHandler = (plotted: Float32Array[] | Float64Array[], index: number, events?: {
 	type: string;
 	data: any;
 }[]) => void;
@@ -622,7 +618,7 @@ export declare class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implement
 	constructor(instance: FaustMonoDspInstance, sampleRate: number, sampleSize: number, bufferSize: number);
 	private initMemory;
 	toString(): string;
-	compute(input: Float32Array[], output: Float32Array[]): boolean;
+	compute(input: Float32Array[] | ((input: Float32Array[] | Float64Array[]) => any), output: Float32Array[] | ((output: Float32Array[] | Float64Array[]) => any)): boolean;
 	metadata(handler: MetadataHandler): void;
 	getNumInputs(): number;
 	getNumOutputs(): number;

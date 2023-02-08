@@ -10,7 +10,10 @@
     <script>
         code = `
 import("stdfaust.lib");
-process(r, i, b) = (b == 19) * 0.01, (b == 19) * 0.01, (b == 19) * 0.01, (b == 19) * 0.01;`;
+process(r, i, b) = a, a, a, a with {
+    k = (b == 0) : + ~ %(20);
+    a = (b == k) * 0.01;
+};`;
         let t0 = performance.now();
         const time = (str) => {
             const t = performance.now();
@@ -33,35 +36,27 @@ process(r, i, b) = (b == 19) * 0.01, (b == 19) * 0.01, (b == 19) * 0.01, (b == 1
                 const kissFFT = new KissFFT(Module);
                 return kissFFT.FFTR;
             };
-            static fftToSignal = (f) => {
-                const fftSize = f.length;
-                const len = fftSize / 2;
+            static fftToSignal = (f, r, i, b) => {
+                const fftSize = f.length - 2;
+                const len = fftSize / 2 + 1;
                 const invFFTSize = 1 / fftSize;
-                const r = new Float32Array(len);
-                const i = new Float32Array(len);
-                const b = new Float32Array(len);
                 for (let j = 0; j < len; j++) {
                     r[j] = f[2 * j] * invFFTSize;
-                    i[j] = f[2 * j + 1] * invFFTSize;
-                    b[j] = j;
+                    if (i) i[j] = f[2 * j + 1] * invFFTSize;
+                    if (b) b[j] = j;
                 }
-                return [r, i, b];
             };
-            static signalToFFT = (r, i) => {
+            static signalToFFT = (r, i, f) => {
                 const len = r.length * 2;
-                const f = new Float32Array(len);
                 for (let j = 0; j < r.length; j++) {
                     f[2 * j] = r[j];
                     f[2 * j + 1] = i[j];
                 }
-                return f;
             };
-            static signalToNoFFT = (r, i) => {
+            static signalToNoFFT = (r, i, f) => {
                 const len = (r.length - 1) * 2;
-                const f = new Float32Array(len);
                 f.set(r.subarray(1, r.length));
                 f.set(i.subarray(0, i.length - 1), r.length - 1);
-                return f;
             };
         }
         document.getElementById("start").onclick = async () => {

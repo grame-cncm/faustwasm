@@ -835,14 +835,20 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
           this.cout = new Float32Array(kissFFTModule.HEAPU8.buffer, this.outptr, size * 2);
         }
         forward(cin) {
-          this.cin.set(cin);
+          if (typeof cin === "function")
+            cin(this.cin);
+          else
+            this.cin.set(cin);
           _kiss_fft(this.fcfg, this.inptr, this.outptr);
-          return new Float32Array(kissFFTModule.HEAPU8.buffer, this.outptr, this.size * 2);
+          return this.cout;
         }
         inverse(cpx) {
-          this.cin.set(cpx);
+          if (typeof cpx === "function")
+            cpx(this.cin);
+          else
+            this.cin.set(cpx);
           _kiss_fft(this.icfg, this.inptr, this.outptr);
-          return new Float32Array(kissFFTModule.HEAPU8.buffer, this.outptr, this.size * 2);
+          return this.cout;
         }
         dispose() {
           _free(this.inptr);
@@ -860,22 +866,34 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
           this.ci = new Float32Array(kissFFTModule.HEAPU8.buffer, this.cptr, size + 2);
         }
         forward(real) {
-          this.ri.set(real);
+          if (typeof real === "function")
+            real(this.ri);
+          else
+            this.ri.set(real);
           _kiss_fftr(this.fcfg, this.rptr, this.cptr);
-          return new Float32Array(kissFFTModule.HEAPU8.buffer, this.cptr, this.size + 2);
+          return this.ci;
         }
         inverse(cpx) {
-          this.ci.set(cpx);
+          if (typeof cpx === "function")
+            cpx(this.ci);
+          else
+            this.ci.set(cpx);
           _kiss_fftri(this.icfg, this.cptr, this.rptr);
-          return new Float32Array(kissFFTModule.HEAPU8.buffer, this.rptr, this.size);
+          return this.ri;
         }
         dispose() {
           _free(this.rptr);
           _kiss_fft_cleanup();
         }
       }
-      this.FFT = FFT;
-      this.FFTR = FFTR;
+      this._FFT = FFT;
+      this._FFTR = FFTR;
+    }
+    get FFT() {
+      return this._FFT;
+    }
+    get FFTR() {
+      return this._FFTR;
     }
   };
   var KissFFT_default = KissFFT;

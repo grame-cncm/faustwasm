@@ -1134,11 +1134,13 @@ var getFaustFFTAudioWorkletProcessor = (dependencies, faustData, register = true
     dspMeta,
     fftOptions
   } = faustData;
-  const windowFunctions = FFTUtils.windowFunctions;
-  const getFFT = FFTUtils.getFFT;
-  const fftToSignal = FFTUtils.fftToSignal;
-  const signalToFFT = FFTUtils.signalToFFT;
-  const signalToNoFFT = FFTUtils.signalToNoFFT;
+  const {
+    windowFunctions,
+    getFFT,
+    fftToSignal,
+    signalToFFT,
+    signalToNoFFT
+  } = FFTUtils;
   const ceil = (x, to) => Math.abs(to) < 1 ? Math.ceil(x * (1 / to)) / (1 / to) : Math.ceil(x / to) * to;
   const mod = (x, y) => (x % y + y) % y;
   const apply = (array, windowFunction) => {
@@ -1256,35 +1258,38 @@ var getFaustFFTAudioWorkletProcessor = (dependencies, faustData, register = true
     processFFT() {
       let samplesForFFT = mod(this.$inputWrite - this.$inputRead, this.fftBufferSize) || this.fftBufferSize;
       while (samplesForFFT >= this.fftSize) {
-        const fftProcessorInputs = [];
-        const fftProcessorOutputs = new Array(this.fDSPCode.getNumOutputs()).fill(null).map(() => new Float32Array(this.fftProcessorBufferSize));
-        for (let i = 0; i < this.fftInput.length; i++) {
-          const fftBuffer = new Float32Array(this.fftSize);
-          setTypedArray(fftBuffer, this.fftInput[i], 0, this.$inputRead);
-          for (let j = 0; j < fftBuffer.length; j++) {
-            fftBuffer[j] *= this.window[j];
+        let fftProcessorOutputs = [];
+        this.fDSPCode.compute((inputs) => {
+          for (let i = 0; i < Math.min(this.fftInput.length, Math.ceil(inputs.length / 3)); i++) {
+            const ffted = this.rfft.forward((fftBuffer) => {
+              setTypedArray(fftBuffer, this.fftInput[i], 0, this.$inputRead);
+              for (let j = 0; j < fftBuffer.length; j++) {
+                fftBuffer[j] *= this.window[j];
+              }
+            });
+            fftToSignal(ffted, inputs[i * 3], inputs[i * 3 + 1], inputs[i * 3 + 2]);
           }
-          const ffted = this.rfft.forward(fftBuffer);
-          fftProcessorInputs.push(...fftToSignal(ffted));
-        }
-        for (let i = 0; i < this.fDSPCode.getNumInputs(); i++) {
-          if (!fftProcessorInputs[i]) {
-            fftProcessorInputs[i] = new Float32Array(this.fftProcessorBufferSize);
+          for (let i = this.fftInput.length * 3; i < inputs.length; i++) {
             if (i % 3 === 2)
-              fftProcessorInputs[i] = fftProcessorInputs[i].map((v, j) => j + 1);
+              inputs[i].forEach((v, j) => inputs[i][j] = j);
+            else
+              inputs[i].fill(0);
           }
-        }
+        }, (outputs) => {
+          fftProcessorOutputs = outputs;
+        });
         this.$inputRead += this.fftHopSize;
         this.$inputRead %= this.fftBufferSize;
         samplesForFFT -= this.fftHopSize;
-        this.fDSPCode.compute(fftProcessorInputs.slice(0, this.fDSPCode.getNumInputs()), fftProcessorOutputs);
         for (let i = 0; i < this.fftOutput.length; i++) {
           let iffted;
           if (this.noIFFT) {
-            iffted = signalToNoFFT(fftProcessorOutputs[i * 2] || new Float32Array(this.fftProcessorBufferSize), fftProcessorOutputs[i * 2 + 1] || new Float32Array(this.fftProcessorBufferSize));
+            iffted = this.noIFFTBuffer;
+            signalToNoFFT(fftProcessorOutputs[i * 2] || this.fftProcessorZeros, fftProcessorOutputs[i * 2 + 1] || this.fftProcessorZeros, iffted);
           } else {
-            const ifftBuffer = signalToFFT(fftProcessorOutputs[i * 2] || new Float32Array(this.fftProcessorBufferSize), fftProcessorOutputs[i * 2 + 1] || new Float32Array(this.fftProcessorBufferSize));
-            iffted = this.rfft.inverse(ifftBuffer);
+            iffted = this.rfft.inverse((ifftBuffer) => {
+              signalToFFT(fftProcessorOutputs[i * 2] || this.fftProcessorZeros, fftProcessorOutputs[i * 2 + 1] || this.fftProcessorZeros, ifftBuffer);
+            });
           }
           for (let j = 0; j < iffted.length; j++) {
             iffted[j] *= this.window[j];
@@ -1439,6 +1444,7 @@ var getFaustFFTAudioWorkletProcessor = (dependencies, faustData, register = true
       if (fftSizeChanged) {
         (_b = this.rfft) == null ? void 0 : _b.dispose();
         this.rfft = new this.FFT(fftSize);
+        this.noIFFTBuffer = new Float32Array(this.fftSize);
         this.createFFTProcessor();
       }
       if (fftSizeChanged || windowFunction !== this.windowFunction) {
@@ -1490,6 +1496,7 @@ var getFaustFFTAudioWorkletProcessor = (dependencies, faustData, register = true
       this.fftHopSizeParam = params.find((s) => s.endsWith("/fftHopSize"));
       if (this.fftHopSizeParam)
         this.fDSPCode.setParamValue(this.fftHopSizeParam, this.fftHopSize);
+      this.fftProcessorZeros = new Float32Array(this.fftProcessorBufferSize);
     }
     destroy() {
       var _a, _b, _c;
@@ -2135,31 +2142,39 @@ this.fDSP: ${this.fDSP}`;
       return false;
     if (!this.fProcessing)
       return true;
-    if (this.getNumInputs() > 0 && (!input || !input[0] || input[0].length === 0)) {
-      return true;
-    }
-    if (this.getNumOutputs() > 0 && (!output || !output[0] || output[0].length === 0)) {
-      return true;
-    }
-    if (input !== void 0) {
-      for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); ++chan) {
-        const dspInput = this.fInChannels[chan];
-        dspInput.set(input[chan]);
+    if (typeof input === "function") {
+      input(this.fInChannels);
+    } else {
+      if (this.getNumInputs() > 0 && (!input || !input[0] || input[0].length === 0)) {
+        return true;
+      }
+      if (this.getNumOutputs() > 0 && typeof output !== "function" && (!output || !output[0] || output[0].length === 0)) {
+        return true;
+      }
+      if (input !== void 0) {
+        for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); chan++) {
+          const dspInput = this.fInChannels[chan];
+          dspInput.set(input[chan]);
+        }
       }
     }
     if (this.fComputeHandler)
       this.fComputeHandler(this.fBufferSize);
     this.fInstance.api.compute(this.fDSP, this.fBufferSize, this.fAudioInputs, this.fAudioOutputs);
     this.updateOutputs();
-    if (output !== void 0) {
+    let forPlot = this.fOutChannels;
+    if (typeof output === "function") {
+      output(this.fOutChannels);
+    } else {
       for (let chan = 0; chan < Math.min(this.getNumOutputs(), output.length); chan++) {
         const dspOutput = this.fOutChannels[chan];
         output[chan].set(dspOutput);
       }
-      if (this.fPlotHandler) {
-        this.fPlotHandler(output, this.fBufferNum++, this.fCachedEvents.length ? this.fCachedEvents : void 0);
-        this.fCachedEvents = [];
-      }
+      forPlot = output;
+    }
+    if (this.fPlotHandler) {
+      this.fPlotHandler(forPlot, this.fBufferNum++, this.fCachedEvents.length ? this.fCachedEvents : void 0);
+      this.fCachedEvents = [];
     }
     return true;
   }
