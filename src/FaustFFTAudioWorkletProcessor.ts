@@ -158,7 +158,10 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         private fftBufferSize = 0;
         private fftProcessorZeros: Float32Array;
         private noIFFTBuffer: Float32Array;
-        private plotHandler: PlotHandler | null;
+
+        private fPlotHandler: PlotHandler | null = null;
+        private fCachedEvents: { type: string; data: any }[] = [];
+        private fBufferNum = 0;
         get fftProcessorBufferSize() {
             return this.fftSize / 2 + 1;
         }
@@ -357,12 +360,18 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 let div = 0;
                 for (let j = 0; j < bufferSize; j++) {
                     div = this.windowSumSquare[mod(this.$outputRead + j, this.fftBufferSize)];
-                    output[i][j] /= div < Number.EPSILON ? 1 : div;
+                    output[i][j] /= div < 1e-8 ? 1 : div;
                 }
             }
             // Advance pointers
             this.$outputRead += bufferSize;
             this.$outputRead %= this.fftBufferSize;
+
+            // plot
+            if (this.fPlotHandler) {
+                this.port.postMessage({ type: "plot", value: output, index: this.fBufferNum++, events: this.fCachedEvents });
+                this.fCachedEvents = [];
+            }
             return true;
         }
 
@@ -380,11 +389,13 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 // Plot handler set on demand
                 case "setPlotHandler": {
                     if (msg.data) {
-                        this.plotHandler = (output, index, events) => this.port.postMessage({ type: "plot", value: output, index: index, events: events });
+                        this.fPlotHandler = (output, index, events) => {
+                            if (events) this.fCachedEvents.push(...events);
+                        };
                     } else {
-                        this.plotHandler = null;
+                        this.fPlotHandler = null;
                     }
-                    this.fDSPCode?.setPlotHandler(this.plotHandler);
+                    this.fDSPCode?.setPlotHandler(this.fPlotHandler);
                     break;
                 }
                 case "start": {
@@ -502,7 +513,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
-            this.fDSPCode.setPlotHandler(this.plotHandler);
+            this.fDSPCode.setPlotHandler(this.fPlotHandler);
             const params = this.fDSPCode.getParams();
             this.fDSPCode.start();
             // Write the cached parameters

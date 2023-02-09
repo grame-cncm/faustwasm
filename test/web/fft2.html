@@ -10,10 +10,29 @@
     <script>
         code = `
 import("stdfaust.lib");
-process(r, i, b) = rr, ii, rr, ii with {
-    rr = r * 0.1;
-    ii = i * 0.1;
-};`;
+
+fftSize = hslider("fftSize", 1024, 2, 16384, 1); // global variable set by the processor itself
+fftHopSize = hslider("fftHopSize", 1024, 2, 16384, 1); // global variable set by the processor itself
+bufferSize = fftSize / 2 + 1; // Bins from 0Hz to Nyquist freq
+freqPerBin = ma.SR / fftSize;
+
+cartopol(x, y) = x * x + y * y : sqrt, atan2(y, x); // cartesian to polar
+poltocar(r, theta) = r * cos(theta), r * sin(theta); // polar to cartesian
+
+feedback = hslider("feedback", 0, 0, 1, 0.01);
+delay = hslider("Delay", 1, 0, 10, 0.01);
+delayFrames = int(ma.SR * delay / fftHopSize) : max(1);
+delaySmps = delayFrames * bufferSize : min(ma.SR * 10);
+
+delayLine = + ~ (@(delaySmps - 1) : *(feedback));
+
+fftproc(rIn, iIn, bin) = out with { // 3 inputs for each audio channel: real, imaginary, current bin
+    
+    out = (rIn : delayLine), (iIn : delayLine);
+};
+process = fftproc;
+
+`;
         let t0 = performance.now();
         const time = (str) => {
             const t = performance.now();
@@ -63,9 +82,12 @@ process(r, i, b) = rr, ii, rr, ii with {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             await audioCtx.audioWorklet.addModule("./kissfft.js");
             await audioCtx.resume();
-            const osc = audioCtx.createOscillator();
+            osc = audioCtx.createOscillator();
             osc.frequency.value = 440;
             osc.start();
+            gain = audioCtx.createGain();
+            gain.gain.value = 1;
+            osc.connect(gain);
             time();
             faustModule = await instantiateFaustModule();
             time("Faust WASM Module ready");
@@ -77,9 +99,15 @@ process(r, i, b) = rr, ii, rr, ii with {
             time("Faust DSP compiled");
             node = await generator.createFFTNode(audioCtx, FFTUtils);
             time("Faust FFT AW Node generated");
-            osc.connect(node);
+            gain.connect(node);
+            setTimeout(() => gain.gain.value = 0, 300);
+            setInterval(() => {
+                gain.gain.value = 1;
+                setTimeout(() => gain.gain.value = 0, 300);
+            }, 2500);
             node.parameters.get("windowFunction").value = 1;
             node.parameters.get("fftOverlap").value = 2;
+            node.parameters.get("/dsp/feedback").value = 0.8;
             node.connect(audioCtx.destination);
         };
     </script>

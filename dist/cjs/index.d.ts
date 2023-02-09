@@ -1037,7 +1037,7 @@ export declare class FaustAudioWorkletNode<Poly extends boolean = false> extends
 	protected fPlotHandler: PlotHandler | null;
 	protected fUICallback: UIHandler;
 	protected fDescriptor: FaustUIInputItem[];
-	constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"]);
+	constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"], nodeOptions?: Partial<FaustAudioWorkletNodeOptions>);
 	setOutputParamHandler(handler: OutputParamHandler | null): void;
 	getOutputParamHandler(): OutputParamHandler | null;
 	setComputeHandler(handler: ComputeHandler | null): void;
@@ -1067,7 +1067,7 @@ export declare class FaustAudioWorkletNode<Poly extends boolean = false> extends
  */
 export declare class FaustMonoAudioWorkletNode extends FaustAudioWorkletNode<false> implements IFaustMonoWebAudioDsp {
 	onprocessorerror: (e: Event) => never;
-	constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, sampleSize: number);
+	constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, sampleSize: number, nodeOptions?: Partial<FaustAudioWorkletNodeOptions>);
 }
 /**
  * Polyphonic AudioWorkletNode
@@ -1075,7 +1075,7 @@ export declare class FaustMonoAudioWorkletNode extends FaustAudioWorkletNode<fal
 export declare class FaustPolyAudioWorkletNode extends FaustAudioWorkletNode<true> implements IFaustPolyWebAudioDsp {
 	private fJSONEffect;
 	onprocessorerror: (e: Event) => never;
-	constructor(context: BaseAudioContext, name: string, voiceFactory: LooseFaustDspFactory, mixerModule: WebAssembly.Module, voices: number, sampleSize: number, effectFactory?: LooseFaustDspFactory);
+	constructor(context: BaseAudioContext, name: string, voiceFactory: LooseFaustDspFactory, mixerModule: WebAssembly.Module, voices: number, sampleSize: number, effectFactory?: LooseFaustDspFactory, nodeOptions?: Partial<FaustAudioWorkletNodeOptions>);
 	keyOn(channel: number, pitch: number, velocity: number): void;
 	keyOff(channel: number, pitch: number, velocity: number): void;
 	allNotesOff(hard: boolean): void;

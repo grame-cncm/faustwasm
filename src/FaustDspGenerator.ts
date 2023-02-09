@@ -223,7 +223,7 @@ const dependencies = {
     ): Promise<FaustMonoAudioWorkletNode | null> {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
-        const meta = JSON.parse(factory.json);
+        const meta: FaustDspMeta = JSON.parse(factory.json);
         const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
         // Dynamically create AudioWorkletProcessor if code not yet created
         if (!FaustMonoDspGenerator.gWorkletProcessors.has(context)) FaustMonoDspGenerator.gWorkletProcessors.set(context, new Set());
@@ -264,7 +264,7 @@ const dependencies = {
             }
         }
         // Create the AWN
-        const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
+        const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize, { channelCount: Math.ceil(meta.inputs / 3), outputChannelCount: [Math.ceil(meta.outputs / 2)] });
         if (fftOptions.fftSize) {
             const param = node.parameters.get("fftSize");
             if (param) param.value = fftOptions.fftSize;

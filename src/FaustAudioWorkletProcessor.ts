@@ -136,7 +136,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
                 // Plot handler set on demand
                 case "setPlotHandler": {
                     if (msg.data) {
-                        this.fDSPCode.setPlotHandler((output, index, events) => this.port.postMessage({ type: "plot", value: output, index: index, events: events }));
+                        this.fDSPCode.setPlotHandler((output, index, events) => this.port.postMessage({ type: "plot", value: output, index, events }));
                     } else {
                         this.fDSPCode.setPlotHandler(null);
                     }

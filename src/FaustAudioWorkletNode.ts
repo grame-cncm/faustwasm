@@ -16,7 +16,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     protected fUICallback: UIHandler;
     protected fDescriptor: FaustUIInputItem[];
 
-    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"]) {
+    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"], nodeOptions: Partial<FaustAudioWorkletNodeOptions> = {}) {
 
         // Create JSON object
         const JSONObj: FaustDspMeta = JSON.parse(factory.json);
@@ -169,8 +169,8 @@ export class FaustMonoAudioWorkletNode extends FaustAudioWorkletNode<false> impl
         throw e;
     }
 
-    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, sampleSize: number) {
-        super(context, name, factory, { name, factory, sampleSize });
+    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, sampleSize: number, nodeOptions: Partial<FaustAudioWorkletNodeOptions> = {}) {
+        super(context, name, factory, { name, factory, sampleSize }, nodeOptions);
     }
 }
 
@@ -192,9 +192,12 @@ export class FaustPolyAudioWorkletNode extends FaustAudioWorkletNode<true> imple
         mixerModule: WebAssembly.Module,
         voices: number,
         sampleSize: number,
-        effectFactory?: LooseFaustDspFactory) {
+        effectFactory?: LooseFaustDspFactory, nodeOptions: Partial<FaustAudioWorkletNodeOptions> = {}) {
 
-        super(context, name, voiceFactory,
+        super(
+            context,
+            name,
+            voiceFactory,
             {
                 name,
                 voiceFactory,
@@ -202,7 +205,9 @@ export class FaustPolyAudioWorkletNode extends FaustAudioWorkletNode<true> imple
                 voices,
                 sampleSize,
                 effectFactory
-            });
+            },
+            nodeOptions
+        );
 
         this.fJSONEffect = effectFactory ? JSON.parse(effectFactory.json) : null;
 

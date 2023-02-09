@@ -1205,6 +1205,9 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
         this.fftHopSize = 0;
         this.fftSize = 0;
         this.fftBufferSize = 0;
+        this.fPlotHandler = null;
+        this.fCachedEvents = [];
+        this.fBufferNum = 0;
         this.windowFunction = null;
         this.port.onmessage = (e) => this.handleMessageAux(e);
         const { parameterDescriptors } = this.constructor;
@@ -1358,11 +1361,15 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
           let div = 0;
           for (let j = 0; j < bufferSize; j++) {
             div = this.windowSumSquare[mod(this.$outputRead + j, this.fftBufferSize)];
-            output[i][j] /= div < Number.EPSILON ? 1 : div;
+            output[i][j] /= div < 1e-8 ? 1 : div;
           }
         }
         this.$outputRead += bufferSize;
         this.$outputRead %= this.fftBufferSize;
+        if (this.fPlotHandler) {
+          this.port.postMessage({ type: "plot", value: output, index: this.fBufferNum++, events: this.fCachedEvents });
+          this.fCachedEvents = [];
+        }
         return true;
       }
       handleMessageAux(e) {
@@ -1383,11 +1390,14 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
             break;
           case "setPlotHandler": {
             if (msg.data) {
-              this.plotHandler = (output, index, events) => this.port.postMessage({ type: "plot", value: output, index, events });
+              this.fPlotHandler = (output, index, events) => {
+                if (events)
+                  this.fCachedEvents.push(...events);
+              };
             } else {
-              this.plotHandler = null;
+              this.fPlotHandler = null;
             }
-            (_a = this.fDSPCode) == null ? void 0 : _a.setPlotHandler(this.plotHandler);
+            (_a = this.fDSPCode) == null ? void 0 : _a.setPlotHandler(this.fPlotHandler);
             break;
           }
           case "start": {
@@ -1494,7 +1504,7 @@ export default ${(_b = jsCode.match(jsCodeHead)) == null ? void 0 : _b[1]};
         (_b = this.fDSPCode) == null ? void 0 : _b.destroy();
         this.fDSPCode = new FaustMonoWebAudioDsp2(this.dspInstance, sampleRate, this.sampleSize, this.fftProcessorBufferSize);
         this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
-        this.fDSPCode.setPlotHandler(this.plotHandler);
+        this.fDSPCode.setPlotHandler(this.fPlotHandler);
         const params = this.fDSPCode.getParams();
         this.fDSPCode.start();
         for (const path in this.paramValuesCache) {
@@ -3143,7 +3153,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
 
   // src/FaustAudioWorkletNode.ts
   var FaustAudioWorkletNode = class extends (globalThis.AudioWorkletNode || null) {
-    constructor(context, name, factory, options) {
+    constructor(context, name, factory, options, nodeOptions = {}) {
       const JSONObj = JSON.parse(factory.json);
       super(context, name, {
         numberOfInputs: JSONObj.inputs > 0 ? 1 : 0,
@@ -3271,15 +3281,15 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
     }
   };
   var FaustMonoAudioWorkletNode = class extends FaustAudioWorkletNode {
-    constructor(context, name, factory, sampleSize) {
-      super(context, name, factory, { name, factory, sampleSize });
+    constructor(context, name, factory, sampleSize, nodeOptions = {}) {
+      super(context, name, factory, { name, factory, sampleSize }, nodeOptions);
       this.onprocessorerror = (e) => {
         throw e;
       };
     }
   };
   var FaustPolyAudioWorkletNode = class extends FaustAudioWorkletNode {
-    constructor(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory) {
+    constructor(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory, nodeOptions = {}) {
       super(context, name, voiceFactory, {
         name,
         voiceFactory,
@@ -3287,7 +3297,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
         voices,
         sampleSize,
         effectFactory
-      });
+      }, nodeOptions);
       this.onprocessorerror = (e) => {
         throw e;
       };
@@ -3544,7 +3554,7 @@ const dependencies = {
           throw e;
         }
       }
-      const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
+      const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize, { channelCount: Math.ceil(meta.inputs / 3), outputChannelCount: [Math.ceil(meta.outputs / 2)] });
       if (fftOptions.fftSize) {
         const param = node.parameters.get("fftSize");
         if (param)
