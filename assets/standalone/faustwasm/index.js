@@ -1319,9 +1319,9 @@ var getFaustFFTAudioWorkletProcessor = (dependencies, faustData, register = true
         return true;
       const input = inputs[0];
       const output = outputs[0];
-      const inputChannels = input.length;
-      const outputChannels = output.length;
-      const bufferSize = input.length ? Math.max(...input.map((c) => c.length)) || 128 : 128;
+      const inputChannels = (input == null ? void 0 : input.length) || 0;
+      const outputChannels = (output == null ? void 0 : output.length) || 0;
+      const bufferSize = (input == null ? void 0 : input.length) ? Math.max(...input.map((c) => c.length)) || 128 : 128;
       this.noIFFT = !!parameters.noIFFT[0];
       this.resetFFT(~~parameters.fftSize[0], ~~parameters.fftOverlap[0], ~~parameters.windowFunction[0], inputChannels, outputChannels, bufferSize);
       if (!this.fDSPCode)
@@ -1335,7 +1335,7 @@ var getFaustFFTAudioWorkletProcessor = (dependencies, faustData, register = true
           this.paramValuesCache[path] = paramValue;
         }
       }
-      if (input.length) {
+      if (input == null ? void 0 : input.length) {
         let $inputWrite = 0;
         for (let i = 0; i < input.length; i++) {
           const inputWindow = this.fftInput[i];

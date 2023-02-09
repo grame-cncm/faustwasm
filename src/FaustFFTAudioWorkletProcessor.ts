@@ -315,11 +315,11 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             if (!this.FFT) return true;
             const input = inputs[0];
             const output = outputs[0];
-            const inputChannels = input.length;
-            const outputChannels = output.length;
+            const inputChannels = input?.length || 0;
+            const outputChannels = output?.length || 0;
             // if (input.length === 0) return true;
     
-            const bufferSize = input.length ? Math.max(...input.map(c => c.length)) || 128 : 128;
+            const bufferSize = input?.length ? Math.max(...input.map(c => c.length)) || 128 : 128;
     
             // Reset FFT and related buffers if necessary (checks in the resetFFT method)
             this.noIFFT = !!parameters.noIFFT[0];
@@ -337,7 +337,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             }
 
             // Write audio input into fftInput buffer, advance pointers
-            if (input.length) {
+            if (input?.length) {
                 let $inputWrite = 0;
                 for (let i = 0; i < input.length; i++) {
                     const inputWindow = this.fftInput[i];
