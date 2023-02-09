@@ -264,7 +264,7 @@ const dependencies = {
             }
         }
         // Create the AWN
-        const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize, { channelCount: Math.ceil(meta.inputs / 3), outputChannelCount: [Math.ceil(meta.outputs / 2)] });
+        const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize, { channelCount: Math.max(1, Math.ceil(meta.inputs / 3)), outputChannelCount: [Math.ceil(meta.outputs / 2)] });
         if (fftOptions.fftSize) {
             const param = node.parameters.get("fftSize");
             if (param) param.value = fftOptions.fftSize;

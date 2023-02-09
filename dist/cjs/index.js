@@ -3162,7 +3162,8 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
         outputChannelCount: [JSONObj.outputs],
         channelCountMode: "explicit",
         channelInterpretation: "speakers",
-        processorOptions: options
+        processorOptions: options,
+        ...nodeOptions
       });
       this.fJSONDsp = JSONObj;
       this.fJSON = factory.json;
@@ -3554,7 +3555,7 @@ const dependencies = {
           throw e;
         }
       }
-      const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize, { channelCount: Math.ceil(meta.inputs / 3), outputChannelCount: [Math.ceil(meta.outputs / 2)] });
+      const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize, { channelCount: Math.max(1, Math.ceil(meta.inputs / 3)), outputChannelCount: [Math.ceil(meta.outputs / 2)] });
       if (fftOptions.fftSize) {
         const param = node.parameters.get("fftSize");
         if (param)

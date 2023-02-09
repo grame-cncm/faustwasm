@@ -29,7 +29,8 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
             outputChannelCount: [JSONObj.outputs],
             channelCountMode: "explicit",
             channelInterpretation: "speakers",
-            processorOptions: options
+            processorOptions: options,
+            ...nodeOptions
         });
 
         this.fJSONDsp = JSONObj;
