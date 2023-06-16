@@ -13,6 +13,11 @@ git clone https://github.com/fr0stbyter/faustwasm
 cd faustwasm
 ```
 
+Build the files:
+```bash
+npm run build
+```
+
 #### Generate WebAssembly version of a Faust DSP
 For example:
 ```bash
@@ -172,9 +177,3 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 })();
 ```
 
-
-## Build
-
-```bash
-npm run build
-```
