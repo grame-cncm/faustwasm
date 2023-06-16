@@ -91,3 +91,4 @@ local/
 
 *.wav
 test/out/
+dist/
