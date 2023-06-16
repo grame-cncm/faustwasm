@@ -10,8 +10,8 @@ const instantiateFaustModuleFromFile = async (jsFile: string, dataFile = jsFile.
     let FaustModule: FaustModuleFactory;
     let dataBinary: ArrayBuffer;
     let wasmBinary: Uint8Array | ArrayBuffer;
-    const jsCodeHead = /var (.+) = \(\(\) => \{/;
-    if (typeof globalThis.fetch === "function") {
+    const jsCodeHead = /var (.+) = \(/;
+    if (typeof window === "object") {
         let jsCode = await (await fetch(jsFile)).text();
         jsCode = `${jsCode}
 export default ${jsCode.match(jsCodeHead)?.[1]};

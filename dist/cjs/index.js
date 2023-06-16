@@ -893,8 +893,8 @@
     let FaustModule;
     let dataBinary;
     let wasmBinary;
-    const jsCodeHead = /var (.+) = \(\(\) => \{/;
-    if (typeof globalThis.fetch === "function") {
+    const jsCodeHead = /var (.+) = \(/;
+    if (typeof window === "object") {
       let jsCode = await (await fetch(jsFile)).text();
       jsCode = `${jsCode}
 export default ${(_a = jsCode.match(jsCodeHead)) == null ? void 0 : _a[1]};
