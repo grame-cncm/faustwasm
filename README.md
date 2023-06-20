@@ -1,5 +1,6 @@
 # FaustWasm
-WebAssembly version of [Faust Compiler](https://github.com/grame-cncm/faust) for [Node.js](https://nodejs.org) and web browsers, built with [Emscripten](https://emscripten.org/) 2.0.25
+
+WebAssembly version of [Faust Compiler](https://github.com/grame-cncm/faust) for [Node.js](https://nodejs.org) and web browsers, built with [Emscripten](https://emscripten.org/) 3.1.31
 
 ## Usage
 
@@ -9,7 +10,7 @@ Please use a stable version of [Node.js](https://nodejs.org) 16+ to work with th
 
 Clone and get into this project:
 ```bash
-git clone https://github.com/fr0stbyter/faustwasm
+git clone https://github.com/grame-cncm/faustwasm.git
 cd faustwasm
 ```
 
