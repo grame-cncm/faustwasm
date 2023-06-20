@@ -22,7 +22,7 @@ The Faust Web Audio library provides a high level Javascript API over the [Faust
 
 The API is organised from low to high level as illustrated by the figure below.
 
-![Overview](rsrc/overview.png)
+<img src="rsrc/overview.png" class="mx-auto d-block" width="60%">
 
 ### Faust Compiler WebAssembly module <a name="module"></a>
 
@@ -58,10 +58,7 @@ An offline processor to render a DSP in a non real-time context and get the comp
 
 ### High-level API <a name="high"></a>
 
-*
-To rework ?
-A high-level API is available to compile a DSP program and create the audio node, either monophonic or polyphonic. It is described in `index.d.ts`. More generally, the `Faustxxx.d.ts`files describe interfaces and `index.d.ts` describes functions and includes the interface files.
-*
+*TO REWORK ? A high-level API is available to compile a DSP program and create the audio node, either monophonic or polyphonic. It is described in `index.d.ts`. More generally, the `Faustxxx.d.ts`files describe interfaces and `index.d.ts` describes functions and includes the interface files.*
 
 ### How to use with typescript <a name="tsuse"></a>
 
@@ -75,11 +72,6 @@ Simply include the following to get access to types and functions:
 The Faust Wasm and Audio Node levels make it possible to generate instances from Faust dsp code as well as from pre-compiled WebAssembly modules.
 In the latter case, it is not necessary to include the `libfaust-wasm.js` library, `index.js` is sufficient to provide the required services.
 This allows to generate lighter and faster-loading HTML pages.
-
-*
-Still necessary ?
-**Note**: to create a polyphonic instance from a pre-compiled WebAssembly module, an additional `mixer32.wasm` file (or `mixer64.wasm` when compiled in `-double`) is required and must be present at the same level as the referring HTML page. This module is part of the `dist` folder.
-*
 
 ## Misc. services <a name="misc"></a>
 
