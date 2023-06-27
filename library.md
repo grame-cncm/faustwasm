@@ -58,7 +58,7 @@ An offline processor to render a DSP in a non real-time context and get the comp
 
 ### High-level API <a name="high"></a>
 
-*TO REWORK ? A high-level API is available to compile a DSP program and create the audio node, either monophonic or polyphonic. It is described in `index.d.ts`. More generally, the `Faustxxx.d.ts`files describe interfaces and `index.d.ts` describes functions and includes the interface files.*
+A high-level API is available to compile a DSP program and create the audio node, either monophonic or polyphonic using `createNode`. Offline processing monophonic or polyphonic nodes can be created using `createOfflineProcessor`. FFT processing nodes can be created using `createFFTNode`. It is described in `FaustDspGenerator.ts`. 
 
 ### How to use with typescript <a name="tsuse"></a>
 
@@ -76,7 +76,7 @@ This allows to generate lighter and faster-loading HTML pages.
 ## Misc. services <a name="misc"></a>
 
 - `FaustSvgDiagrams.ts`: provides facilities to browse Faust generated SVG diagrams
-- `FaustFFTAudioWorkletProcessor`: provides FFT processing (*to complete*)
+- `FaustFFTAudioWorkletProcessor`: provides FFT processing
 
 ## Important note <a name="note"></a>
 
