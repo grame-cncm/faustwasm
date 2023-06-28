@@ -22,8 +22,8 @@
   },
   "keywords": [
     "faust",
-    "webassembly"
-    "audio"
+    "webassembly",
+    "audio",
     "signal processing"
   ],
   "author": "Grame-CNCM",
