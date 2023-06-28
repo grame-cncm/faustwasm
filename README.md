@@ -239,7 +239,7 @@ A high-level API is available to compile a DSP program and create the audio node
 
 Simply include the following to get access to types and functions:
 ~~~~~~~~~~~~~~~
-///<reference types="@grame/libfaust"/>
+///<reference types="@grame/faustwasm"/>
 ~~~~~~~~~~~~~~~
 
 ## Dynamic and Static Instances <a name="ds"></a>
