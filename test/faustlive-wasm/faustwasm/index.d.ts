@@ -3,7 +3,7 @@
 /// <reference types="emscripten" />
 /// <reference types="node" />
 
-export declare type FaustModuleFactory = EmscriptenModuleFactory<FaustModule>;
+export type FaustModuleFactory = EmscriptenModuleFactory<FaustModule>;
 export interface FaustModule extends EmscriptenModule {
 	ccall: typeof ccall;
 	cwrap: typeof cwrap;
@@ -22,7 +22,7 @@ export interface FaustModule extends EmscriptenModule {
 	FS: typeof FS;
 	libFaustWasm: new () => LibFaustWasm;
 }
-export declare type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
+export type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
 export interface IntVector {
 	size(): number;
 	get(i: number): number;
@@ -125,8 +125,8 @@ export interface FaustDspMeta {
 	}[];
 	ui: FaustUIDescriptor;
 }
-export declare type FaustUIDescriptor = FaustUIGroup[];
-export declare type FaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
+export type FaustUIDescriptor = FaustUIGroup[];
+export type FaustUIItem = FaustUIInputItem | FaustUIOutputItem | FaustUIGroup;
 export interface FaustUIInputItem {
 	type: FaustUIInputType;
 	label: string;
@@ -156,15 +156,15 @@ export interface FaustUIMeta {
 	hidden?: string;
 	[key: string]: string | undefined;
 }
-export declare type FaustUIGroupType = "vgroup" | "hgroup" | "tgroup";
-export declare type FaustUIOutputType = "hbargraph" | "vbargraph";
-export declare type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry";
+export type FaustUIGroupType = "vgroup" | "hgroup" | "tgroup";
+export type FaustUIOutputType = "hbargraph" | "vbargraph";
+export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry";
 export interface FaustUIGroup {
 	type: FaustUIGroupType;
 	label: string;
 	items: FaustUIItem[];
 }
-export declare type FaustUIType = FaustUIGroupType | FaustUIOutputType | FaustUIInputType;
+export type FaustUIType = FaustUIGroupType | FaustUIOutputType | FaustUIInputType;
 export interface AudioParamDescriptor {
 	automationRate?: AutomationRate;
 	defaultValue?: number;
@@ -198,12 +198,12 @@ export interface InterfaceFFT {
 export declare const InterfaceFFT: {
 	new (size: number): InterfaceFFT;
 };
-export declare type TWindowFunction = (index: number, length: number, ...args: any[]) => number;
-export declare type Writeable<T> = {
+export type TWindowFunction = (index: number, length: number, ...args: any[]) => number;
+export type Writeable<T> = {
 	-readonly [P in keyof T]: T[P];
 };
-export declare type TypedArray = Int8Array | Uint8Array | Int16Array | Uint16Array | Int32Array | Uint32Array | Uint8ClampedArray | Float32Array | Float64Array;
-export declare type TypedArrayConstructor = typeof Int8Array | typeof Uint8Array | typeof Int16Array | typeof Uint16Array | typeof Int32Array | typeof Uint32Array | typeof Uint8ClampedArray | typeof Float32Array | typeof Float64Array;
+export type TypedArray = Int8Array | Uint8Array | Int16Array | Uint16Array | Int32Array | Uint32Array | Uint8ClampedArray | Float32Array | Float64Array;
+export type TypedArrayConstructor = typeof Int8Array | typeof Uint8Array | typeof Int16Array | typeof Uint16Array | typeof Int32Array | typeof Uint32Array | typeof Uint8ClampedArray | typeof Float32Array | typeof Float64Array;
 export declare const FFTUtils: {
 	/** Inject window functions as array, no need to add rectangular (no windowing) */
 	windowFunctions?: TWindowFunction[];
@@ -359,14 +359,14 @@ export declare class FaustWasmInstantiator {
 	static createAsyncPolyDSPInstance(voiceFactory: LooseFaustDspFactory, mixerModule: WebAssembly.Module, voices: number, effectFactory?: LooseFaustDspFactory): Promise<FaustPolyDspInstance>;
 	static createSyncPolyDSPInstance(voiceFactory: LooseFaustDspFactory, mixerModule: WebAssembly.Module, voices: number, effectFactory?: LooseFaustDspFactory): FaustPolyDspInstance;
 }
-export declare type OutputParamHandler = (path: string, value: number) => void;
-export declare type ComputeHandler = (buffer_size: number) => void;
-export declare type PlotHandler = (plotted: Float32Array[] | Float64Array[], index: number, events?: {
+export type OutputParamHandler = (path: string, value: number) => void;
+export type ComputeHandler = (buffer_size: number) => void;
+export type PlotHandler = (plotted: Float32Array[] | Float64Array[], index: number, events?: {
 	type: string;
 	data: any;
 }[]) => void;
-export declare type MetadataHandler = (key: string, value: string) => void;
-export declare type UIHandler = (item: FaustUIItem) => void;
+export type MetadataHandler = (key: string, value: string) => void;
+export type UIHandler = (item: FaustUIItem) => void;
 /**
  * DSP implementation: mimic the C++ 'dsp' class:
  * - adding MIDI control: metadata are decoded and incoming MIDI messages will control the associated controllers

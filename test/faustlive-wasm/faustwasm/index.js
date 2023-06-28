@@ -15,7 +15,10 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target, mod));
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 
 // node_modules/tslib/tslib.js
 var require_tslib = __commonJS({
@@ -846,8 +849,8 @@ var require_jsSha256 = __commonJS({
         return this.hash.digest();
       };
       Sha2563.prototype.digest = function() {
-        return (0, tslib_1.__awaiter)(this, void 0, void 0, function() {
-          return (0, tslib_1.__generator)(this, function(_a) {
+        return tslib_1.__awaiter(this, void 0, void 0, function() {
+          return tslib_1.__generator(this, function(_a) {
             return [2, this.digestSync()];
           });
         });
@@ -875,7 +878,7 @@ var require_build2 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var tslib_1 = require_tslib();
-    (0, tslib_1.__exportStar)(require_jsSha256(), exports);
+    tslib_1.__exportStar(require_jsSha256(), exports);
   }
 });
 
@@ -1802,7 +1805,9 @@ var FaustWasmInstantiator = class {
       return n;
     };
     const effectSize = effectMeta ? effectMeta.size : 0;
-    let memorySize = pow2limit(effectSize + dspMeta.size * voices + (dspMeta.inputs + dspMeta.outputs * 2) * (ptrSize + bufferSize * sampleSize)) / 65536;
+    let memorySize = pow2limit(
+      effectSize + dspMeta.size * voices + (dspMeta.inputs + dspMeta.outputs * 2) * (ptrSize + bufferSize * sampleSize)
+    ) / 65536;
     memorySize = Math.max(2, memorySize);
     return new WebAssembly.Memory({ initial: memorySize, maximum: memorySize });
   }
@@ -2316,7 +2321,13 @@ var FaustPolyWebAudioDsp = class extends FaustBaseWebAudioDsp {
     this.initMemory();
     this.fVoiceTable = [];
     for (let voice = 0; voice < this.fInstance.voices; voice++) {
-      this.fVoiceTable.push(new FaustWebAudioDspVoice(this.fJSONDsp.size * voice, this.fInstance.voiceAPI, this.fInputsItems, this.fPathTable, sampleRate));
+      this.fVoiceTable.push(new FaustWebAudioDspVoice(
+        this.fJSONDsp.size * voice,
+        this.fInstance.voiceAPI,
+        this.fInputsItems,
+        this.fPathTable,
+        sampleRate
+      ));
     }
     if (this.fInstance.effectAPI)
       this.fInstance.effectAPI.init(this.fEffect, sampleRate);
@@ -3283,14 +3294,20 @@ var FaustMonoAudioWorkletNode = class extends FaustAudioWorkletNode {
 };
 var FaustPolyAudioWorkletNode = class extends FaustAudioWorkletNode {
   constructor(context, name, voiceFactory, mixerModule, voices, sampleSize, effectFactory, nodeOptions = {}) {
-    super(context, name, voiceFactory, {
+    super(
+      context,
       name,
       voiceFactory,
-      mixerModule,
-      voices,
-      sampleSize,
-      effectFactory
-    }, nodeOptions);
+      {
+        name,
+        voiceFactory,
+        mixerModule,
+        voices,
+        sampleSize,
+        effectFactory
+      },
+      nodeOptions
+    );
     this.onprocessorerror = (e) => {
       throw e;
     };

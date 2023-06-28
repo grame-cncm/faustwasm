@@ -72,12 +72,12 @@ node scripts/faust2sndfile.js test/rev.dsp test/out/p-dj-rev.wav -c 192000 -sr 4
 ### Use the JavaScript Module
 
 ```bash
-npm i -D @shren/faustwasm
+npm i -D @grame/faustwasm
 ```
 
 In JavaScript:
 ```JavaScript
-const FaustWasm = require("@shren/faustwasm");
+const FaustWasm = require("@grame/faustwasm");
 const path = require("path");
 const fs = require("fs");
 
@@ -91,7 +91,7 @@ const {
 } = FaustWasm;
 
 (async () => {
-    const faustModulePath = path.join(__dirname, "../node_modules/@shren/faustwasm/ libfaust-wasm/libfaust-wasm.js");
+    const faustModulePath = path.join(__dirname, "../node_modules/@grame/faustwasm/libfaust-wasm/libfaust-wasm.js");
 
     // initialize the libfaust wasm
     const faustModule = await instantiateFaustModuleFromFile(faustModulePath);
@@ -136,10 +136,10 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
         FaustMonoDspGenerator,
         FaustCompiler,
         FaustSvgDiagrams
-    } = await import("../node_modules/@shren/faustwasm/dist/esm/index.js");
+    } = await import("../node_modules/@grame/faustwasm/dist/esm/index.js");
 
     // initialize the libfaust wasm
-    const faustModule = await instantiateFaustModuleFromFile("../node_modules/@shren/faustwasm/libfaust-wasm/libfaust-wasm.js");
+    const faustModule = await instantiateFaustModuleFromFile("../node_modules/@grame/faustwasm/libfaust-wasm/libfaust-wasm.js");
 
     // Get the Faust compiler
     const libFaust = new LibFaust(faustModule);
