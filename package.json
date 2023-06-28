@@ -1,5 +1,5 @@
 {
-  "name": "@shren/faustwasm",
+  "name": "@grame/faustwasm",
   "version": "0.0.25",
   "description": "WebAssembly version of Faust Compiler",
   "main": "dist/cjs/index.js",
@@ -18,7 +18,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Fr0stbyteR/faustwasm.git"
+    "url": "git+https://github.com/grame-cncm/faustwasm.git"
   },
   "keywords": [
     "faust",
@@ -27,9 +27,9 @@
   "author": "Grame-CNCM",
   "license": "LGPL-3.0",
   "bugs": {
-    "url": "https://github.com/Fr0stbyteR/faustwasm/issues"
+    "url": "https://github.com/grame-cncm/faustwasm/issues"
   },
-  "homepage": "https://github.com/Fr0stbyteR/faustwasm#readme",
+  "homepage": "https://github.com/grame-cncm/faustwasm#readme",
   "devDependencies": {
     "@aws-crypto/sha256-js": "^2.0.1",
     "@shren/faust-ui": "^1.1.2",
