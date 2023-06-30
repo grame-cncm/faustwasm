@@ -191,9 +191,9 @@ const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
 const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
 // Put them in dependencies
 const dependencies = {
-    ${FaustBaseWebAudioDsp.name},
-    ${FaustMonoWebAudioDsp.name},
-    ${FaustWasmInstantiator.name}
+    FaustBaseWebAudioDsp: ${FaustBaseWebAudioDsp.name},
+    FaustMonoWebAudioDsp: ${FaustMonoWebAudioDsp.name},
+    FaustWasmInstantiator: ${FaustWasmInstantiator.name}
 };
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
@@ -245,9 +245,9 @@ const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
 const FFTUtils = ${fftUtils.toString()}
 // Put them in dependencies
 const dependencies = {
-    ${FaustBaseWebAudioDsp.name},
-    ${FaustMonoWebAudioDsp.name},
-    ${FaustWasmInstantiator.name},
+    FaustBaseWebAudioDsp: ${FaustBaseWebAudioDsp.name},
+    FaustMonoWebAudioDsp: ${FaustMonoWebAudioDsp.name},
+    FaustWasmInstantiator: ${FaustWasmInstantiator.name},
     FFTUtils
 };
 // Generate the actual AudioWorkletProcessor code
@@ -419,9 +419,9 @@ const ${FaustWebAudioDspVoice.name} = ${FaustWebAudioDspVoice.toString()}
 const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
 // Put them in dependencies
 const dependencies = {
-    ${FaustBaseWebAudioDsp.name},
-    ${FaustPolyWebAudioDsp.name},
-    ${FaustWasmInstantiator.name}
+    FaustBaseWebAudioDsp: ${FaustBaseWebAudioDsp.name},
+    FaustPolyWebAudioDsp: ${FaustPolyWebAudioDsp.name},
+    FaustWasmInstantiator: ${FaustWasmInstantiator.name}
 };
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
