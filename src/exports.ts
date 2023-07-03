@@ -2,7 +2,7 @@ export { default as instantiateFaustModuleFromFile } from "./instantiateFaustMod
 export { default as getFaustAudioWorkletProcessor } from "./FaustAudioWorkletProcessor";
 export { default as getFaustFFTAudioWorkletProcessor } from "./FaustFFTAudioWorkletProcessor";
 export { default as FaustCompiler } from "./FaustCompiler";
-export { default as FaustDspInstance } from "./FaustDspInstance";
+export { FaustDspInstance } from "./FaustDspInstance";
 export { default as FaustWasmInstantiator } from "./FaustWasmInstantiator";
 export { default as FaustOfflineProcessor } from "./FaustOfflineProcessor";
 export { default as FaustSvgDiagrams } from "./FaustSvgDiagrams";

@@ -1,4 +1,4 @@
-import FaustDspInstance, { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance, IFaustMixerInstance } from "./FaustDspInstance";
+import { FaustDspInstance, FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance, IFaustMixerInstance } from "./FaustDspInstance";
 import type { FaustDspFactory, FaustDspMeta, LooseFaustDspFactory } from "./types";
 
 class FaustWasmInstantiator {

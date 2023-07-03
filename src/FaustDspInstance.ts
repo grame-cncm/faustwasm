@@ -120,7 +120,7 @@ export interface FaustPolyDspInstance {
     effectJSON?: string;
 }
 
-class FaustDspInstance implements IFaustDspInstance {
+export class FaustDspInstance implements IFaustDspInstance {
     private readonly fExports: IFaustDspInstance;
 
     constructor(exports: IFaustDspInstance) { this.fExports = exports; }
@@ -137,5 +137,3 @@ class FaustDspInstance implements IFaustDspInstance {
     instanceResetUserInterface($dsp: number) { this.fExports.instanceResetUserInterface($dsp); }
     setParamValue($dsp: number, index: number, value: number) { this.fExports.setParamValue($dsp, index, value); }
 }
-
-export default FaustDspInstance;

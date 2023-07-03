@@ -1,7 +1,7 @@
 import { FaustMonoAudioWorkletNode, FaustPolyAudioWorkletNode } from "./FaustAudioWorkletNode";
 import getFaustAudioWorkletProcessor, { FaustData } from "./FaustAudioWorkletProcessor";
 import getFaustFFTAudioWorkletProcessor, { FaustFFTData, FaustFFTOptionsData } from "./FaustFFTAudioWorkletProcessor";
-import FaustDspInstance from "./FaustDspInstance";
+import { FaustDspInstance } from "./FaustDspInstance";
 import FaustWasmInstantiator from "./FaustWasmInstantiator";
 import { FaustMonoOfflineProcessor, FaustPolyOfflineProcessor, IFaustMonoOfflineProcessor, IFaustPolyOfflineProcessor } from "./FaustOfflineProcessor";
 import { FaustMonoScriptProcessorNode, FaustPolyScriptProcessorNode } from "./FaustScriptProcessorNode";
@@ -185,7 +185,7 @@ const faustData = ${JSON.stringify({
     poly: false
 } as FaustData)};
 // Implementation needed classes of functions
-const ${FaustDspInstance.name}_default = ${FaustDspInstance.toString()}
+const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
 const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
 const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
@@ -238,7 +238,7 @@ const faustData = ${JSON.stringify({
     fftOptions
 } as FaustFFTData)};
 // Implementation needed classes of functions
-const ${FaustDspInstance.name}_default = ${FaustDspInstance.toString()}
+const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
 const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
 const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
@@ -412,7 +412,7 @@ const faustData = ${JSON.stringify({
     effectMeta
 } as FaustData)};
 // Implementation needed classes of functions
-const ${FaustDspInstance.name}_default = ${FaustDspInstance.toString()}
+const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
 const ${FaustPolyWebAudioDsp.name} = ${FaustPolyWebAudioDsp.toString()}
 const ${FaustWebAudioDspVoice.name} = ${FaustWebAudioDspVoice.toString()}
