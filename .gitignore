@@ -94,3 +94,5 @@ test/out/
 dist/
 assets/standalone/faust-ui
 assets/standalone/faustwasm
+test/faustlive-wasm/faust-ui
+test/faustlive-wasm/faustwasm
