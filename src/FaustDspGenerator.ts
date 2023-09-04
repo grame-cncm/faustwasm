@@ -375,7 +375,7 @@ const dependencies = {
 
     getMeta() { return JSON.parse(this.factory!.json); }
     getJSON() { return JSON.stringify(this.getMeta()); }
-    getUI() { return this.getMeta(); }
+    getUI() { return this.getMeta().ui; }
 }
 
 export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
