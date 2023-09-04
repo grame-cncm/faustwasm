@@ -7,7 +7,7 @@ import { FaustMonoOfflineProcessor, FaustPolyOfflineProcessor, IFaustMonoOffline
 import { FaustMonoScriptProcessorNode, FaustPolyScriptProcessorNode } from "./FaustScriptProcessorNode";
 import { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, FaustWebAudioDspVoice, IFaustMonoWebAudioNode, IFaustPolyWebAudioNode } from "./FaustWebAudioDsp";
 import type { IFaustCompiler } from "./FaustCompiler";
-import type { FaustDspFactory, FaustDspMeta, FFTUtils, LooseFaustDspFactory } from "./types";
+import type { FaustDspFactory, FaustUIDescriptor, FaustDspMeta, FFTUtils, LooseFaustDspFactory } from "./types";
 
 export interface IFaustMonoDspGenerator {
     /**
@@ -44,7 +44,7 @@ export interface IFaustMonoDspGenerator {
         bufferSize?: number,
         processorName?: string
     ): Promise<IFaustMonoWebAudioNode | null>;
-    
+
     /**
      * Create a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
      *
@@ -64,7 +64,7 @@ export interface IFaustMonoDspGenerator {
         fftOptions?: Partial<FaustFFTOptionsData>,
         processorName?: string
     ): Promise<FaustMonoAudioWorkletNode | null>;
-    
+
     /**
      * Create a monophonic Offline processor.
      *
@@ -74,6 +74,27 @@ export interface IFaustMonoDspGenerator {
      * @returns the compiled processor or 'null' if failure
      */
     createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory, meta?: FaustDspMeta): Promise<IFaustMonoOfflineProcessor | null>;
+
+    /**
+     * Get DSP JSON description with its UI and metadata as object.
+     *
+     * @return the DSP JSON description as object
+     */
+    getMeta(): FaustDspMeta;
+
+    /**
+     * Get DSP JSON description with its UI and metadata.
+     *
+     * @return the DSP JSON description
+     */
+    getJSON(): string;
+
+    /**
+     * Get DSP UI description.
+     *
+     * @return the DSP UI description
+     */
+    getUI(): FaustUIDescriptor;
 }
 
 export interface IFaustPolyDspGenerator {
@@ -131,8 +152,29 @@ export interface IFaustPolyDspGenerator {
         voices: number,
         voiceFactory?: LooseFaustDspFactory,
         mixerModule?: WebAssembly.Module,
-        effectFactory?: LooseFaustDspFactory | null 
+        effectFactory?: LooseFaustDspFactory | null
     ): Promise<IFaustPolyOfflineProcessor | null>;
+
+    /**
+     * Get DSP JSON description with its UI and metadata as object.
+     *
+     * @return the DSP JSON description as object
+     */
+    getMeta(): FaustDspMeta;
+
+    /**
+     * Get DSP JSON description with its UI and metadata.
+     *
+     * @return the DSP JSON description
+     */
+    getJSON(): string;
+
+    /**
+     * Get DSP UI description.
+     *
+     * @return the DSP UI description
+     */
+    getUI(): FaustUIDescriptor;
 }
 
 export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
@@ -179,11 +221,11 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
                     const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
-    processorName,
-    dspName: name,
-    dspMeta: meta,
-    poly: false
-} as FaustData)};
+                        processorName,
+                        dspName: name,
+                        dspMeta: meta,
+                        poly: false
+                    } as FaustData)};
 // Implementation needed classes of functions
 const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
@@ -232,11 +274,11 @@ const dependencies = {
                 const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
-    processorName,
-    dspName: name,
-    dspMeta: meta,
-    fftOptions
-} as FaustFFTData)};
+                    processorName,
+                    dspName: name,
+                    dspMeta: meta,
+                    fftOptions
+                } as FaustFFTData)};
 // Implementation needed classes of functions
 const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
@@ -300,22 +342,22 @@ const dependencies = {
         }
         // const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
         // Dynamically create AudioWorkletProcessor if code not yet created
-            try {
-                // DSP name and JSON string for DSP are generated
-                const faustData = {
-                    processorName,
-                    dspName: name,
-                    dspMeta: meta,
-                    poly: false
-                } as FaustData;
-                // Generate the actual AudioWorkletProcessor code
-                const Processor = getFaustAudioWorkletProcessor(dependencies, faustData);
-                return Processor;
-            } catch (e) {
-                // console.error(`=> exception raised while running createMonoNode: ${e}`);
-                // console.error(`=> check that your page is served using https.${e}`);
-                throw e;
-            }
+        try {
+            // DSP name and JSON string for DSP are generated
+            const faustData = {
+                processorName,
+                dspName: name,
+                dspMeta: meta,
+                poly: false
+            } as FaustData;
+            // Generate the actual AudioWorkletProcessor code
+            const Processor = getFaustAudioWorkletProcessor(dependencies, faustData);
+            return Processor;
+        } catch (e) {
+            // console.error(`=> exception raised while running createMonoNode: ${e}`);
+            // console.error(`=> check that your page is served using https.${e}`);
+            throw e;
+        }
     }
     async createOfflineProcessor(
         sampleRate: number,
@@ -330,6 +372,10 @@ const dependencies = {
         const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
         return new FaustMonoOfflineProcessor(monoDsp, bufferSize);
     }
+
+    getMeta() { return JSON.parse(this.factory!.json); }
+    getJSON() { return JSON.stringify(this.getMeta()); }
+    getUI() { return this.getMeta(); }
 }
 
 export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
@@ -405,12 +451,12 @@ process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
                     const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
-    processorName,
-    dspName: name,
-    dspMeta: voiceMeta,
-    poly: true,
-    effectMeta
-} as FaustData)};
+                        processorName,
+                        dspName: name,
+                        dspMeta: voiceMeta,
+                        poly: true,
+                        effectMeta
+                    } as FaustData)};
 // Implementation needed classes of functions
 const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
@@ -494,5 +540,34 @@ const dependencies = {
         const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
         const polyDsp = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
         return new FaustPolyOfflineProcessor(polyDsp, bufferSize);
+    }
+
+    getMeta() {
+        const o = (this.voiceFactory) ? JSON.parse(this.voiceFactory.json) : null;
+        const e = (this.effectFactory) ? JSON.parse(this.effectFactory.json) : null;
+        const r = { ...o };
+        if (e) {
+            r.ui = [{
+                type: "tgroup", label: "Sequencer", items: [
+                    { type: "vgroup", label: "Instrument", items: o.ui },
+                    { type: "vgroup", label: "Effect", items: e.ui }
+                ]
+            }];
+        } else {
+            r.ui = [{
+                type: "tgroup", label: "Polyphonic", items: [
+                    { type: "vgroup", label: "Voices", items: o.ui }
+                ]
+            }];
+        }
+        return r as FaustDspMeta;
+    }
+
+    getJSON() {
+        return JSON.stringify(this.getMeta());
+    }
+
+    getUI() {
+        return this.getMeta().ui;
     }
 }
