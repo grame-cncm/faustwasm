@@ -200,6 +200,14 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 })();
 ```
 
+### Projects examples
+
+The package is used in the following projects:
+
+- [faust-web-component](https://github.com/grame-cncm/faust-web-component), a package providing two web components for embedding interactive Faust snippets in web pages.
+- [Faust Playground](https://github.com/grame-cncm/faustplayground), a Web platform designed to enable children to learn basic audio programming in a simple and graphic way. 
+- [Faust Editor](https://github.com/grame-cncm/fausteditor), an online editor used to edit, compile and run Faust code from any recent Web Browser with WebAssembly support. 
+
 ## Documentation
 
 -  [Organisation of the API](#org)
