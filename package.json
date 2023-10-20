@@ -1,6 +1,6 @@
 {
   "name": "@grame/faustwasm",
-  "version": "0.0.40",
+  "version": "0.0.41",
   "description": "WebAssembly version of Faust Compiler",
   "main": "dist/cjs/index.js",
   "types": "dist/esm/index.d.ts",
@@ -34,7 +34,7 @@
   "homepage": "https://github.com/grame-cncm/faustwasm#readme",
   "devDependencies": {
     "@aws-crypto/sha256-js": "^2.0.1",
-    "@shren/faust-ui": "^1.1.4",
+    "@shren/faust-ui": "^1.1.5",
     "@types/emscripten": "^1.39.5",
     "@types/node": "^16.11.7",
     "@types/webmidi": "^2.0.6",
