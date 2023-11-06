@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 //@ts-check
 import * as process from "process";
 import faust2wavFiles from "../src/faust2wavFiles.js";

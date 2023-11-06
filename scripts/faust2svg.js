@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 //@ts-check
 import * as process from "process";
 import faust2svgFiles from "../src/faust2svgFiles.js";
