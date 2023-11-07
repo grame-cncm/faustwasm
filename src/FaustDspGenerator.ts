@@ -103,7 +103,7 @@ export interface IFaustPolyDspGenerator {
      * 
      * @param compiler - the Faust compiler
      * @param name - the DSP name
-     * @param dspCode - the DSP code ('dsp_code' can possibly contain an integrated effect)
+     * @param dspCode - the DSP code ('dspCode' can possibly contain an integrated effect)
      * @param args - the compilation parameters
      * @param effectCode - optional effect DSP code
      * @returns the compiled factory or 'null' if failure
@@ -119,7 +119,7 @@ export interface IFaustPolyDspGenerator {
      * @param voices - the number of voices
      * @param name - AudioWorklet Processor name
      * @param voiceFactory - the Faust factory for voices, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
-     * @param mixerModule - the wasm Mixer module (loaded from 'mixer32.wasm' or 'mixer64.wasm' files)
+     * @param mixerModule - the wasm Mixer module (loaded from 'mixer32.wasm' or 'mixer64.wasm' files located in the 'faustwasm' package)
      * @param effectFactory - the Faust factory for the effect, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
      * @param sp - whether to compile a ScriptProcessorNode or an AudioWorkletNode
      * @param bufferSize - the buffer size in frames to be used in ScriptProcessorNode only, since AudioWorkletNode always uses 128 frames

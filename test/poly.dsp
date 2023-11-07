@@ -8,6 +8,6 @@ declare isInstrument "true";
 
 import("stdfaust.lib");
 
-process = pm.flute_ui_MIDI <: _,_;
+process = pm.clarinet_ui_MIDI <: _,_;
 
 effect = dm.freeverb_demo;

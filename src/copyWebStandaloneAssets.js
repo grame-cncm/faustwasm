@@ -17,4 +17,19 @@ const copyWebStandaloneAssets = (outputDir) => {
     cpSync(assetsPath, outputDir);
 };
 
-export default copyWebStandaloneAssets;
+/**
+ * @param {string} outputDir
+ */
+const copyTemplate = (outputDir, poly = false) => {
+    console.log(`Writing index file.`)
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    const templateJSPath = path.join(__dirname, "../assets/standalone/template.js");
+    const templateHTMLPath = (poly) ? path.join(__dirname, "../assets/standalone/template-poly.html") : path.join(__dirname, "../assets/standalone/template.html");
+    const faustwasmPath = path.join(__dirname, "../assets/standalone/faustwasm");
+    cpSync(templateJSPath, outputDir + "/template.js");
+    cpSync(templateHTMLPath, outputDir + "/template.html");
+    cpSync(faustwasmPath, outputDir + "/faustwasm");
+};
+
+export { copyWebStandaloneAssets, copyTemplate };
+

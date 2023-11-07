@@ -2,7 +2,7 @@
 //@ts-check
 import * as process from "process";
 import faust2wasmFiles from "../src/faust2wasmFiles.js";
-import copyWebStandaloneAssets from "../src/copyWebStandaloneAssets.js";
+import { copyWebStandaloneAssets, copyTemplate } from "../src/copyWebStandaloneAssets.js";
 
 const argv = process.argv.slice(2);
 
@@ -26,5 +26,9 @@ const [inputFile, outputDir, ...argvFaust] = argv;
 
 (async () => {
     await faust2wasmFiles(inputFile, outputDir, argvFaust, poly);
-    if (standalone) copyWebStandaloneAssets(outputDir);
+    if (standalone) {
+        copyWebStandaloneAssets(outputDir);
+    } else {
+        copyTemplate(outputDir, poly);
+    }
 })();

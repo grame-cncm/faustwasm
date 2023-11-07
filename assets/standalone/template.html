@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Faust DSP</title>
+</head>
+
+<body>
+    <main>
+        <span id="dsp-switch">
+            <center><button id="button-dsp">Activate DSP</button></center>
+        </span>
+    </main>
+    <script src="./template.js"></script>
+    <script>
+        (async () => {
+
+            // Create audio context
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            const audioContext = new AudioCtx();
+            audioContext.suspend();
+
+            // Create audio context activation button
+            const $buttonDsp = document.getElementById("button-dsp");
+
+            // Function to activate audio context
+            $buttonDsp.disabled = true;
+            $buttonDsp.onclick = () => {
+                if (audioContext.state === "running") {
+                    $buttonDsp.textContent = "Suspended";
+                    audioContext.suspend();
+                } else if (audioContext.state === "suspended") {
+                    $buttonDsp.textContent = "Running";
+                    audioContext.resume();
+                }
+            }
+
+            // Create Faust node
+            const { faustNode, voices, dspMeta: { name } } = await createFaustNode(audioContext);
+
+            // Connect Faust node to audio context
+            faustNode.connect(audioContext.destination);
+
+            // Create Faust node activation button
+            $buttonDsp.disabled = false;
+        })();
+    </script>
+</body>
+
+</html>
