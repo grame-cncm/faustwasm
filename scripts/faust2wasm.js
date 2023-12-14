@@ -2,7 +2,7 @@
 //@ts-check
 import * as process from "process";
 import faust2wasmFiles from "../src/faust2wasmFiles.js";
-import { copyWebStandaloneAssets, copyTemplate } from "../src/copyWebStandaloneAssets.js";
+import { copyWebStandaloneAssets, copyWebTemplateAssets } from "../src/copyWebStandaloneAssets.js";
 
 const argv = process.argv.slice(2);
 
@@ -23,12 +23,14 @@ const standalone = $standalone !== -1;
 if (standalone) argv.splice($standalone, 1);
 
 const [inputFile, outputDir, ...argvFaust] = argv;
+const fileName = inputFile.split('/').pop();
+const dspName = fileName.replace(/\.dsp$/, '');
 
 (async () => {
     await faust2wasmFiles(inputFile, outputDir, argvFaust, poly);
     if (standalone) {
-        copyWebStandaloneAssets(outputDir);
+        copyWebStandaloneAssets(outputDir, dspName, poly);
     } else {
-        copyTemplate(outputDir, poly);
+        copyWebTemplateAssets(outputDir, dspName, poly);
     }
 })();

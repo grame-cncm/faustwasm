@@ -11,7 +11,7 @@
             <center><button id="button-dsp">Activate DSP</button></center>
         </span>
     </main>
-    <script src="./template.js"></script>
+    <script src="./FAUST_DSP.js"></script>
     <script>
         (async () => {
 
@@ -36,7 +36,7 @@
             }
 
             // Create Faust node
-            const { faustNode, voices, dspMeta: { name } } = await createFaustNode(audioContext);
+            const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP");
 
             // Connect Faust node to audio context
             faustNode.connect(audioContext.destination);

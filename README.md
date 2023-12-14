@@ -40,20 +40,36 @@ You'll have to raise the package version number in `package.json` before `npm ru
 #### Generate WebAssembly version of a Faust DSP
 
 For example:
+
 ```bash
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/mono.dsp test/out
 ```
-or
+will create a set of files: `mono.js`, `mono.wasm`, `mono.json`, `mono.html` and the `faustwasm` folder.
+
+Polyphonic instrument with:
+
 ```bash
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/poly.dsp test/out -poly
 ```
-You can create standalone DSP on a web page using the same command line
+will create a set of files: `poly.js`, `poly.wasm`, `poly.json`, `poly.html` (and possibly `poly_effect.wasm`, `poly_effect.json`) and the `faustwasm` folder.
+
+You can create a standalone DSP on a web page using the same command line:
+
 ```bash
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/rev.dsp test/out -standalone
 ```
+will create a set of files: `rev.js`, `rev.wasm`, `rev.json`, `rev.html`, and the `faustwasm`, `faust-ui` folders.
+
+Or a standalone polyphonic DSP on a web page with:
+
+```bash
+rm -rf test/out # make sure you are under the faustwasm directory.
+node scripts/faust2wasm.js test/organ1.dsp test/out -standalone
+```
+will create a set of files: `organ1.js`, `organ1.wasm`, `organ1.json`, `organ1_effect.wasm`, `organ1_effect.json`, `organ1.html`, and the `faustwasm`, `faust-ui` folders.
 
 #### Generate SVG Diagrams of a Faust DSP
 
@@ -222,7 +238,6 @@ The package is used in the following projects:
 - [Dynamic and Static Instances](#ds)
 - [Misc. services](#misc)
 - [Important note](#note)
-
 
 ### Organisation of the API <a name="org"></a>
 

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -17,32 +18,40 @@
             margin: 0;
             position: absolute;
         }
+
         main {
             margin: 20px;
             display: flex;
             flex-direction: column;
             flex: 1 1 100%;
         }
+
         main span {
             position: relative;
             display: flex;
         }
+
         main span[hidden] {
             display: none;
         }
+
         main span span {
             margin: 0px 10px;
             flex: 1;
         }
+
         main span select {
             flex: 2;
         }
+
         #dsp-switch {
             margin: 20px auto;
         }
+
         #button-dsp {
             padding: 10px;
         }
+
         #div-faust-ui {
             flex: 1 1 auto;
             display: flex;
@@ -52,6 +61,7 @@
     </style>
     <link rel="stylesheet" href="./faust-ui/index.css">
 </head>
+
 <body>
     <main>
         <span id="audio-input">
@@ -68,6 +78,7 @@
         <div id="div-faust-ui">
         </div>
     </main>
-    <script src="./index.js"></script>
+    <script src="./FAUST_DSP.js"></script>
 </body>
+
 </html>

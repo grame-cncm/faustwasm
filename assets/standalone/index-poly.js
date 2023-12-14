@@ -202,7 +202,7 @@ const createFaustUI = async (faustNode) => {
 };
 
 (async () => {
-    const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP");
+    const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP", 16);
     await createFaustUI(faustNode);
     faustNode.connect(audioContext.destination);
     if (faustNode.numberOfInputs) await buildAudioDeviceMenu(faustNode);

@@ -1,41 +1,56 @@
 //@ts-check
 import * as fs from "fs";
 import * as path from "path";
-import { cpSync, rmSync } from "../fileutils.js";
+import { cpSync, cpSyncModify, rmSync } from "../fileutils.js";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const __filename = fileURLToPath(import.meta.url);
 
 /**
- * @param {string} outputDir
+ * @param {string} outputDir - The output directory.
+ * @param {string} dspName - The name of the DSP to be loaded.
+ * @param {boolean} [poly] - Whether the DSP is polyphonic.
  */
-const copyWebStandaloneAssets = (outputDir) => {
+const copyWebStandaloneAssets = (outputDir, dspName, poly = false) => {
     console.log(`Writing assets files.`)
     const assetsPath = path.join(__dirname, "../assets/standalone");
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-    // Copy all files
-    cpSync(assetsPath, outputDir);
-    // Then remove template files
-    rmSync(path.join(outputDir, "/template.js"));
-    rmSync(path.join(outputDir, "/template.html"));
-    rmSync(path.join(outputDir, "/template-poly.html"));
+
+    // Copy some files
+    const templateJSPath = (poly) ? path.join(__dirname, "../assets/standalone/index-poly.js") : path.join(__dirname, "../assets/standalone/index.js");
+    cpSyncModify(templateJSPath, outputDir + `/${dspName}.js`, "FAUST_DSP", dspName);
+
+    const templateHTMLPath = path.join(__dirname, "../assets/standalone/index.html");
+    cpSyncModify(templateHTMLPath, outputDir + `/${dspName}.html`, "FAUST_DSP", dspName);
+
+    const faustwasmPath = path.join(__dirname, "../assets/standalone/faustwasm");
+    cpSync(faustwasmPath, outputDir + "/faustwasm");
+
+    const faustuiPath = path.join(__dirname, "../assets/standalone/faust-ui");
+    cpSync(faustuiPath, outputDir + "/faust-ui");
 };
 
 /**
- * @param {string} outputDir
+ * @param {string} outputDir - The output directory.
+ * @param {string} dspName - The name of the DSP to be loaded.
+ * @param {boolean} [poly] - Whether the DSP is polyphonic.
  */
-const copyTemplate = (outputDir, poly = false) => {
-    console.log(`Writing index file.`)
+const copyWebTemplateAssets = (outputDir, dspName, poly = false) => {
+
+    // Create output directory if it doesn't exist
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
     // Copy some files
     const templateJSPath = path.join(__dirname, "../assets/standalone/template.js");
+    cpSync(templateJSPath, outputDir + `/${dspName}.js`);
+
     const templateHTMLPath = (poly) ? path.join(__dirname, "../assets/standalone/template-poly.html") : path.join(__dirname, "../assets/standalone/template.html");
+    cpSyncModify(templateHTMLPath, outputDir + `/${dspName}.html`, "FAUST_DSP", dspName);
+
     const faustwasmPath = path.join(__dirname, "../assets/standalone/faustwasm");
-    cpSync(templateJSPath, outputDir + "/template.js");
-    cpSync(templateHTMLPath, outputDir + "/template.html");
     cpSync(faustwasmPath, outputDir + "/faustwasm");
 };
 
-export { copyWebStandaloneAssets, copyTemplate };
+export { copyWebStandaloneAssets, copyWebTemplateAssets };
 

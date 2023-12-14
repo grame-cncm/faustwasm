@@ -1,4 +1,4 @@
-declare const copyWebStandaloneAssets: (outputDir: string) => void;
-declare const copyTemplate: (outputDir: string, poly: boolean) => void;
+declare const copyWebStandaloneAssets: (outputDir: string, dspName: string, poly: boolean) => void;
+declare const copyWebTemplateAssets: (outputDir: string, dspName: string, poly: boolean) => void;
 
-export { copyWebStandaloneAssets, copyTemplate };
+export { copyWebStandaloneAssets, copyWebTemplateAssets };

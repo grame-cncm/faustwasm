@@ -11,7 +11,7 @@
             <center><button id="button-dsp">Activate DSP</button></center>
         </span>
     </main>
-    <script src="./template.js"></script>
+    <script src="./FAUST_DSP.js"></script>
     <script>
         (async () => {
 
@@ -23,7 +23,7 @@
             // Create audio context activation button
             const $buttonDsp = document.getElementById("button-dsp");
 
-			// Play some notes in loop
+            // Play some notes in loop
             function play(node) {
                 node.keyOn(0, 60, 100);
                 setTimeout(() => node.keyOn(0, 64, 100), 1000);
@@ -46,7 +46,7 @@
             }
 
             // Create Faust node
-            const { faustNode, voices, dspMeta: { name } } = await createFaustNode(audioContext);
+            const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP", 16);
 
             // Connect Faust node to audio context
             faustNode.connect(audioContext.destination);

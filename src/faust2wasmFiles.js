@@ -27,11 +27,14 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     console.log(`Reading file ${inputFile}`);
     const code = fs.readFileSync(inputFile, { encoding: "utf8" });
 
+    const fileName = inputFile.split('/').pop();
+    const dspName = fileName.replace(/\.dsp$/, '');
+
     if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
-    const dspModulePath = path.join(outputDir, "dspModule.wasm");
-    const dspMetaPath = path.join(outputDir, "dspMeta.json");
-    const effectModulePath = path.join(outputDir, "effectModule.wasm");
-    const effectMetaPath = path.join(outputDir, "effectMeta.json");
+    const dspModulePath = path.join(outputDir, `${dspName}.wasm`);
+    const dspMetaPath = path.join(outputDir, `${dspName}.json`);
+    const effectModulePath = path.join(outputDir, `${dspName}_effect.wasm`);
+    const effectMetaPath = path.join(outputDir, `${dspName}_effect.json`);
     const mixerModulePath = path.join(outputDir, "mixerModule.wasm");
     /** @type {Uint8Array} */
     let dspModule;

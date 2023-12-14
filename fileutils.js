@@ -11,8 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 */
 
 /**
- * @param {string} src
- * @param {string} dest
+ * @param {string} src - The source path.
+ * @param {string} dest - The destination path.
  */
 const cpSync = (src, dest) => {
     if (!fs.existsSync(src)) return;
@@ -25,7 +25,34 @@ const cpSync = (src, dest) => {
 };
 
 /**
- * @param {string} dir
+ * @param {string} src - The source path of the file to modify and copy.
+ * @param {string} dest - The destination path.
+ * @param {string} find - The string to find.
+ * @param {string} replace - The string to replace.
+ */
+const cpSyncModify = (src, dest, find, replace) => {
+    fs.readFile(src, 'utf8', function (err, data) {
+        if (err) {
+            console.error(err);
+            return;
+        }
+
+        // Create a regular expression from the 'find' string
+        const regex = new RegExp(find, 'g');
+
+        // Replace 'find' with 'replace'
+        let modifiedData = data.replace(regex, replace);
+
+        // Write the modified data to a new file
+        fs.writeFile(dest, modifiedData, 'utf8', function (err) {
+            if (err) {
+                console.error(err);
+            }
+        });
+    });
+}
+/**
+ * @param {string} dir - The directory to remove.
  */
 const rmSync = (dir) => {
     if (!fs.existsSync(dir)) return;
@@ -37,4 +64,4 @@ const rmSync = (dir) => {
     }
 };
 
-export { cpSync, rmSync };
+export { cpSync, cpSyncModify, rmSync };
