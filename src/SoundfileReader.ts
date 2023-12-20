@@ -3,7 +3,18 @@ import type { AudioData, FaustDspMeta, FaustUIItem, LooseFaustDspFactory } from 
 
 /** Read metadata and fetch soundfiles */
 class SoundfileReader {
-    static get fallbackPaths() { return [location.href, location.origin]; }
+
+    // Set the fallback paths
+    static get fallbackPaths() { return [location.href, this.getParentUrl(location.href), location.origin]; }
+
+    /**
+     * Extract the parent URL from an URL.
+     * @param url : the URL
+     * @returns : the parent URL
+     */
+    private static getParentUrl(url: string) {
+        return url.substring(0, url.lastIndexOf('/') + 1);
+    }
 
     /**
      * Convert an audio buffer to audio data.
@@ -46,7 +57,10 @@ class SoundfileReader {
     private static async checkFileExists(url: string): Promise<boolean> {
         try {
             console.log(`"checkFileExists" url: ${url}`);
-            const response = await fetch(url, { method: "HEAD" });
+            // Fetch in "HEAD" mode does not properly work with the service-worker.js cache, so use "GET" mode for now
+            //const response = await fetch(url, { method: "HEAD" });
+            const response = await fetch(url);
+            console.log(`"checkFileExists" response.ok: ${response.ok}`);
             return response.ok; // Will be true if the status code is 200-299
         } catch (error) {
             console.error('Fetch error:', error);

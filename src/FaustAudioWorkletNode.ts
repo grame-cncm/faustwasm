@@ -76,8 +76,6 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     async listenSensors() {
         if (this.hasAccInput) {
             const isAndroid: boolean = /Android/i.test(navigator.userAgent);
-            console.log(navigator.userAgent);
-            console.log(isAndroid);
             let handleDeviceMotion = null;
             if (isAndroid) {
                 handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
@@ -242,7 +240,6 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         this.port.postMessage({ type: "destroy" });
         this.port.close();
     }
-
 }
 
 /**

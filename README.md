@@ -4,6 +4,10 @@ The FaustWasm library presents a convenient, high-level API that wraps around [F
 
 The library offers functionality for compiling Faust DSP code into WebAssembly, enabling its utilization as WebAudio nodes within a standard WebAudio node graph. Moreover, it supports offline rendering scenarios. Furthermore, supplementary tools can be employed for generating SVGs from Faust DSP programs.
 
+Synthesizer and effect mono nodes, as well as [polyphonic](https://faustdoc.grame.fr/manual/midi/#midi-polyphony-support) poly nodes can be created. MIDI support is activated as soon as [MIDI metadata](https://faustdoc.grame.fr/manual/midi/#configuring-midi-in-faust) are used in the DSP code for mono nodes, and always in polyphonic mode. 
+  
+[Sensors](https://faustdoc.grame.fr/manual/syntax/#sensors-control-metadatas) (accelerometer and gyroscope) are supported, as well as the  [Progressive Web Application](https://en.wikipedia.org/wiki/Progressive_web_app) model.  
+
 ## Usage
 
 Please use a stable version of [Node.js](https://nodejs.org) 16+ to work with this project.
@@ -55,21 +59,23 @@ node scripts/faust2wasm.js test/poly.dsp test/out -poly
 ```
 will create a set of files: `poly.js`, `poly.wasm`, `poly.json`, `poly.html` (and possibly `poly_effect.wasm`, `poly_effect.json`) in the `out` folder.
 
-You can create a standalone DSP on a web page using the same command line:
+You can create a standalone Progressive Web Application using the same command line:
 
 ```bash
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/rev.dsp test/out -standalone
 ```
-will create a set of files: `rev.js`, `rev.wasm`, `rev.json`, `rev.html`, and the `faustwasm`, `faust-ui` folders in the `out` folder .
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `rev.js`, `rev.wasm`, `rev.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `out` folder.
 
-Or a standalone polyphonic DSP on a web page with:
+The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. 
+
+A standalone polyphonic and MIDI standalone Progressive Web Application can be created with:
 
 ```bash
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/organ1.dsp test/out -standalone
 ```
-will create a set of files: `organ1.js`, `organ1.wasm`, `organ1.json`, `organ1_effect.wasm`, `organ1_effect.json`, `organ1.html`, and the `faustwasm`, `faust-ui` folders in the `out` folder.
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `organ1.js`, `organ1.wasm`, `organ1.json`, `organ1_effect.wasm`, `organ1_effect.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `out` folder.
 
 #### Generate SVG Diagrams of a Faust DSP
 
