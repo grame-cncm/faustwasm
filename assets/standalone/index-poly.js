@@ -140,18 +140,19 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0) =
     /** @type {FaustDspDistribution} */
     const faustDsp = { dspMeta, dspModule };
 
-    // Try to load optional mixer and effect modules
-    try {
-        faustDsp.mixerModule = await WebAssembly.compileStreaming(await fetch("./mixerModule.wasm"));
-        faustDsp.effectMeta = await (await fetch(`./${dspName}_effect.json`)).json();
-        faustDsp.effectModule = await WebAssembly.compileStreaming(await fetch(`./${dspName}_effect.wasm`));
-    } catch (e) { }
-
     /** @type {FaustAudioWorkletNode} */
     let faustNode;
 
     // Create either a polyphonic or monophonic Faust audio node based on the number of voices
     if (voices > 0) {
+
+        // Try to load optional mixer and effect modules
+        try {
+            faustDsp.mixerModule = await WebAssembly.compileStreaming(await fetch("./mixerModule.wasm"));
+            faustDsp.effectMeta = await (await fetch(`./${dspName}_effect.json`)).json();
+            faustDsp.effectModule = await WebAssembly.compileStreaming(await fetch(`./${dspName}_effect.wasm`));
+        } catch (e) { }
+
         const generator = new FaustPolyDspGenerator();
         faustNode = await generator.createNode(
             audioContext,
