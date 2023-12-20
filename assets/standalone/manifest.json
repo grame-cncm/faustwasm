@@ -1,0 +1,15 @@
+{
+  "name": "Faust FAUST_DSP",
+  "short_name": "FAUST_DSP",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "390x390",
+      "type": "image/png"
+    }
+  ]
+}
