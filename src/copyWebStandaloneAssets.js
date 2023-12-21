@@ -29,7 +29,7 @@ const copyWebStandaloneAssets = (outputDir, dspName, poly = false) => {
     cpSyncModify(templateServerJSPath, outputDir + `/service-worker.js`, "FAUST_DSP", dspName);
 
     const templateIconPath = path.join(__dirname, "../assets/standalone/icon.png");
-    cpSync(templateServerJSPath, outputDir + `/icon.png`);
+    cpSync(templateIconPath, outputDir + `/icon.png`);
 
     const faustwasmPath = path.join(__dirname, "../assets/standalone/faustwasm");
     cpSync(faustwasmPath, outputDir + "/faustwasm");
