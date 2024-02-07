@@ -397,15 +397,21 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
         name: string,
         dspCode: string,
         args: string,
+        // The ${dspCode} has to be added with wrapping new lines to make is properly formatted and compile
         effectCode = `
-adapt(1,1) = _; adapt(2,2) = _,_; adapt(1,2) = _ <: _,_; adapt(2,1) = _,_ :> _;
-adaptor(F,G) = adapt(outputs(F),inputs(G));
-dsp_code = environment{${dspCode}};
-process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
+            adapt(1,1) = _;
+            adapt(2,2) = _,_;
+            adapt(1,2) = _ <: _,_;
+            adapt(2,1) = _,_ :> _;
+            adaptor(F,G) = adapt(outputs(F),inputs(G));
+            dsp_code = environment{
+                ${dspCode}
+            };
+            process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
     ) {
         this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCode, args);
         if (!this.voiceFactory) return null;
-        // Compile effect, possibly failing since 'compilePolyNode2' can be called by called by 'compilePolyNode'
+        // Compile effect, possibly failing since 'compilePolyNode2' can be called by 'compilePolyNode'
         try {
             this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
         } catch (e) {
