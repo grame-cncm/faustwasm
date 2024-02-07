@@ -397,7 +397,7 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
         name: string,
         dspCode: string,
         args: string,
-        // The ${dspCode} has to be added with wrapping new lines to make is properly formatted and compile
+        // The ${dspCode} has to be added with wrapping new lines to make it properly formatted and ready to compile
         effectCode = `
             adapt(1,1) = _;
             adapt(2,2) = _,_;
