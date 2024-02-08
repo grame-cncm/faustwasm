@@ -411,7 +411,7 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
     ) {
         this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCode, args);
         if (!this.voiceFactory) return null;
-        // Compile effect, possibly failing since 'compilePolyNode2' can be called by 'compilePolyNode'
+        // Compile effect, possibly failing
         try {
             this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
         } catch (e) {
