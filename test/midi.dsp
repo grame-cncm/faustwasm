@@ -1,6 +1,5 @@
 
 import("stdfaust.lib");
-
 process = os.osc(freq)*vol
 with {
     freq = hslider("Freq[midi:ctrl 1 ]", 200, 200, 2000, 0.01);

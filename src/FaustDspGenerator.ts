@@ -395,35 +395,82 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
     async compile(
         compiler: IFaustCompiler,
         name: string,
-        dspCode: string,
+        dspCodeAux: string,
         args: string,
-        // The ${dspCode} has to be added with wrapping new lines to make it properly formatted and ready to compile
-        effectCode = `
-            adapt(1,1) = _;
-            adapt(2,2) = _,_;
-            adapt(1,2) = _ <: _,_;
-            adapt(2,1) = _,_ :> _;
-            adaptor(F,G) = adapt(outputs(F),inputs(G));
-            dsp_code = environment{
-                ${dspCode}
+        // The ${dspCode} has to be added with wrapping new lines to make it properly formatted and ready to compile  
+        effectCodeAux = `dsp_code = environment{
+                ${dspCodeAux}
             };
-            process = adaptor(dsp_code.process, dsp_code.effect) : dsp_code.effect;`
+            process = dsp_code.effect;`
     ) {
-        this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCode, args);
-        if (!this.voiceFactory) return null;
-        // Compile effect, possibly failing
+        // Try to compile effect, possibly failing
         try {
-            this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args);
+            this.effectFactory = await compiler.createPolyDSPFactory(name, effectCodeAux, args);
+            // Since the effect is processing the same buffers for inputs and outputs (in place processing), 
+            // the voice and effect are adapted, possibly clearing buffers
+            if (this.effectFactory) {
+                const effectJSON = JSON.parse(this.effectFactory.json);
+                const dspCode = `
+                    // Voice output is forced to 2, when DSP is stereo or effect has 2 ins or 2 outs,
+                    // so that the effect can process the 2 channels of the voice
+                    adaptOut(1,1,1) = _;
+                    adaptOut(1,1,2) = _ <: _,_;
+                    adaptOut(1,2,1) = _ <: _,_;
+                    adaptOut(1,2,2) = _ <: _,_;
+                    adaptOut(2,1,1) = _,_;
+                    adaptOut(2,1,2) = _,_;
+                    adaptOut(2,2,1) = _,_;
+                    adaptOut(2,2,2) = _,_;
+                    adaptor(F) = adaptOut(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
+                    dsp_code = environment{
+                        ${dspCodeAux}
+                    };
+                    process = dsp_code.process : adaptor(dsp_code.process);`
+                const effectCode = `
+                    // Inputs
+                    adaptIn(1,1,1) = _;
+                    adaptIn(1,1,2) = _,*(0) :> _;  // The voice output was duplicated, so only one channel has to be kept
+                    adaptIn(1,2,1) = _,_;
+                    adaptIn(1,2,2) = _,_;
+                    adaptIn(2,1,1) = _,_ :> _;
+                    adaptIn(2,1,2) = _,_ :> _;
+                    adaptIn(2,2,1) = _,_;
+                    adaptIn(2,2,2) = _,_;
+                    // Outputs
+                    adaptOut(1,1) = _ <: _,*(0);   // The left channel is kept, but the right one has to be cleared
+                    adaptOut(1,2) = _,_;
+                    adaptOut(2,1) = _ <: _,*(0);   // The left channel is kept, but the right one has to be cleared
+                    adaptOut(2,2) = _,_;
+                    adaptorIns(F) = adaptIn(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
+                    adaptorOuts = adaptOut(${effectJSON.inputs},${effectJSON.outputs});
+                    dsp_code = environment{
+                        ${dspCodeAux}
+                    };
+                    process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;`
+                this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCode, args);
+                try {
+                    // Effect is processing same buffers for inputs and outputs, so has to use -inpl option
+                    this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args + " -inpl");
+                } catch (e) {
+                    console.log(e);
+                }
+            }
         } catch (e) {
-            console.warn(e);
+            console.log(e);
+            this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCodeAux, args);
         }
-        this.name = name;
-        const voiceMeta = JSON.parse(this.voiceFactory.json);
-        const isDouble = voiceMeta.compile_options.match("-double");
-        const { mixerBuffer, mixerModule } = await compiler.getAsyncInternalMixerModule(!!isDouble);
-        this.mixerBuffer = mixerBuffer;
-        this.mixerModule = mixerModule;
-        return this;
+
+        if (this.voiceFactory) {
+            this.name = name;
+            const voiceMeta = JSON.parse(this.voiceFactory.json);
+            const isDouble = voiceMeta.compile_options.match("-double");
+            const { mixerBuffer, mixerModule } = await compiler.getAsyncInternalMixerModule(!!isDouble);
+            this.mixerBuffer = mixerBuffer;
+            this.mixerModule = mixerModule;
+            return this;
+        } else {
+            return null;
+        }
     }
 
     async createNode<SP extends boolean = false>(
