@@ -31,6 +31,7 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     const dspName = fileName.replace(/\.dsp$/, '');
 
     if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
+    argv.push("-ftz", "2");
     const dspModulePath = path.join(outputDir, `${dspName}.wasm`);
     const dspMetaPath = path.join(outputDir, `${dspName}.json`);
     const effectModulePath = path.join(outputDir, `${dspName}_effect.wasm`);
@@ -58,7 +59,6 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
         dspModule = voiceFactory.code;
         dspMeta = JSON.parse(voiceFactory.json);
         mixerModule = mixerBuffer;
-
         if (effectFactory) {
             effectModule = effectFactory.code;
             effectMeta = JSON.parse(effectFactory.json);
