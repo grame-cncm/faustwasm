@@ -414,7 +414,7 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
                     // Voice output is forced to 2, when DSP is stereo or effect has 2 ins or 2 outs,
                     // so that the effect can process the 2 channels of the voice
                     adaptOut(1,1,1) = _;
-                    adaptOut(1,1,2) = _ <: _,_;
+                    adaptOut(1,1,2) = _ <: _,0;  // The left channel only is kept
                     adaptOut(1,2,1) = _ <: _,_;
                     adaptOut(1,2,2) = _ <: _,_;
                     adaptOut(2,1,1) = _,_;
@@ -429,7 +429,7 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
                 const effectCode = `
                     // Inputs
                     adaptIn(1,1,1) = _;
-                    adaptIn(1,1,2) = _,*(0) :> _;  // The voice output was duplicated, so only one channel has to be kept
+                    adaptIn(1,1,2) = _,_ :> _;  
                     adaptIn(1,2,1) = _,_;
                     adaptIn(1,2,2) = _,_;
                     adaptIn(2,1,1) = _,_ :> _;
@@ -437,9 +437,9 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
                     adaptIn(2,2,1) = _,_;
                     adaptIn(2,2,2) = _,_;
                     // Outputs
-                    adaptOut(1,1) = _ <: _,*(0);   // The left channel is kept, but the right one has to be cleared
+                    adaptOut(1,1) = _ <: _,0;   // The left channel only is kept
                     adaptOut(1,2) = _,_;
-                    adaptOut(2,1) = _ <: _,*(0);   // The left channel is kept, but the right one has to be cleared
+                    adaptOut(2,1) = _ <: _,0;   // The left channel only is kept
                     adaptOut(2,2) = _,_;
                     adaptorIns(F) = adaptIn(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
                     adaptorOuts = adaptOut(${effectJSON.inputs},${effectJSON.outputs});
@@ -452,11 +452,11 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
                     // Effect is processing same buffers for inputs and outputs, so has to use -inpl option
                     this.effectFactory = await compiler.createPolyDSPFactory(name, effectCode, args + " -inpl");
                 } catch (e) {
-                    console.log(e);
+                    console.warn(e);
                 }
             }
         } catch (e) {
-            console.log(e);
+            console.warn(e);
             this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCodeAux, args);
         }
 
