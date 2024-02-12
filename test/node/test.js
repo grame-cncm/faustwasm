@@ -11,7 +11,6 @@ const wasmBuf = fs.readFileSync(path.join(__dirname, "../../libfaust-wasm/libfau
 (async () => {
     // const w = await WebAssembly.instantiate(wasmBuf, {env:{},wasi_snapshot_preview1:{}});
     // console.log(w);
-
     const faustModule = await FaustWasm.instantiateFaustModuleFromFile(path.join(__dirname, "../../libfaust-wasm/libfaust-wasm.js"));
     console.log(faustModule);
 })();
