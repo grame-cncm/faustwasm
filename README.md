@@ -45,7 +45,7 @@ For example:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/mono.dsp test/out
 ```
-will create a set of files: `mono.js`, `mono.wasm`, `mono.json`, `mono.html` and the `faustwasm` folder.
+will create a set of files: `mono.js`, `mono.wasm`, `mono.json`, `mono.html` in the `out` folder.
 
 Polyphonic instrument with:
 
@@ -53,7 +53,7 @@ Polyphonic instrument with:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/poly.dsp test/out -poly
 ```
-will create a set of files: `poly.js`, `poly.wasm`, `poly.json`, `poly.html` (and possibly `poly_effect.wasm`, `poly_effect.json`) and the `faustwasm` folder.
+will create a set of files: `poly.js`, `poly.wasm`, `poly.json`, `poly.html` (and possibly `poly_effect.wasm`, `poly_effect.json`) in the `out` folder.
 
 You can create a standalone DSP on a web page using the same command line:
 
@@ -61,7 +61,7 @@ You can create a standalone DSP on a web page using the same command line:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/rev.dsp test/out -standalone
 ```
-will create a set of files: `rev.js`, `rev.wasm`, `rev.json`, `rev.html`, and the `faustwasm`, `faust-ui` folders.
+will create a set of files: `rev.js`, `rev.wasm`, `rev.json`, `rev.html`, and the `faustwasm`, `faust-ui` folders in the `out` folder .
 
 Or a standalone polyphonic DSP on a web page with:
 
@@ -69,7 +69,7 @@ Or a standalone polyphonic DSP on a web page with:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/organ1.dsp test/out -standalone
 ```
-will create a set of files: `organ1.js`, `organ1.wasm`, `organ1.json`, `organ1_effect.wasm`, `organ1_effect.json`, `organ1.html`, and the `faustwasm`, `faust-ui` folders.
+will create a set of files: `organ1.js`, `organ1.wasm`, `organ1.json`, `organ1_effect.wasm`, `organ1_effect.json`, `organ1.html`, and the `faustwasm`, `faust-ui` folders in the `out` folder.
 
 #### Generate SVG Diagrams of a Faust DSP
 
@@ -78,6 +78,7 @@ For example:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2svg.js test/mono.dsp test/out
 ```
+
 The main diagram should be in `test/out/process.svg`.
 
 #### Generate or process audio files
