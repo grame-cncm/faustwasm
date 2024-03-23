@@ -5,7 +5,7 @@ import {
     instantiateFaustModuleFromFile,
     LibFaust,
     FaustCompiler,
-    FaustSvgDiagrams
+    FaustCmajor
 } from "../dist/esm/index.js";
 import { fileURLToPath } from "url";
 
@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
  * @param {string} outputDir
  * @param {string[]} [argv]
  */
-const faust2svgFiles = async (inputFile, outputDir, argv = []) => {
+const faust2CmajorFiles = async (inputFile, outputDir, argv = []) => {
     const faustModule = await instantiateFaustModuleFromFile(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
     const libFaust = new LibFaust(faustModule);
     const compiler = new FaustCompiler(libFaust);
@@ -25,17 +25,14 @@ const faust2svgFiles = async (inputFile, outputDir, argv = []) => {
     console.log(`Reading file ${inputFile}`);
     const code = fs.readFileSync(inputFile, { encoding: "utf8" });
     const { name } = path.parse(inputFile);
-    const diagram = new FaustSvgDiagrams(compiler);
+    const cmajor = new FaustCmajor(compiler);
     if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
-    const svgs = diagram.from(name, code, argv.join(" "));
-    console.log(`Generated ${Object.keys(svgs).length} files.`);
+    const cmajor_file = cmajor.compile(name, code, argv.join(" "));
     console.log(`Writing files to ${outputDir}`);
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-    for (const file in svgs) {
-        const svgPath = path.join(outputDir, file);
-        fs.writeFileSync(svgPath, svgs[file]);
-    }
-    return svgs;
+    const cmajorPath = path.join(outputDir, `${name}.cmajor`);
+    fs.writeFileSync(cmajorPath, cmajor_file);
+    return cmajor_file;
 };
 
-export default faust2svgFiles;
+export default faust2CmajorFiles;

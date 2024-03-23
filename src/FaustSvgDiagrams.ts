@@ -18,14 +18,14 @@ class FaustSvgDiagrams implements IFaustSvgDiagrams {
     constructor(compiler: FaustCompiler) {
         this.compiler = compiler;
     }
-    
+
     from(name: string, code: string, args: string) {
         const fs = this.compiler.fs();
         try {
             const files: string[] = fs.readdir(`/${name}-svg/`);
             files.filter(file => file !== "." && file !== "..").forEach(file => fs.unlink(`/${name}-svg/${file}`));
-        } catch {}
-        const success = this.compiler.generateAuxFiles(name, code, `-lang wasm -svg ${args}`);
+        } catch { }
+        const success = this.compiler.generateAuxFiles(name, code, `-lang wasm -o binary -svg ${args}`);
         if (!success) throw new Error(this.compiler.getErrorMessage());
         const svgs: Record<string, string> = {};
         const files: string[] = fs.readdir(`/${name}-svg/`);

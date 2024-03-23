@@ -6,6 +6,7 @@ export { FaustDspInstance } from "./FaustDspInstance";
 export { default as FaustWasmInstantiator } from "./FaustWasmInstantiator";
 export { default as FaustOfflineProcessor } from "./FaustOfflineProcessor";
 export { default as FaustSvgDiagrams } from "./FaustSvgDiagrams";
+export { default as FaustCmajor } from "./FaustCmajor";
 export { default as LibFaust } from "./LibFaust";
 export { default as WavEncoder } from "./WavEncoder";
 export { default as WavDecoder } from "./WavDecoder";
