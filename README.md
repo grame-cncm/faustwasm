@@ -81,6 +81,16 @@ node scripts/faust2svg.js test/mono.dsp test/out
 
 The main diagram should be in `test/out/process.svg`.
 
+#### Compile a Faust DSP in a Cmajor file
+
+For example:
+```bash
+rm -rf test/out # make sure you are under the faustwasm directory.
+node scripts/faust2cmajor.js test/organ.dsp test/out
+```
+
+The Cmajor file should be in `test/out/organ.cmajor`.
+
 #### Generate or process audio files
 
 Options:
