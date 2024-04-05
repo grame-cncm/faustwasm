@@ -112,7 +112,7 @@ export interface LibFaustWasm {
  * json: the compiled DSP JSON description
  * poly: whether the factory is a polyphonic one or not
  */
-export interface FaustDspFactory extends Required<LooseFaustDspFactory> {}
+export interface FaustDspFactory extends Required<LooseFaustDspFactory> { }
 
 export interface LooseFaustDspFactory {
     cfactory?: number;
@@ -143,6 +143,7 @@ export interface FaustUIInputItem {
     type: FaustUIInputType;
     label: string;
     address: string;
+    url: string;
     index: number;
     init?: number;
     min?: number;
@@ -170,7 +171,7 @@ export interface FaustUIMeta {
 }
 export type FaustUIGroupType = "vgroup" | "hgroup" | "tgroup";
 export type FaustUIOutputType = "hbargraph" | "vbargraph";
-export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry";
+export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry" | "soundfile";
 export interface FaustUIGroup {
     type: FaustUIGroupType;
     label: string;
@@ -193,7 +194,7 @@ export interface AudioWorkletProcessor {
 export declare const AudioWorkletProcessor: {
     prototype: AudioWorkletProcessor;
     parameterDescriptors: AudioParamDescriptor[];
-    new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
+    new(options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 };
 
 export interface AudioWorkletGlobalScope {
@@ -212,7 +213,7 @@ export interface InterfaceFFT {
     dispose(): void;
 }
 export declare const InterfaceFFT: {
-    new (size: number): InterfaceFFT;
+    new(size: number): InterfaceFFT;
 }
 
 export type TWindowFunction = (index: number, length: number, ...args: any[]) => number;
