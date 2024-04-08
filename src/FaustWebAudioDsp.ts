@@ -11,6 +11,478 @@ export type MetadataHandler = (key: string, value: string) => void;
 export type UIHandler = (item: FaustUIItem) => void;
 
 /**
+ * WasmAllocator is a basic memory management class designed to allocate
+ * blocks of memory within a WebAssembly.Memory object. It provides a simple
+ * alloc method to allocate a contiguous block of memory of a specified size.
+ * 
+ * The allocator operates by keeping a linear progression through the memory,
+ * always allocating the next block at the end of the last. This approach does not
+ * handle freeing of memory or reuse of memory spaces.
+ */
+class WasmAllocator {
+    // The WebAssembly.Memory object this allocator will manage.
+    private readonly memory: WebAssembly.Memory;
+    // The number of bytes currently allocated. This serves as the "pointer" to the
+    // next free byte in the memory.
+    private allocatedBytes: number;
+
+    constructor(memory: WebAssembly.Memory, offset: number) {
+        this.memory = memory;
+        // Initialize the allocator with offset allocated bytes.
+        this.allocatedBytes = offset;
+    }
+
+    /**
+     * Allocates a block of memory of the specified size, returning the pointer to the
+     * beginning of the block. The block is allocated at the current offset and the
+     * offset is incremented by the size of the block.
+     * 
+     * @param sizeInBytes The size of the block to allocate in bytes.
+     * @returns The offset (pointer) to the beginning of the allocated block.
+     */
+    alloc(sizeInBytes: number): number {
+        // Store the current offset as the start of the new block.
+        const currentOffset = this.allocatedBytes;
+        // Calculate the new offset after allocating the requested block.
+        const newOffset = currentOffset + sizeInBytes;
+        // Get the total size of the WebAssembly memory in bytes.
+        const totalMemoryBytes = this.memory.buffer.byteLength;
+
+        // If the new offset exceeds the total size of the memory, grow the memory.
+        if (newOffset > totalMemoryBytes) {
+            // Calculate the number of WebAssembly pages needed to fit the new allocation.
+            // WebAssembly memory pages are 64KiB each.
+            const neededPages = Math.ceil((newOffset - totalMemoryBytes) / 65536);
+            // Grow the memory by the required number of pages.
+            console.log(`GROW: ${neededPages} pages`);
+            this.memory.grow(neededPages);
+        }
+
+        // Update the allocated bytes to the new offset.
+        this.allocatedBytes = newOffset;
+        // Return the offset at which the allocated block starts.
+        return currentOffset;
+    }
+
+    /**
+     * Returns the underlying buffer object.
+     * 
+     * @returns The buffer object.
+     */
+    getBuffer(): ArrayBuffer {
+        return this.memory.buffer;
+    }
+
+    /**
+     * Returns the Int32 view of the underlying buffer object.
+     * 
+     * @returns The view of the memory buffer as Int32Array.
+     */
+    getInt32Array(): Int32Array {
+        return new Int32Array(this.memory.buffer);
+    }
+
+    /**
+     * Returns the Float32 view of the underlying buffer object.
+     * 
+     * @returns The view of the memory buffer as Float32Array.
+     */
+    getFloat32Array(): Float32Array {
+        return new Float32Array(this.memory.buffer);
+    }
+
+    /**
+     * Returns the Float64 view of the underlying buffer object..
+     * 
+     * @returns The view of the memory buffer as Float64Array.
+     */
+    getFloat64Array(): Float64Array {
+        return new Float64Array(this.memory.buffer);
+    }
+}
+
+// Maximum number of soundfile parts.
+const MAX_SOUNDFILE_PARTS = 256;
+
+// Maximum number of channels.
+const MAX_CHAN = 64;
+
+// Maximum buffer size in frames.
+const BUFFER_SIZE = 1024;
+
+// Default sample rate.
+const SAMPLE_RATE = 44100;
+
+// Size of an integer in bytes.
+const intSize = 4;
+
+/**
+ * Soundfile class to handle soundfile data in wasm memory.
+ */
+class Soundfile {
+    private readonly fPtr: number; // Pointer to the soundfile structure in wasm memory
+    private readonly fBuffers: number;
+    private readonly fLength: number;
+    private readonly fSR: number;
+    private readonly fOffset: number;
+    private readonly fSampleSize: number;
+    private readonly fPtrSize: number;
+    private readonly fAllocator: WasmAllocator;
+
+    constructor(allocator: WasmAllocator, ptrSize: number, sampleSize: number, curChan: number, length: number, maxChan: number, totalParts: number) {
+        // Keep the soundfile structure parameters
+
+        this.fSampleSize = sampleSize;
+        this.fPtrSize = ptrSize;
+        this.fAllocator = allocator;
+
+        // Allocate wasm memory for the soundfile structure
+        this.fPtr = allocator.alloc(4 * ptrSize); // 4 ptrSize: fBuffers, fLength, fSR, fOffset
+        this.fLength = allocator.alloc(MAX_SOUNDFILE_PARTS * intSize);
+        this.fSR = allocator.alloc(MAX_SOUNDFILE_PARTS * intSize);
+        this.fOffset = allocator.alloc(MAX_SOUNDFILE_PARTS * intSize);
+        this.fBuffers = this.allocBuffers(curChan, length, maxChan);
+
+        //this.displayMemory("Allocated soundfile structure 1");
+
+        // Set the soundfile structure in wasm memory
+        const HEAP32 = this.fAllocator.getInt32Array();
+        HEAP32[this.fPtr >> 2] = this.fBuffers;
+        HEAP32[(this.fPtr + ptrSize) >> 2] = this.fLength;
+        HEAP32[(this.fPtr + 2 * ptrSize) >> 2] = this.fSR;
+        HEAP32[(this.fPtr + 3 * ptrSize) >> 2] = this.fOffset;
+
+        for (let chan = 0; chan < curChan; chan++) {
+            const buffer: number = HEAP32[(this.fBuffers >> 2) + chan];
+            console.log(`allocBuffers AFTER: ${chan} - ${buffer}`);
+        }
+
+        //this.displayMemory("Allocated soundfile structure 2");
+    }
+
+    private allocBuffers(curChan: number, length: number, maxChan: number): number {
+        const buffers = this.fAllocator.alloc(maxChan * this.fPtrSize);
+
+        console.log(`allocBuffers buffers: ${buffers}`);
+
+        for (let chan = 0; chan < curChan; chan++) {
+            const buffer: number = this.fAllocator.alloc(length * this.fSampleSize);
+            // HEAP32 is the Int32Array view of the memory buffer which can change after grow in `alloc` method
+            // so we need to recompute the buffer address
+            const HEAP32 = this.fAllocator.getInt32Array();
+            HEAP32[(buffers >> 2) + chan] = buffer;
+        }
+        //this.displayMemory("Allocated soundfile buffers");
+        return buffers;
+    }
+
+    shareBuffers(curChan: number, maxChan: number) {
+        // Share the same buffers for all other channels so that we have maxChan channels available
+        const HEAP32 = this.fAllocator.getInt32Array();
+        for (let chan = curChan; chan < maxChan; chan++) {
+            HEAP32[(this.fBuffers >> 2) + chan] = HEAP32[(this.fBuffers >> 2) + chan % curChan];
+        }
+    }
+
+    copyToOut(part: number, maxChannels: number, offset: number, buffer: AudioBuffer) {
+        const HEAP32 = this.fAllocator.getInt32Array();
+        HEAP32[(this.fLength >> 2) + part] = buffer.length;
+        HEAP32[(this.fSR >> 2) + part] = buffer.sampleRate;
+        HEAP32[(this.fOffset >> 2) + part] = offset;
+
+        //this.displayMemory("IN copyToOut, BEFORE copyToOutReal", true);
+        // Copy the soundfile data to the buffer
+        if (this.fSampleSize === 8) {
+            this.copyToOutReal64(maxChannels, offset, buffer);
+        } else {
+            this.copyToOutReal32(maxChannels, offset, buffer);
+        }
+        //this.displayMemory("IN copyToOut, AFTER copyToOutReal");
+    }
+
+    copyToOutReal32(maxChannels: number, offset: number, buffer: AudioBuffer) {
+        const HEAP32 = this.fAllocator.getInt32Array();
+        const HEAPF = this.fAllocator.getFloat32Array();
+        for (let chan = 0; chan < buffer.numberOfChannels; chan++) {
+            const input: Float32Array = buffer.getChannelData(chan);
+            const output: number = HEAP32[(this.fBuffers >> 2) + chan];
+            const outputReal: Float32Array = HEAPF.subarray((output + offset * this.fSampleSize) >> Math.log2(this.fSampleSize),
+                (output + (offset + input.length) * this.fSampleSize) >> Math.log2(this.fSampleSize));
+            for (let sample = 0; sample < input.length; sample++) {
+                outputReal[sample] = input[sample];
+            }
+        }
+    }
+
+    copyToOutReal64(maxChannels: number, offset: number, buffer: AudioBuffer) {
+        const HEAP32 = this.fAllocator.getInt32Array();
+        const HEAPF = this.fAllocator.getFloat64Array();
+        for (let chan = 0; chan < buffer.numberOfChannels; chan++) {
+            const input: Float32Array = buffer.getChannelData(chan);
+            const output: number = HEAP32[(this.fBuffers >> 2) + chan];
+            const outputReal: Float64Array = HEAPF.subarray((output + offset * this.fSampleSize) >> Math.log2(this.fSampleSize),
+                (output + (offset + input.length) * this.fSampleSize) >> Math.log2(this.fSampleSize));
+            for (let sample = 0; sample < input.length; sample++) {
+                outputReal[sample] = input[sample];
+            }
+        }
+    }
+
+    emptyFile(part: number, offset: number): number {
+        // Set the soundfile buffer in wasm memory
+        const HEAP32 = this.fAllocator.getInt32Array();
+        HEAP32[(this.fLength >> 2) + part] = BUFFER_SIZE;
+        HEAP32[(this.fSR >> 2) + part] = SAMPLE_RATE;
+        HEAP32[(this.fOffset >> 2) + part] = offset;
+
+        // Update and return the new offset
+        return offset + BUFFER_SIZE;
+    }
+
+    displayMemory(where: string = "", mem: boolean = false) {
+        console.log("Soundfile memory: " + where);
+        console.log(`fPtr: ${this.fPtr}`);
+        console.log(`fBuffers: ${this.fBuffers}`);
+        console.log(`fLength: ${this.fLength}`);
+        console.log(`fSR: ${this.fSR}`);
+        console.log(`fOffset: ${this.fOffset}`);
+        const HEAP32 = this.fAllocator.getInt32Array();
+        if (mem) console.log(`HEAP32: ${HEAP32}`);
+        console.log(`HEAP32[this.fPtr >> 2]: ${HEAP32[this.fPtr >> 2]}`);
+        console.log(`HEAP32[(this.fPtr + ptrSize) >> 2]: ${HEAP32[(this.fPtr + this.fPtrSize) >> 2]}`);
+        console.log(`HEAP32[(this.fPtr + 2 * ptrSize) >> 2]: ${HEAP32[(this.fPtr + 2 * this.fPtrSize) >> 2]}`);
+        console.log(`HEAP32[(this.fPtr + 3 * ptrSize) >> 2]: ${HEAP32[(this.fPtr + 3 * this.fPtrSize) >> 2]}`);
+    }
+
+    // Return the pointer to the soundfile structure in wasm memory
+    getPtr(): number {
+        return this.fPtr;
+    }
+
+    getHEAP32(): Int32Array {
+        return this.fAllocator.getInt32Array();
+    }
+    getHEAPFloat32(): Float32Array {
+        return this.fAllocator.getFloat32Array();
+    }
+
+    getHEAPFloat64(): Float64Array {
+        return this.fAllocator.getFloat64Array();
+    }
+
+}
+
+// Definition of the AudioBufferItem type
+type AudioBufferItem = {
+    pathName: string;
+    audioBuffer: AudioBuffer;
+};
+
+/**
+ * SoundfileReader class to read soundfile data and copy it to the soundfile buffer.
+ */
+class SoundfileReader {
+
+    private readonly fAllocator: WasmAllocator;
+    private readonly fPtrSize: number;
+    private readonly fSampleSize: number;
+    private readonly fContext;
+    private readonly fAudioBuffers: AudioBufferItem[];
+
+    constructor(allocator: WasmAllocator, context: BaseAudioContext, ptrSize: number, sampleSize: number) {
+        this.fAllocator = allocator;
+        this.fPtrSize = ptrSize;
+        this.fSampleSize = sampleSize;
+        this.fContext = context;
+        this.fAudioBuffers = [];
+    }
+
+    /**
+     * Check if the file exists in the given directories.
+     * 
+     * @param directories : the list of directories to search for the file   
+     * @param fileName : the name of the file to search for 
+     * @returns : the path of the file if found, otherwise an empty string
+     */
+    private async checkFile(directories: string[], fileName: string): Promise<string> {
+
+        async function checkFileExists(url: string): Promise<boolean> {
+            try {
+                console.log(`"checkFileExists" url: ${url}`);
+                const response = await fetch(url, { method: 'HEAD' });
+                return response.ok; // Will be true if the status code is 200-299
+            } catch (error) {
+                console.error('Fetch error:', error);
+                return false;
+            }
+        }
+
+        if (await checkFileExists(fileName)) {
+            return fileName;
+        } else {
+            for (let i = 0; i < directories.length; i++) {
+                const pathName = directories[i] + "/" + fileName;
+                if (await checkFileExists(pathName)) {
+                    return pathName;
+                }
+            }
+            return "";
+        }
+    }
+
+    /**
+     * Check if all soundfiles exist and return their real path_name.
+     * 
+     * @param directories : the list of directories to search for the file
+     * @param fileNameList : the list of file names to search for
+     * @returns : the list of path names of the files if found, otherwise an empty string
+     */
+    async checkFiles(directories: string[], fileNameList: string[]): Promise<string[]> {
+        const pathNameList: string[] = [];
+        for (let i = 0; i < fileNameList.length; i++) {
+            const pathName: string = await this.checkFile(directories, fileNameList[i]);
+            console.log(`checkFiles pathName: ${pathName}`);
+            // If 'pathName' is not found, it is replaced by an identifier for an empty sound (e.g., silence)
+            pathNameList.push(pathName === "" ? "__empty_sound__" : pathName);
+        }
+        return pathNameList;
+    }
+
+    /**
+     * Get the channels and length values of the given sound resource.
+     * 
+     * @param pathName : the name of the file, or sound resource identified this way
+     * @returns channels and length of the soundfile
+     */
+    private async getParamsFile(pathName: string): Promise<{ channels: number, length: number }> {
+        console.log(`Loading sound file from ${pathName}`);
+
+        const item = this.fAudioBuffers.find((element: AudioBufferItem) => element.pathName === pathName);
+        if (item) {
+            console.log(`getItemByPathName FOUND`);
+            return { channels: item.audioBuffer.numberOfChannels, length: item.audioBuffer.length };
+        } else {
+            const response = await fetch(pathName);
+            if (!response.ok) {
+                console.log(`Failed to load sound file from ${pathName}: ${response.statusText}`);
+                return { channels: 1, length: BUFFER_SIZE };
+            } else {
+
+                // Decode the audio data
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await this.fContext.decodeAudioData(arrayBuffer);
+                const { numberOfChannels, length } = audioBuffer;
+
+                // Keep the audio buffer for later use
+                this.fAudioBuffers.push({ pathName, audioBuffer });
+
+                // Ensure the returned object keys match what's being returned
+                return { channels: numberOfChannels, length };
+            }
+        }
+    }
+
+    /**
+     * Read one sound resource and fill the 'soundfile' structure accordingly
+     *
+     * @param soundfile - the soundfile to be filled
+     * @param pathName - the name of the file, or sound resource identified this way
+     * @param part - the part number to be filled in the soundfile
+     * @param maxChan - the maximum number of mono channels to fill
+     * 
+     * @returns the offset in the soundfile buffer
+     *
+     */
+    private readFile(soundfile: Soundfile, pathName: string, part: number, offset: number, maxChan: number): number {
+        // Read the soundfile
+        const item = this.fAudioBuffers.find(entry => entry.pathName === pathName);
+        // Copy the soundfile data to the buffer
+        if (item) {
+            //soundfile.displayMemory("BEFORE copyToOut");
+            soundfile.copyToOut(part, maxChan, offset, item.audioBuffer);
+            //soundfile.displayMemory("AFTER copyToOut");
+            return offset + item.audioBuffer.length;
+        } else {
+            console.error(`Failed to access sound file from ${pathName}`);
+            return offset + BUFFER_SIZE;
+        }
+    }
+
+    /**
+     * Crate a soundfile, load all parts and copy audio data to the wasm soundfile buffer.
+     * @param pathNameList : list of soundfile paths
+     * @param maxChan : maximum number of channels
+     * @param isDouble : whether the soundfile will be copied as double
+     */
+    async createSoundfile(pathNameList: string[], maxChan: number, isDouble: boolean): Promise<Soundfile | null> {
+        try {
+            let curChan = 1; // At least one channel
+            let totalLength = 0;
+
+            // Compute total length and channels max of all files
+            for (const pathName of pathNameList) {
+                let chan: number = 0, len: number = 0;
+                if (pathName === "__empty_sound__") {
+                    length = BUFFER_SIZE;
+                    chan = 1;
+                } else {
+                    const { channels, length } = await this.getParamsFile(pathName);
+                    chan = channels;
+                    len = length;
+                }
+                curChan = Math.max(curChan, chan);
+                totalLength += len;
+            }
+
+            // Complete with empty parts
+            totalLength += (MAX_SOUNDFILE_PARTS - pathNameList.length) * BUFFER_SIZE;
+
+            // Create the soundfile
+            let soundfile = new Soundfile(this.fAllocator, this.fPtrSize, this.fSampleSize, curChan, totalLength, maxChan, pathNameList.length);
+
+            //soundfile.displayMemory("After soundfile creation");
+            // Init offset
+            let offset = 0;
+
+            // Read all files
+            for (let part = 0; part < pathNameList.length; part++) {
+                if (pathNameList[part] === "__empty_sound__") {
+                    // Empty sound
+                    offset = soundfile.emptyFile(part, offset);
+                } else {
+                    // Read the soundfile and update the offset
+                    offset = await this.readFile(soundfile, pathNameList[part], part, offset, maxChan);
+                }
+            }
+
+            //soundfile.displayMemory("After reading soundfiles");
+
+            // Complete with empty parts
+            for (let part = pathNameList.length; part < MAX_SOUNDFILE_PARTS; part++) {
+                offset = soundfile.emptyFile(part, offset);
+            }
+
+            //soundfile.displayMemory("After emptyFile");
+
+            // Share the same buffers for all other channels so that we have maxChan channels available
+            soundfile.shareBuffers(curChan, maxChan);
+
+            //soundfile.displayMemory("After shareBuffers");
+
+            return soundfile;
+
+        } catch (error) {
+            console.error("Failed to create soundfile:", error);
+            return null;
+        }
+    }
+
+    getHEAP32(): Int32Array {
+        return this.fAllocator.getInt32Array();
+    }
+}
+
+/**
  * DSP implementation: mimic the C++ 'dsp' class:
  * - adding MIDI control: metadata are decoded and incoming MIDI messages will control the associated controllers
  * - an output handler can be set to treat produced output controllers (like 'bargraph') 
@@ -180,8 +652,8 @@ export interface IFaustBaseWebAudioDsp {
     destroy(): void;
 }
 
-export interface IFaustMonoWebAudioDsp extends IFaustBaseWebAudioDsp {}
-export interface IFaustMonoWebAudioNode extends IFaustMonoWebAudioDsp, AudioNode {}
+export interface IFaustMonoWebAudioDsp extends IFaustBaseWebAudioDsp { }
+export interface IFaustMonoWebAudioNode extends IFaustMonoWebAudioDsp, AudioNode { }
 
 export interface IFaustPolyWebAudioDsp extends IFaustBaseWebAudioDsp {
     /**
@@ -209,7 +681,14 @@ export interface IFaustPolyWebAudioDsp extends IFaustBaseWebAudioDsp {
      */
     allNotesOff(hard: boolean): void;
 }
-export interface IFaustPolyWebAudioNode extends IFaustPolyWebAudioDsp, AudioNode {}
+export interface IFaustPolyWebAudioNode extends IFaustPolyWebAudioDsp, AudioNode { }
+
+// Definition of the SoundfileItem type
+type SoundfileItem = {
+    name: string;      // Name of the soundfile
+    url: string;       // URL of the soundfile
+    basePtr: number;   // Base pointer in wasm memory
+};
 
 export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fOutputHandler: OutputParamHandler | null;
@@ -230,13 +709,17 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fOutputsItems: string[];
     protected fDescriptor: FaustUIInputItem[];
 
+    // Soundfile handling
+    protected fSoundfiles: SoundfileItem[];
+    protected fEndMemory: number; // Keep the end of memory offset before soundfiles
+
     // Buffers in wasm memory
     protected fAudioInputs!: number;
     protected fAudioOutputs!: number;
 
     protected fBufferSize: number;
-    protected gPtrSize: number;
-    protected gSampleSize: number;
+    protected fPtrSize: number;
+    protected fSampleSize: number;
 
     // MIDI handling
     protected fPitchwheelLabel: { path: string; min: number; max: number }[];
@@ -244,9 +727,10 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fPathTable: { [address: string]: number };
     protected fUICallback: UIHandler;
 
+    // Audio callback
     protected fProcessing: boolean;
-
     protected fDestroyed: boolean;
+    protected fFirstCall: boolean;
 
     protected fJSONDsp!: FaustDspMeta;
 
@@ -264,13 +748,15 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         this.fInChannels = [];
         this.fOutChannels = [];
 
-        this.gPtrSize = sampleSize; // Done on wast/wasm backend side
-        this.gSampleSize = sampleSize;
+        this.fPtrSize = sampleSize; // Done on wast/wasm backend side
+        this.fSampleSize = sampleSize;
 
         this.fOutputsTimer = 5;
         this.fInputsItems = [];
         this.fOutputsItems = [];
         this.fDescriptor = [];
+
+        this.fSoundfiles = [];
 
         this.fPitchwheelLabel = [];
         this.fCtrlLabel = new Array(128).fill(null).map(() => []);
@@ -278,6 +764,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 
         this.fProcessing = false;
         this.fDestroyed = false;
+        this.fFirstCall = true;
 
         this.fUICallback = (item: FaustUIItem) => {
             if (item.type === "hbargraph" || item.type === "vbargraph") {
@@ -303,6 +790,8 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                         this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min as number, max: item.max as number });
                     }
                 });
+            } else if (item.type === "soundfile") {
+                this.fSoundfiles.push({ name: item.label, url: item.url, basePtr: -1 });
             }
         }
     }
@@ -332,6 +821,88 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         } else {
             callback(item);
         }
+    }
+
+    // Split the soundfile names and return an array of names
+    static splitNames(input: string): string[] {
+        // Trim off the curly braces at the start and end, if present
+        let trimmed = input.replace(/^\{|\}$/g, '');
+        // Split the string into an array of strings and remove first and last characters
+        return trimmed.split(";").map(str => str.length <= 2 ? '' : str.substring(1, str.length - 1));
+    }
+    /**
+     *  Load a soundfile possibly containing several parts. 
+     * 
+     * @param sfReader : the soundfile reader 
+     * @param sfOffset : the offset in the wasm memory
+     * @param name : the name of the soundfile
+     * @param url : the url of the soundfile
+     */
+    private async loadSoundfile(sfReader: SoundfileReader, sfOffset: number, name: string, url: string): Promise<void> {
+
+        console.log(`Soundfile ${name} paths: ${url}`);
+
+        // Add standard directories to look for soundfiles
+        const sfDirectories: string[] = ["", ".", "http://127.0.0.1:8000"];
+
+        console.log(`sfDirectories ${sfDirectories}`);
+
+        // Check if the soundfile exists in the given directories and return the real path
+        const sfPathNames: string[] = await sfReader.checkFiles(sfDirectories, FaustBaseWebAudioDsp.splitNames(url));
+
+        console.log(`Soundfile ${name} paths: ${sfPathNames}`);
+
+        const item = this.fSoundfiles.find((element: SoundfileItem) => element.url === url);
+        if (item) {
+            // Use the cached Soundfile
+            if (item.basePtr !== -1) {
+                // Update HEAP32 after soundfile creation
+                const HEAP32 = sfReader.getHEAP32();
+
+                // Fill the soundfile structure in wasm memory, sounfiles are at the beginning of the DSP memory
+                console.log(`Soundfile ${name} loaded at ${item.basePtr} in wasm memory with sfOffset ${sfOffset}`);
+                console.log(`Soundfile CACHE ${url}}`);
+
+                HEAP32[sfOffset >> 2] = item.basePtr;
+            } else {
+
+                // Create the soundfiles
+                const soundfile = await sfReader.createSoundfile(sfPathNames, MAX_CHAN, this.fSampleSize === 8);
+                if (soundfile) {
+
+                    //soundfile.displayMemory("After createSoundfile");
+
+                    // Update HEAP32 after soundfile creation
+                    const HEAP32 = soundfile.getHEAP32();
+
+                    // Fill the soundfile structure in wasm memory, sounfiles are at the beginning of the DSP memory
+                    item.basePtr = soundfile.getPtr();
+                    console.log(`Soundfile ${name} loaded at ${item.basePtr} in wasm memory with sfOffset ${sfOffset}`);
+
+                    HEAP32[sfOffset >> 2] = item.basePtr;
+
+                } else {
+                    console.log(`Soundfile ${name} for ${url} cannot be created !}`);
+                }
+            }
+        } else {
+            console.log(`Soundfile with ${url} cannot be found !}`);
+        }
+    }
+
+    /** 
+     * Init soundfiles memory.
+     * 
+     * Soundfile pointers are located at the beginning of the DSP struct memory (one after the other), 
+     * so that the TS scode can setup them easily.
+    */
+    protected async initSoundfileMemory(allocator: WasmAllocator, sfReader: SoundfileReader, baseDSP: number): Promise<void> {
+        // Create and fill the soundfile structure
+        let sfOffset: number = baseDSP;
+        for (const { name, url } of this.fSoundfiles) {
+            await this.loadSoundfile(sfReader, sfOffset, name, url);
+            sfOffset += this.fPtrSize;
+        };
     }
 
     protected updateOutputs() {
@@ -420,6 +991,8 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     getUI() { return this.fJSONDsp.ui; }
     getDescriptors() { return this.fDescriptor; }
 
+    hasSoundfiles() { return this.fSoundfiles.length > 0; }
+
     start() {
         this.fProcessing = true;
     }
@@ -453,13 +1026,29 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
 
         // Setup wasm memory
-        this.initMemory();
+        this.fEndMemory = this.initMemory();
 
         // Init DSP
         this.fInstance.api.init(this.fDSP, sampleRate);
     }
 
-    private initMemory() {
+    async init(context: BaseAudioContext | null): Promise<void> {
+
+        // Init soundfiles memory is needed
+        if (this.fSoundfiles.length > 0 && context) {
+
+            // Create memory allocator for soundfiles in wasm memory, starting at the end of DSP memory
+            const allocator = new WasmAllocator(this.fInstance.memory, this.fEndMemory);
+
+            // Create soundfile reader
+            const sfReader = new SoundfileReader(allocator, context, this.fPtrSize, this.fSampleSize);
+
+            // Init soundfiles memory
+            await this.initSoundfileMemory(allocator, sfReader, this.fDSP);
+        }
+    }
+
+    private initMemory(): number {
 
         // Start of DSP memory: Mono DSP is placed first with index 0
         this.fDSP = 0;
@@ -469,45 +1058,50 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
 
         // Setup audio pointers offset
         this.fAudioInputs = $audio;
-        this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.gPtrSize;
+        this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.fPtrSize;
 
         // Prepare wasm memory layout
-        const $audioInputs = this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize;
-        const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
+        const $audioInputs = this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize;
+        const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.fSampleSize;
+        // Compute memory end in bytes
+        const endMemory = $audioOutputs + this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
 
+        // Setup Int32 and Real views of the memory
         const HEAP = this.fInstance.memory.buffer;
         const HEAP32 = new Int32Array(HEAP);
-        const HEAPF = (this.gSampleSize === 4) ? new Float32Array(HEAP) : new Float64Array(HEAP);
+        const HEAPF = (this.fSampleSize === 4) ? new Float32Array(HEAP) : new Float64Array(HEAP);
 
         if (this.getNumInputs() > 0) {
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.gSampleSize * chan;
+                HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.fSampleSize * chan;
             }
             // Prepare Ins buffer tables
-            const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, (this.fAudioInputs + this.getNumInputs() * this.gPtrSize) >> 2);
+            const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, (this.fAudioInputs + this.getNumInputs() * this.fPtrSize) >> 2);
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                this.fInChannels[chan] = HEAPF.subarray(dspInChans[chan] >> Math.log2(this.gSampleSize), (dspInChans[chan] + this.fBufferSize * this.gSampleSize) >> Math.log2(this.gSampleSize));
+                this.fInChannels[chan] = HEAPF.subarray(dspInChans[chan] >> Math.log2(this.fSampleSize), (dspInChans[chan] + this.fBufferSize * this.fSampleSize) >> Math.log2(this.fSampleSize));
             }
         }
         if (this.getNumOutputs() > 0) {
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.gSampleSize * chan;
+                HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.fSampleSize * chan;
             }
             // Prepare Out buffer tables
-            const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, (this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize) >> 2);
+            const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, (this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize) >> 2);
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                this.fOutChannels[chan] = HEAPF.subarray(dspOutChans[chan] >> Math.log2(this.gSampleSize), (dspOutChans[chan] + this.fBufferSize * this.gSampleSize) >> Math.log2(this.gSampleSize));
+                this.fOutChannels[chan] = HEAPF.subarray(dspOutChans[chan] >> Math.log2(this.fSampleSize), (dspOutChans[chan] + this.fBufferSize * this.fSampleSize) >> Math.log2(this.fSampleSize));
             }
         }
+
+        return endMemory;
     }
 
     toString() {
         return `============== Mono Memory layout ==============
-this.fBufferSize: ${this.fBufferSize}
-this.fJSONDsp.size: ${this.fJSONDsp.size}
-this.fAudioInputs: ${this.fAudioInputs}
-this.fAudioOutputs: ${this.fAudioOutputs}
-this.fDSP: ${this.fDSP}`;
+        this.fBufferSize: ${this.fBufferSize}
+        this.fJSONDsp.size: ${this.fJSONDsp.size}
+        this.fAudioInputs: ${this.fAudioInputs}
+        this.fAudioOutputs: ${this.fAudioOutputs}
+        this.fDSP: ${this.fDSP}`;
     }
 
     // Public API
@@ -519,6 +1113,12 @@ this.fDSP: ${this.fDSP}`;
         // Check Processing state: the node returns 'true' to stay in the graph, even if not processing
         if (!this.fProcessing) return true;
 
+        // Init memory again on first call (since WebAssembly.memory.grow() may have been called)
+        if (this.fFirstCall) {
+            this.initMemory();
+            this.fFirstCall = false;
+        }
+
         if (typeof input === "function") {
             // Call input callback to avoid array copy
             input(this.fInChannels);
@@ -528,20 +1128,20 @@ this.fDSP: ${this.fDSP}`;
                 // console.log("Process input error");
                 return true;
             }
-    
+
             // Check outputs
             if (this.getNumOutputs() > 0 && typeof output !== "function" && (!output || !output[0] || output[0].length === 0)) {
                 // console.log("Process output error");
                 return true;
             }
-    
+
             // Copy inputs
             if (input !== undefined) {
                 for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); chan++) {
                     const dspInput = this.fInChannels[chan];
                     dspInput.set(input[chan]);
                 }
-            }    
+            }
         }
         // Possibly call an externally given callback (for instance to synchronize playing a MIDIFile...)
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
@@ -610,7 +1210,7 @@ export class FaustWebAudioDspVoice {
     private fGainLabel: number[];
     private fKeyLabel: number[];
     private fVelLabel: number[];
-    private fDSP: number;         // Voice DSP location in wasm memory
+    private fDSP: number;            // Voice DSP location in wasm memory
     private fAPI: IFaustDspInstance; // Voice DSP code
     // Accessed by PolyDSPImp class
     fCurNote: number;
@@ -743,7 +1343,7 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         if (this.fJSONEffect) FaustBaseWebAudioDsp.parseUI(this.fJSONEffect.ui, this.fUICallback);
 
         // Setup wasm memory
-        this.initMemory();
+        this.fEndMemory = this.initMemory();
 
         // Init DSP voices
         this.fVoiceTable = [];
@@ -761,6 +1361,24 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         if (this.fInstance.effectAPI) this.fInstance.effectAPI.init(this.fEffect, sampleRate);
     }
 
+    async init(context: BaseAudioContext | null): Promise<void> {
+
+        // Init soundfiles memory is needed
+        if (this.fSoundfiles.length > 0 && context) {
+
+            // Create memory allocator for soundfiles in wasm memory, starting at the end of DSP memory
+            const allocator = new WasmAllocator(this.fInstance.memory, this.fEndMemory);
+
+            // Create soundfile reader
+            const sfReader = new SoundfileReader(allocator, context, this.fPtrSize, this.fSampleSize);
+
+            // Init soundfiles memory for all voices
+            for (let voice = 0; voice < this.fInstance.voices; voice++) {
+                await this.initSoundfileMemory(allocator, sfReader, this.fJSONDsp.size * voice);
+            }
+        }
+    }
+
     private initMemory() {
 
         // Effet start at the end of all DSP voices
@@ -771,51 +1389,57 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
 
         // Setup audio pointers offset
         this.fAudioInputs = $audio;
-        this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.gPtrSize;
-        this.fAudioMixing = this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize;
-        this.fAudioMixingHalf = this.fAudioMixing + this.getNumOutputs() * this.gPtrSize;
+        this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.fPtrSize;
+        this.fAudioMixing = this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize;
+        this.fAudioMixingHalf = this.fAudioMixing + this.getNumOutputs() * this.fPtrSize;
 
         // Prepare wasm memory layout
-        const $audioInputs = this.fAudioMixingHalf + this.getNumOutputs() * this.gPtrSize;
-        const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.gSampleSize;
-        const $audioMixing = $audioOutputs + this.getNumOutputs() * this.fBufferSize * this.gSampleSize;
+        const $audioInputs = this.fAudioMixingHalf + this.getNumOutputs() * this.fPtrSize;
+        const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.fSampleSize;
+        const $audioMixing = $audioOutputs + this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
 
+        // Compute memory end in bytes
+        const endMemory = $audioMixing + this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
+
+        // Setup Int32 and Real views of the memory
         const HEAP = this.fInstance.memory.buffer;
         const HEAP32 = new Int32Array(HEAP);
-        const HEAPF = (this.gSampleSize === 4) ? new Float32Array(HEAP) : new Float64Array(HEAP);
+        const HEAPF = (this.fSampleSize === 4) ? new Float32Array(HEAP) : new Float64Array(HEAP);
 
         if (this.getNumInputs() > 0) {
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.gSampleSize * chan;
+                HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.fSampleSize * chan;
             }
             // Prepare Ins buffer tables
-            const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, (this.fAudioInputs + this.getNumInputs() * this.gPtrSize) >> 2);
+            const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, (this.fAudioInputs + this.getNumInputs() * this.fPtrSize) >> 2);
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                this.fInChannels[chan] = HEAPF.subarray(dspInChans[chan] >> Math.log2(this.gSampleSize), (dspInChans[chan] + this.fBufferSize * this.gSampleSize) >> Math.log2(this.gSampleSize));
+                this.fInChannels[chan] = HEAPF.subarray(dspInChans[chan] >> Math.log2(this.fSampleSize), (dspInChans[chan] + this.fBufferSize * this.fSampleSize) >> Math.log2(this.fSampleSize));
             }
         }
         if (this.getNumOutputs() > 0) {
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.gSampleSize * chan;
-                HEAP32[(this.fAudioMixing >> 2) + chan] = $audioMixing + this.fBufferSize * this.gSampleSize * chan;
-                HEAP32[(this.fAudioMixingHalf >> 2) + chan] = $audioMixing + this.fBufferSize * this.gSampleSize * chan + this.fBufferSize / 2 * this.gSampleSize;
+                HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.fSampleSize * chan;
+                HEAP32[(this.fAudioMixing >> 2) + chan] = $audioMixing + this.fBufferSize * this.fSampleSize * chan;
+                HEAP32[(this.fAudioMixingHalf >> 2) + chan] = $audioMixing + this.fBufferSize * this.fSampleSize * chan + this.fBufferSize / 2 * this.fSampleSize;
             }
             // Prepare Out buffer tables
-            const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, (this.fAudioOutputs + this.getNumOutputs() * this.gPtrSize) >> 2);
+            const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, (this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize) >> 2);
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                this.fOutChannels[chan] = HEAPF.subarray(dspOutChans[chan] >> Math.log2(this.gSampleSize), (dspOutChans[chan] + this.fBufferSize * this.gSampleSize) >> Math.log2(this.gSampleSize));
+                this.fOutChannels[chan] = HEAPF.subarray(dspOutChans[chan] >> Math.log2(this.fSampleSize), (dspOutChans[chan] + this.fBufferSize * this.fSampleSize) >> Math.log2(this.fSampleSize));
             }
         }
+
+        return endMemory;
     }
 
     toString() {
         return `============== Poly Memory layout ==============
-this.fBufferSize: ${this.fBufferSize}
-this.fJSONDsp.size: ${this.fJSONDsp.size}
-this.fAudioInputs: ${this.fAudioInputs}
-this.fAudioOutputs: ${this.fAudioOutputs}
-this.fAudioMixing: ${this.fAudioMixing}
-this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
+        this.fBufferSize: ${this.fBufferSize}
+        this.fJSONDsp.size: ${this.fJSONDsp.size}
+        this.fAudioInputs: ${this.fAudioInputs}
+        this.fAudioOutputs: ${this.fAudioOutputs}
+        this.fAudioMixing: ${this.fAudioMixing}
+        this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
     }
 
     private allocVoice(voice: number, type: number) {
@@ -882,6 +1506,12 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
 
         // Check DSP state
         if (this.fDestroyed) return false;
+
+        // Init memory again on first call (since WebAssembly.memory.grow() may have been called)
+        if (this.fFirstCall) {
+            this.initMemory();
+            this.fFirstCall = false;
+        }
 
         // Check Processing state: the node returns 'true' to stay in the graph, even if not processing
         if (!this.fProcessing) return true;
@@ -952,6 +1582,7 @@ this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
 
         return true;
     }
+
     getNumInputs() {
         return this.fInstance.voiceAPI.getNumInputs(0);
     }

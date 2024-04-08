@@ -14,10 +14,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const __filename = fileURLToPath(import.meta.url);
 
 /**
- * @param {string} inputFile
- * @param {string} outputDir
- * @param {string[]} [argv]
- * @param {boolean} [poly]
+ *  Script to compile a Faust DSP file to WebAssembly and write the output to files.
+ * 
+ * @param {string} inputFile : The path to the Faust DSP file.
+ * @param {string} outputDir : The path to the output directory.
+ * @param {string[]} [argv] : An array of command-line arguments to pass to the Faust compiler.
+ * @param {boolean} [poly] : Whether to compile the DSP as a polyphonic instrument.
  */
 const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) => {
     const faustModule = await instantiateFaustModuleFromFile(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));

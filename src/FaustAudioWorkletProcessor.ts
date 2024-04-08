@@ -42,7 +42,6 @@ export interface FaustPolyAudioWorkletProcessorOptions extends FaustAudioWorklet
     effectFactory?: LooseFaustDspFactory;
 }
 
-
 // Dynamic AudioWorkletProcessor code generator
 const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencies: FaustAudioWorkletProcessorDependencies<Poly>, faustData: FaustData, register = true): typeof AudioWorkletProcessor => {
     const { registerProcessor, AudioWorkletProcessor, sampleRate } = globalThis as unknown as AudioWorkletGlobalScope;
@@ -51,7 +50,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         FaustBaseWebAudioDsp,
         FaustWasmInstantiator
     } = dependencies;
-    
+
     const {
         processorName,
         dspName,
@@ -88,7 +87,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
             // Setup port message handling
             this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);
-            
+
             const { parameterDescriptors } = (this.constructor as typeof AudioWorkletProcessor);
             parameterDescriptors.forEach((pd) => {
                 this.paramValuesCache[pd.name] = pd.defaultValue || 0;
@@ -189,8 +188,15 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             const { factory, sampleSize } = options.processorOptions;
 
             const instance = FaustWasmInstantiator.createSyncMonoDSPInstance(factory);
+
             // Create Monophonic DSP
             this.fDSPCode = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, 128);
+
+            // Check for soundfile support
+            if (this.fDSPCode.hasSoundfiles()) {
+                console.error("FaustAudioWorkletProcessor: Soundfile support is not implemented yet, switch to ScriptProcessorNode for now");
+                return;
+            }
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
@@ -211,8 +217,15 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
 
             const instance = FaustWasmInstantiator.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
+
             // Create Polyphonic DSP
             this.fDSPCode = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, 128);
+
+            // Check for soundfile support
+            if (this.fDSPCode.hasSoundfiles()) {
+                console.error("FaustAudioWorkletProcessor: Soundfile support is not implemented yet, switch to ScriptProcessorNode for now");
+                return;
+            }
 
             // Setup port message handling
             this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);

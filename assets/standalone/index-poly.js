@@ -50,8 +50,8 @@ const buildAudioDeviceMenu = async (faustNode) => {
         const constraints = {
             audio: {
                 echoCancellation: false,
-                mozNoiseSuppression: false,
-                mozAutoGainControl: false,
+                noiseSuppression: false,
+                autoGainControl: false,
                 deviceId: id ? { exact: id } : undefined,
             },
         };
@@ -124,9 +124,10 @@ $buttonDsp.onclick = () => {
  * @param {AudioContext} audioContext - The Web Audio API AudioContext to which the Faust audio node will be connected.
  * @param {string} dspName - The name of the DSP to be loaded.
  * @param {number} voices - The number of voices to be used for polyphonic DSPs.
+ * @param {boolean} sp - Whether to create a ScriptProcessorNode instead of an AudioWorkletNode.
  * @returns {Object} - An object containing the Faust audio node and the DSP metadata.
  */
-const createFaustNode = async (audioContext, dspName = "template", voices = 0) => {
+const createFaustNode = async (audioContext, dspName = "template", voices = 0, sp = false) => {
     // Import necessary Faust modules and data
     const { FaustMonoDspGenerator, FaustPolyDspGenerator } = await import("./faustwasm/index.js");
 
@@ -161,14 +162,16 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0) =
             "FaustPolyDSP",
             { module: faustDsp.dspModule, json: JSON.stringify(faustDsp.dspMeta) },
             faustDsp.mixerModule,
-            faustDsp.effectModule ? { module: faustDsp.effectModule, json: JSON.stringify(faustDsp.effectMeta) } : undefined
+            faustDsp.effectModule ? { module: faustDsp.effectModule, json: JSON.stringify(faustDsp.effectMeta) } : undefined,
+            sp
         );
     } else {
         const generator = new FaustMonoDspGenerator();
         faustNode = await generator.createNode(
             audioContext,
             "FaustMonoDSP",
-            { module: faustDsp.dspModule, json: JSON.stringify(faustDsp.dspMeta) }
+            { module: faustDsp.dspModule, json: JSON.stringify(faustDsp.dspMeta) },
+            sp
         );
     }
 

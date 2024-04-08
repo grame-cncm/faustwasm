@@ -112,6 +112,7 @@ export interface IFaustPolyDspGenerator {
         voiceFactory: FaustDspFactory | null;
         effectFactory?: FaustDspFactory | null;
     } | null>;
+
     /**
      * Create a polyphonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
      *
@@ -189,9 +190,12 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
     }
     async compile(compiler: IFaustCompiler, name: string, code: string, args: string) {
         this.factory = await compiler.createMonoDSPFactory(name, code, args);
-        if (!this.factory) return null;
-        this.name = name;
-        return this;
+        if (this.factory) {
+            this.name = name;
+            return this;
+        } else {
+            return null;
+        }
     }
 
     async createNode<SP extends boolean = false>(
@@ -209,6 +213,8 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
         if (sp) {
             const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
             const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
+            // Initialize the DSP instance, possibly loading soundfiles
+            await monoDsp.init(context);
             const sp = context.createScriptProcessor(bufferSize, monoDsp.getNumInputs(), monoDsp.getNumOutputs()) as FaustMonoScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustMonoScriptProcessorNode.prototype);
             sp.init(monoDsp);
@@ -255,6 +261,7 @@ const dependencies = {
             return node as SP extends true ? FaustMonoScriptProcessorNode : FaustMonoAudioWorkletNode;
         }
     }
+
     async createFFTNode(
         context: BaseAudioContext,
         fftUtils: typeof FFTUtils,
@@ -325,6 +332,7 @@ const dependencies = {
         }
         return node;
     }
+
     async createAudioWorkletProcessor(
         name = this.name,
         factory = this.factory as LooseFaustDspFactory,
@@ -359,6 +367,7 @@ const dependencies = {
             throw e;
         }
     }
+
     async createOfflineProcessor(
         sampleRate: number,
         bufferSize: number,
@@ -370,6 +379,8 @@ const dependencies = {
         const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
         const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
         const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
+        // Initialize the DSP instance, no soundfiles loading for now (TODO ?)
+        await monoDsp.init(null);
         return new FaustMonoOfflineProcessor(monoDsp, bufferSize);
     }
 
@@ -492,6 +503,8 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
         if (sp) {
             const instance = await FaustWasmInstantiator.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || undefined);
             const polyDsp = new FaustPolyWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
+            // Initialize the DSP instance, possibly loading soundfiles
+            await polyDsp.init(context);
             const sp = context.createScriptProcessor(bufferSize, polyDsp.getNumInputs(), polyDsp.getNumOutputs()) as FaustPolyScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustPolyScriptProcessorNode.prototype);
             sp.init(polyDsp);
@@ -540,6 +553,7 @@ const dependencies = {
             return node as SP extends true ? FaustPolyScriptProcessorNode : FaustPolyAudioWorkletNode;
         }
     }
+
     async createAudioWorkletProcessor(
         name = this.name,
         voiceFactory = this.voiceFactory as LooseFaustDspFactory,
@@ -577,6 +591,7 @@ const dependencies = {
             throw e;
         }
     }
+
     async createOfflineProcessor(
         sampleRate: number,
         bufferSize: number,
