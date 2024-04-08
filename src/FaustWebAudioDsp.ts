@@ -830,6 +830,18 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         // Split the string into an array of strings and remove first and last characters
         return trimmed.split(";").map(str => str.length <= 2 ? '' : str.substring(1, str.length - 1));
     }
+
+    private extractURLsFromJSON(): string[] {
+        // Find the entry with the "soundfiles" key
+        const soundfilesEntry = this.fJSONDsp.meta.find(entry => entry.soundfiles !== undefined);
+        // If the entry is found, split the string by semicolon to get the URLs
+        if (soundfilesEntry) {
+            return soundfilesEntry.soundfiles.split(';').filter(url => url !== '');
+        } else {
+            return [];
+        }
+    }
+
     /**
      *  Load a soundfile possibly containing several parts. 
      * 
@@ -842,9 +854,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 
         console.log(`Soundfile ${name} paths: ${url}`);
 
-        // Add standard directories to look for soundfiles
-        const sfDirectories: string[] = ["", ".", "http://127.0.0.1:8000"];
+        const sfReaderURLs = this.extractURLsFromJSON();
+        console.log(`sfReaderURLs ${sfReaderURLs}`);
 
+        const sfDirectories: string[] = ["", ".", "http://127.0.0.1:8000"];
+        sfDirectories.push(...sfReaderURLs);
         console.log(`sfDirectories ${sfDirectories}`);
 
         // Check if the soundfile exists in the given directories and return the real path
