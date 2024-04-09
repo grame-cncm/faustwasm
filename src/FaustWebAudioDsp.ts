@@ -687,6 +687,7 @@ export interface IFaustPolyWebAudioNode extends IFaustPolyWebAudioDsp, AudioNode
 type SoundfileItem = {
     name: string;      // Name of the soundfile
     url: string;       // URL of the soundfile
+    index: number;     // Index in the DSP struct 
     basePtr: number;   // Base pointer in wasm memory
 };
 
@@ -791,7 +792,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                     }
                 });
             } else if (item.type === "soundfile") {
-                this.fSoundfiles.push({ name: item.label, url: item.url, basePtr: -1 });
+                this.fSoundfiles.push({ name: item.label, url: item.url, index: item.index, basePtr: -1 });
             }
         }
     }
@@ -843,14 +844,17 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
 
     /**
-     *  Load a soundfile possibly containing several parts. 
+     * Load a soundfile possibly containing several parts in the DSP struct.
+     * Soundfile pointers are located at 'index' offset, to be read in the JSON file.
+     * The DSP struct is located at baseDSP in the wasm memory, 
+     * either a monophonic DSP, or a voice in a polyphonic context.
      * 
      * @param sfReader : the soundfile reader 
-     * @param sfOffset : the offset in the wasm memory
+     * @param baseDSP : the base DSP in the wasm memory
      * @param name : the name of the soundfile
      * @param url : the url of the soundfile
      */
-    private async loadSoundfile(sfReader: SoundfileReader, sfOffset: number, name: string, url: string): Promise<void> {
+    private async loadSoundfile(sfReader: SoundfileReader, baseDSP: number, name: string, url: string): Promise<void> {
 
         console.log(`Soundfile ${name} paths: ${url}`);
 
@@ -870,30 +874,31 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         if (item) {
             // Use the cached Soundfile
             if (item.basePtr !== -1) {
+
                 // Update HEAP32 after soundfile creation
                 const HEAP32 = sfReader.getHEAP32();
 
                 // Fill the soundfile structure in wasm memory, sounfiles are at the beginning of the DSP memory
-                console.log(`Soundfile ${name} loaded at ${item.basePtr} in wasm memory with sfOffset ${sfOffset}`);
-                console.log(`Soundfile CACHE ${url}}`);
+                console.log(`Soundfile CACHE ${url}} : ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`);
 
-                HEAP32[sfOffset >> 2] = item.basePtr;
+                // Soundfile is located at 'index' in the DSP struct, to be added with baseDSP in the wasm memory
+                HEAP32[(baseDSP + item.index) >> 2] = item.basePtr;
+
             } else {
 
                 // Create the soundfiles
                 const soundfile = await sfReader.createSoundfile(sfPathNames, MAX_CHAN, this.fSampleSize === 8);
                 if (soundfile) {
 
-                    //soundfile.displayMemory("After createSoundfile");
-
                     // Update HEAP32 after soundfile creation
                     const HEAP32 = soundfile.getHEAP32();
 
-                    // Fill the soundfile structure in wasm memory, sounfiles are at the beginning of the DSP memory
+                    // Get the soundfile pointer in wasm memory
                     item.basePtr = soundfile.getPtr();
-                    console.log(`Soundfile ${name} loaded at ${item.basePtr} in wasm memory with sfOffset ${sfOffset}`);
+                    console.log(`Soundfile ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`);
 
-                    HEAP32[sfOffset >> 2] = item.basePtr;
+                    // Soundfile is located at 'index' in the DSP struct, to be added with baseDSP in the wasm memory
+                    HEAP32[(baseDSP + item.index) >> 2] = item.basePtr;
 
                 } else {
                     console.log(`Soundfile ${name} for ${url} cannot be created !}`);
@@ -907,15 +912,14 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     /** 
      * Init soundfiles memory.
      * 
-     * Soundfile pointers are located at the beginning of the DSP struct memory (one after the other), 
-     * so that the TS scode can setup them easily.
+     * @param allocator : the wasm memory allocator
+     * @param sfReader : the soundfile reader
+     * @param baseDSP : the DSP struct (either a monophonic DSP of polyphonic voice) base DSP in the wasm memory
     */
     protected async initSoundfileMemory(allocator: WasmAllocator, sfReader: SoundfileReader, baseDSP: number): Promise<void> {
         // Create and fill the soundfile structure
-        let sfOffset: number = baseDSP;
         for (const { name, url } of this.fSoundfiles) {
-            await this.loadSoundfile(sfReader, sfOffset, name, url);
-            sfOffset += this.fPtrSize;
+            await this.loadSoundfile(sfReader, baseDSP, name, url);
         };
     }
 
