@@ -139,9 +139,13 @@ class FaustWasmInstantiator {
     }
 
     static async createAsyncMonoDSPInstance(factory: LooseFaustDspFactory) {
-        const parsedJson = JSON.parse(factory.json);
-        // If the JSON contains a soundfile UI element, we need to create a memory object
-        if (Array.isArray(parsedJson.ui) && parsedJson.ui.some((group: { items: any[]; }) => group.items?.some(item => item.type === "soundfile"))) {
+
+        // Regular expression to match the 'type: soundfile' pattern
+        const pattern = /"type":\s*"soundfile"/;
+        // Check if the pattern exists in the JSON string
+        const isDetected = pattern.test(factory.json);
+
+        if (isDetected) {
             const memory = this.createMemoryMono(factory);
             const instance = await WebAssembly.instantiate(factory.module, this.createWasmImport(memory));
             return this.createMonoDSPInstanceAux(instance, factory.json, memory);
@@ -153,9 +157,14 @@ class FaustWasmInstantiator {
     }
 
     static createSyncMonoDSPInstance(factory: LooseFaustDspFactory) {
-        const parsedJson = JSON.parse(factory.json);
+
+        // Regular expression to match the 'type: soundfile' pattern
+        const pattern = /"type":\s*"soundfile"/;
+        // Check if the pattern exists in the JSON string
+        const isDetected = pattern.test(factory.json);
+
         // If the JSON contains a soundfile UI element, we need to create a memory object
-        if (Array.isArray(parsedJson.ui) && parsedJson.ui.some((group: { items: any[]; }) => group.items?.some(item => item.type === "soundfile"))) {
+        if (isDetected) {
             const memory = this.createMemoryMono(factory);
             const instance = new WebAssembly.Instance(factory.module, this.createWasmImport(memory));
             return this.createMonoDSPInstanceAux(instance, factory.json, memory);
