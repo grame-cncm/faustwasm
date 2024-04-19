@@ -37,10 +37,12 @@
     "url": "https://github.com/grame-cncm/faustwasm/issues"
   },
   "homepage": "https://github.com/grame-cncm/faustwasm#readme",
+  "dependencies": {
+    "@types/emscripten": "^1.39.5"
+  },
   "devDependencies": {
     "@aws-crypto/sha256-js": "^2.0.1",
     "@shren/faust-ui": "^1.1.9",
-    "@types/emscripten": "^1.39.5",
     "@types/node": "^16.11.7",
     "@types/webmidi": "^2.0.6",
     "dts-bundle-generator": "^6.13.0",
