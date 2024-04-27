@@ -1065,12 +1065,12 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
 
 export class FaustWebAudioDspVoice {
     // Voice state
-    static kActiveVoice = 0;
-    static kFreeVoice = -1;
-    static kReleaseVoice = -2;
-    static kLegatoVoice = -3;
-    static kNoVoice = -4;
-    static VOICE_STOP_LEVEL = 0.0005;
+    static get kActiveVoice() { return 0; }
+    static get kFreeVoice() { return -1; }
+    static get kReleaseVoice() { return -2; }
+    static get kLegatoVoice() { return -3; }
+    static get kNoVoice() { return -4; }
+    static get VOICE_STOP_LEVEL() { return 0.0005; }
 
     private fFreqLabel: number[] = [];
     private fGateLabel: number[] = [];
