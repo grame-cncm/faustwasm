@@ -1,4 +1,4 @@
-import type LibFaust from "./LibFaust";
+import type FaustCompiler from "./FaustCompiler";
 
 interface IFaustCmajor {
     /**
@@ -13,15 +13,15 @@ interface IFaustCmajor {
 }
 
 class FaustCmajor implements IFaustCmajor {
-    private fLibFaust: LibFaust;
+    private fCompiler: FaustCompiler;
 
-    constructor(libfaust: LibFaust) {
-        this.fLibFaust = libfaust;
+    constructor(compiler: FaustCompiler) {
+        this.fCompiler = compiler;
     }
 
     compile(name: string, code: string, args: string) {
-        const fs = this.fLibFaust.fs();
-        const success = this.fLibFaust.generateAuxFiles(name, code, `-lang cmajor-hybrid -cn ${name} -o ${name}.cmajor`);
+        const fs = this.fCompiler.fs();
+        const success = this.fCompiler.generateAuxFiles(name, code, `-lang cmajor-hybrid -cn ${name} -o ${name}.cmajor`);
         return (success) ? fs.readFile(`${name}.cmajor`, { encoding: "utf8" }) as string : "";
     }
 }

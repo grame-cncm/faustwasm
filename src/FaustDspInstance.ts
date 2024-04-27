@@ -31,7 +31,7 @@ export interface IFaustDspInstance {
      * 
      * @param $dsp - the DSP pointer
      * @param index - the parameter index
-     * @preturn the parameter value
+     * @return the parameter value
      */
     getParamValue($dsp: number, index: number): number;
 
@@ -39,7 +39,7 @@ export interface IFaustDspInstance {
      * Give the Faust wasm instance sample rate.
      * 
      * @param $dsp - the DSP pointer
-     * @preturn the sample rate
+     * @return the sample rate
      */
     getSampleRate($dsp: number): number;
 

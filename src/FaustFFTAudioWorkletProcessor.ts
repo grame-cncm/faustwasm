@@ -162,6 +162,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         private fPlotHandler: PlotHandler | null = null;
         private fCachedEvents: { type: string; data: any }[] = [];
         private fBufferNum = 0;
+        private soundfiles: LooseFaustDspFactory["soundfiles"] = {};
         get fftProcessorBufferSize() {
             return this.fftSize / 2 + 1;
         }
@@ -182,6 +183,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
 
             this.dspInstance = FaustWasmInstantiator.createSyncMonoDSPInstance(factory);
             this.sampleSize = sampleSize;
+            this.soundfiles = factory.soundfiles;
 
             // Init the FFT constructor and the Faust FFT Processor
             this.initFFT();
@@ -509,7 +511,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             this.fDSPCode?.destroy();
 
             // Create Monophonic DSP
-            this.fDSPCode = new FaustMonoWebAudioDsp(this.dspInstance, sampleRate, this.sampleSize, this.fftProcessorBufferSize);
+            this.fDSPCode = new FaustMonoWebAudioDsp(this.dspInstance, sampleRate, this.sampleSize, this.fftProcessorBufferSize, this.soundfiles);
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));

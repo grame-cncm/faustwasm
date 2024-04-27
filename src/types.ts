@@ -104,23 +104,26 @@ export interface LibFaustWasm {
     getInfos(what: FaustInfoType): string;
 }
 
-/**
- * The Factory structure.
- * cfactory: a "pointer" (as an integer) on the internal C++ factory 
- * code: the WASM code as a binary array
- * module: the compule WASM module
- * json: the compiled DSP JSON description
- * poly: whether the factory is a polyphonic one or not
- */
 export interface FaustDspFactory extends Required<LooseFaustDspFactory> { }
 
+/**
+ * The Factory structure.
+ */
 export interface LooseFaustDspFactory {
+    /** a "pointer" (as an integer) on the internal C++ factory */
     cfactory?: number;
+    /** the WASM code as a binary array */
     code?: Uint8Array;
+    /** the compule WASM module */
     module: WebAssembly.Module;
+    /** the compiled DSP JSON description */
     json: string;
+    /** whether the factory is a polyphonic one or not */
     poly?: boolean;
+    /** a unique identifier */
     shaKey?: string;
+    /** a map of transferable audio buffers for the `soundfile` function */
+    soundfiles: Record<string, (AudioData | null)>;
 }
 
 export interface FaustDspMeta {
@@ -232,4 +235,9 @@ export declare const FFTUtils: {
     signalToFFT: (real: Float32Array | Float64Array, imag: Float32Array | Float64Array, fft: Float32Array | Float64Array) => any;
     /** Convert from Faust processor's output to direct audio output, real/imag are readonly, fft length = fftSize = (real/imag length - 1) * 2 */
     signalToNoFFT: (real: Float32Array | Float64Array, imag: Float32Array | Float64Array, fft: Float32Array | Float64Array) => any;
+}
+
+export interface AudioData {
+    sampleRate: number;
+    audioBuffer: Float32Array[];
 }

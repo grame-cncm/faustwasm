@@ -29,7 +29,7 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     console.log(`Reading file ${inputFile}`);
     const code = fs.readFileSync(inputFile, { encoding: "utf8" });
 
-    const fileName = inputFile.split('/').pop();
+    const fileName = /** @type {string} */(inputFile.split('/').pop());
     const dspName = fileName.replace(/\.dsp$/, '');
 
     if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");

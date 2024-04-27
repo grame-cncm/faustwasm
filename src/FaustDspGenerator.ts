@@ -5,9 +5,10 @@ import { FaustDspInstance } from "./FaustDspInstance";
 import FaustWasmInstantiator from "./FaustWasmInstantiator";
 import { FaustMonoOfflineProcessor, FaustPolyOfflineProcessor, IFaustMonoOfflineProcessor, IFaustPolyOfflineProcessor } from "./FaustOfflineProcessor";
 import { FaustMonoScriptProcessorNode, FaustPolyScriptProcessorNode } from "./FaustScriptProcessorNode";
-import { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, FaustWebAudioDspVoice, IFaustMonoWebAudioNode, IFaustPolyWebAudioNode } from "./FaustWebAudioDsp";
+import { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, FaustWebAudioDspVoice, IFaustMonoWebAudioNode, IFaustPolyWebAudioNode, Soundfile, WasmAllocator } from "./FaustWebAudioDsp";
 import type { IFaustCompiler } from "./FaustCompiler";
 import type { FaustDspFactory, FaustUIDescriptor, FaustDspMeta, FFTUtils, LooseFaustDspFactory } from "./types";
+import SoundfileReader from "./SoundfileReader";
 
 export interface IFaustMonoDspGenerator {
     /**
@@ -73,7 +74,11 @@ export interface IFaustMonoDspGenerator {
      * @param factory - default is the compiled factory
      * @returns the compiled processor or 'null' if failure
      */
-    createOfflineProcessor(sampleRate: number, bufferSize: number, factory?: LooseFaustDspFactory, meta?: FaustDspMeta): Promise<IFaustMonoOfflineProcessor | null>;
+    createOfflineProcessor(
+        sampleRate: number,
+        bufferSize: number,
+        factory?: LooseFaustDspFactory
+    ): Promise<IFaustMonoOfflineProcessor | null>;
 
     /**
      * Get DSP JSON description with its UI and metadata as object.
@@ -134,7 +139,8 @@ export interface IFaustPolyDspGenerator {
         mixerModule?: WebAssembly.Module,
         effectFactory?: LooseFaustDspFactory | null,
         sp?: boolean,
-        bufferSize?: number
+        bufferSize?: number,
+        processorName?: string
     ): Promise<IFaustPolyWebAudioNode | null>;
 
     /**
@@ -153,7 +159,8 @@ export interface IFaustPolyDspGenerator {
         voices: number,
         voiceFactory?: LooseFaustDspFactory,
         mixerModule?: WebAssembly.Module,
-        effectFactory?: LooseFaustDspFactory | null
+        effectFactory?: LooseFaustDspFactory | null,
+        processorName?: string
     ): Promise<IFaustPolyOfflineProcessor | null>;
 
     /**
@@ -210,11 +217,10 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
 
         const meta = JSON.parse(factory.json);
         const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
+        factory.soundfiles = await SoundfileReader.loadSoundfiles(meta, factory.soundfiles || {}, context);
         if (sp) {
             const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
-            const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
-            // Initialize the DSP instance, possibly loading soundfiles
-            await monoDsp.init(context);
+            const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize, factory.soundfiles);
             const sp = context.createScriptProcessor(bufferSize, monoDsp.getNumInputs(), monoDsp.getNumOutputs()) as FaustMonoScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustMonoScriptProcessorNode.prototype);
             sp.init(monoDsp);
@@ -233,15 +239,23 @@ const faustData = ${JSON.stringify({
                         poly: false
                     } as FaustData)};
 // Implementation needed classes of functions
-const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
-const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
-const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
-const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
+var ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
+var FaustDspInstance = ${FaustDspInstance.name};
+var ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
+var FaustBaseWebAudioDsp = ${FaustBaseWebAudioDsp.name};
+var ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
+var FaustMonoWebAudioDsp = ${FaustMonoWebAudioDsp.name};
+var ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
+var FaustWasmInstantiator = ${FaustWasmInstantiator.name};
+var ${Soundfile.name} = ${Soundfile.toString()}
+var Soundfile = ${Soundfile.name};
+var ${WasmAllocator.name} = ${WasmAllocator.toString()}
+var WasmAllocator = ${WasmAllocator.name};
 // Put them in dependencies
 const dependencies = {
-    FaustBaseWebAudioDsp: ${FaustBaseWebAudioDsp.name},
-    FaustMonoWebAudioDsp: ${FaustMonoWebAudioDsp.name},
-    FaustWasmInstantiator: ${FaustWasmInstantiator.name}
+    FaustBaseWebAudioDsp,
+    FaustMonoWebAudioDsp,
+    FaustWasmInstantiator
 };
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
@@ -274,6 +288,7 @@ const dependencies = {
 
         const meta: FaustDspMeta = JSON.parse(factory.json);
         const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
+        factory.soundfiles = await SoundfileReader.loadSoundfiles(meta, factory.soundfiles || {}, context);
         // Dynamically create AudioWorkletProcessor if code not yet created
         if (!FaustMonoDspGenerator.gWorkletProcessors.has(context)) FaustMonoDspGenerator.gWorkletProcessors.set(context, new Set());
         if (!FaustMonoDspGenerator.gWorkletProcessors.get(context)?.has(processorName)) {
@@ -287,16 +302,24 @@ const faustData = ${JSON.stringify({
                     fftOptions
                 } as FaustFFTData)};
 // Implementation needed classes of functions
-const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
-const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
-const ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
-const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
-const FFTUtils = ${fftUtils.toString()}
+var ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
+var FaustDspInstance = ${FaustDspInstance.name};
+var ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
+var FaustBaseWebAudioDsp = ${FaustBaseWebAudioDsp.name};
+var ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
+var FaustMonoWebAudioDsp = ${FaustMonoWebAudioDsp.name};
+var ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
+var FaustWasmInstantiator = ${FaustWasmInstantiator.name};
+var ${Soundfile.name} = ${Soundfile.toString()}
+var Soundfile = ${Soundfile.name};
+var ${WasmAllocator.name} = ${WasmAllocator.toString()}
+var WasmAllocator = ${WasmAllocator.name};
+var FFTUtils = ${fftUtils.toString()}
 // Put them in dependencies
 const dependencies = {
-    FaustBaseWebAudioDsp: ${FaustBaseWebAudioDsp.name},
-    FaustMonoWebAudioDsp: ${FaustMonoWebAudioDsp.name},
-    FaustWasmInstantiator: ${FaustWasmInstantiator.name},
+    FaustBaseWebAudioDsp,
+    FaustMonoWebAudioDsp,
+    FaustWasmInstantiator,
     FFTUtils
 };
 // Generate the actual AudioWorkletProcessor code
@@ -371,16 +394,14 @@ const dependencies = {
     async createOfflineProcessor(
         sampleRate: number,
         bufferSize: number,
-        factory = this.factory as LooseFaustDspFactory,
+        factory = this.factory as LooseFaustDspFactory
     ) {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
         const meta = JSON.parse(factory.json);
         const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
         const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
-        const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
-        // Initialize the DSP instance, no soundfiles loading for now (TODO ?)
-        await monoDsp.init(null);
+        const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize, factory.soundfiles);
         return new FaustMonoOfflineProcessor(monoDsp, bufferSize);
     }
 
@@ -421,43 +442,45 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
             // the voice and effect are adapted, possibly clearing buffers
             if (this.effectFactory) {
                 const effectJSON = JSON.parse(this.effectFactory.json);
-                const dspCode = `
-                    // Voice output is forced to 2, when DSP is stereo or effect has 2 ins or 2 outs,
-                    // so that the effect can process the 2 channels of the voice
-                    adaptOut(1,1,1) = _;
-                    adaptOut(1,1,2) = _ <: _,0;  // The left channel only is kept
-                    adaptOut(1,2,1) = _ <: _,_;
-                    adaptOut(1,2,2) = _ <: _,_;
-                    adaptOut(2,1,1) = _,_;
-                    adaptOut(2,1,2) = _,_;
-                    adaptOut(2,2,1) = _,_;
-                    adaptOut(2,2,2) = _,_;
-                    adaptor(F) = adaptOut(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
-                    dsp_code = environment{
-                        ${dspCodeAux}
-                    };
-                    process = dsp_code.process : adaptor(dsp_code.process);`
-                const effectCode = `
-                    // Inputs
-                    adaptIn(1,1,1) = _;
-                    adaptIn(1,1,2) = _,_ :> _;  
-                    adaptIn(1,2,1) = _,_;
-                    adaptIn(1,2,2) = _,_;
-                    adaptIn(2,1,1) = _,_ :> _;
-                    adaptIn(2,1,2) = _,_ :> _;
-                    adaptIn(2,2,1) = _,_;
-                    adaptIn(2,2,2) = _,_;
-                    // Outputs
-                    adaptOut(1,1) = _ <: _,0;   // The left channel only is kept
-                    adaptOut(1,2) = _,_;
-                    adaptOut(2,1) = _ <: _,0;   // The left channel only is kept
-                    adaptOut(2,2) = _,_;
-                    adaptorIns(F) = adaptIn(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
-                    adaptorOuts = adaptOut(${effectJSON.inputs},${effectJSON.outputs});
-                    dsp_code = environment{
-                        ${dspCodeAux}
-                    };
-                    process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;`
+                const dspCode = `\
+// Voice output is forced to 2, when DSP is stereo or effect has 2 ins or 2 outs,
+// so that the effect can process the 2 channels of the voice
+adaptOut(1,1,1) = _;
+adaptOut(1,1,2) = _ <: _,0;  // The left channel only is kept
+adaptOut(1,2,1) = _ <: _,_;
+adaptOut(1,2,2) = _ <: _,_;
+adaptOut(2,1,1) = _,_;
+adaptOut(2,1,2) = _,_;
+adaptOut(2,2,1) = _,_;
+adaptOut(2,2,2) = _,_;
+adaptor(F) = adaptOut(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
+dsp_code = environment{
+    ${dspCodeAux}
+};
+process = dsp_code.process : adaptor(dsp_code.process);
+`;
+                const effectCode = `\
+// Inputs
+adaptIn(1,1,1) = _;
+adaptIn(1,1,2) = _,_ :> _;  
+adaptIn(1,2,1) = _,_;
+adaptIn(1,2,2) = _,_;
+adaptIn(2,1,1) = _,_ :> _;
+adaptIn(2,1,2) = _,_ :> _;
+adaptIn(2,2,1) = _,_;
+adaptIn(2,2,2) = _,_;
+// Outputs
+adaptOut(1,1) = _ <: _,0;   // The left channel only is kept
+adaptOut(1,2) = _,_;
+adaptOut(2,1) = _ <: _,0;   // The left channel only is kept
+adaptOut(2,2) = _,_;
+adaptorIns(F) = adaptIn(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
+adaptorOuts = adaptOut(${effectJSON.inputs},${effectJSON.outputs});
+dsp_code = environment{
+    ${dspCodeAux}
+};
+process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
+`;
                 this.voiceFactory = await compiler.createPolyDSPFactory(name, dspCode, args);
                 try {
                     // Effect is processing same buffers for inputs and outputs, so has to use -inpl option
@@ -500,11 +523,12 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
         const voiceMeta = JSON.parse(voiceFactory.json);
         const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : undefined;
         const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
+        voiceFactory.soundfiles = await SoundfileReader.loadSoundfiles(voiceMeta, voiceFactory.soundfiles || {}, context);
+        if (effectFactory) effectFactory.soundfiles = await SoundfileReader.loadSoundfiles(effectMeta, effectFactory.soundfiles || {}, context);
         if (sp) {
             const instance = await FaustWasmInstantiator.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || undefined);
-            const polyDsp = new FaustPolyWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize);
-            // Initialize the DSP instance, possibly loading soundfiles
-            await polyDsp.init(context);
+            const soundfiles = { ...effectFactory?.soundfiles, ...voiceFactory.soundfiles };
+            const polyDsp = new FaustPolyWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize, soundfiles);
             const sp = context.createScriptProcessor(bufferSize, polyDsp.getNumInputs(), polyDsp.getNumOutputs()) as FaustPolyScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustPolyScriptProcessorNode.prototype);
             sp.init(polyDsp);
@@ -524,16 +548,25 @@ const faustData = ${JSON.stringify({
                         effectMeta
                     } as FaustData)};
 // Implementation needed classes of functions
-const ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
-const ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
-const ${FaustPolyWebAudioDsp.name} = ${FaustPolyWebAudioDsp.toString()}
-const ${FaustWebAudioDspVoice.name} = ${FaustWebAudioDspVoice.toString()}
-const ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
+var ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
+var FaustDspInstance = ${FaustDspInstance.name};
+var ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
+var FaustBaseWebAudioDsp = ${FaustBaseWebAudioDsp.name};
+var ${FaustPolyWebAudioDsp.name} = ${FaustPolyWebAudioDsp.toString()}
+var FaustPolyWebAudioDsp = ${FaustPolyWebAudioDsp.name};
+var ${FaustWebAudioDspVoice.name} = ${FaustWebAudioDspVoice.toString()}
+var FaustWebAudioDspVoice = ${FaustWebAudioDspVoice.name};
+var ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
+var FaustWasmInstantiator = ${FaustWasmInstantiator.name};
+var ${Soundfile.name} = ${Soundfile.toString()}
+var Soundfile = ${Soundfile.name};
+var ${WasmAllocator.name} = ${WasmAllocator.toString()}
+var WasmAllocator = ${WasmAllocator.name};
 // Put them in dependencies
 const dependencies = {
-    FaustBaseWebAudioDsp: ${FaustBaseWebAudioDsp.name},
-    FaustPolyWebAudioDsp: ${FaustPolyWebAudioDsp.name},
-    FaustWasmInstantiator: ${FaustWasmInstantiator.name}
+    FaustBaseWebAudioDsp,
+    FaustPolyWebAudioDsp,
+    FaustWasmInstantiator
 };
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
@@ -606,7 +639,8 @@ const dependencies = {
         const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : undefined;
         const instance = await FaustWasmInstantiator.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || undefined);
         const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
-        const polyDsp = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, bufferSize);
+        const soundfiles = { ...effectFactory?.soundfiles, ...voiceFactory.soundfiles };
+        const polyDsp = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, bufferSize, soundfiles);
         return new FaustPolyOfflineProcessor(polyDsp, bufferSize);
     }
 

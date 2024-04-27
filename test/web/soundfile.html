@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <script src="../../dist/cjs-bundle/index.js"></script>
+    </head>
+    <body style="position: absolute; width: 100%; height: 100%; margin: 0px">
+        <button id="start">Start</button>
+    </body>
+    <script>
+        code = `\
+declare name "DroneLAN";
+declare author "Developpement Grame - CNCM par Elodie Rabibisoa et Romain Constant.";
+
+import ("stdfaust.lib");
+
+declare soundfiles "https://raw.githubusercontent.com/grame-cncm/GameLAN/master/drone/";
+// 2 drones :
+process = par(i, 1, (multi(i) :> _* 1)) :>_ <:_,_;
+
+// select_drone = hslider("[1]Drones[style:radio{'1':0;'2':1}]", 0, 0, 1, 1);
+
+// 4 sounds per drone :
+multi(N) = par(i, 2, so.loop(drone(N), i) *(0.25) * volume(i));
+drone(0) = soundfile("Drone_1 [url:{'Alonepad_reverb_stereo_instru1.flac'; 'something_new'}]", 1);
+
+volume(0) = hslider("Volume 0 [acc:0 0 0 0 10][hidden:1]", 1, 0, 1, 0.001) : fi.lowpass(1, 1);
+volume(1) = hslider("Volume 1 [acc:0 1 -10 0 0][hidden:1]", 0.2, 0, 1, 0.001) : fi.lowpass(1, 1);
+`;
+        let t0 = performance.now();
+        const time = (str) => {
+            const t = performance.now();
+            if (str) console.log(str, t - t0);
+            t0 = t;
+        }
+        const { instantiateFaustModule, LibFaust, FaustCompiler, FaustMonoDspGenerator } = faustwasm;
+        document.getElementById("start").onclick = async () => {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            await audioCtx.resume();
+            time();
+            faustModule = await instantiateFaustModule();
+            time("Faust WASM Module ready");
+            libFaust = new LibFaust(faustModule);
+            compiler = new FaustCompiler(libFaust);
+            generator = new FaustMonoDspGenerator();
+            time("Faust DSP Generator ready");
+            await generator.compile(compiler, "dsp", code, "");
+            time("Faust DSP compiled");
+            const buffer = new Float32Array(audioCtx.sampleRate * 5).fill(0);
+            for (let i = 0; i < buffer.length; i++) {
+                buffer[i] = Math.sin(i * 100 / audioCtx.sampleRate * 2 * Math.PI) * (buffer.length - i) / buffer.length;
+            }
+            generator.factory.soundfiles["something_new"] = { audioBuffer: [buffer], sampleRate: audioCtx.sampleRate };
+            node = await generator.createNode(audioCtx);
+            time("Faust AW Node generated");
+            node.connect(audioCtx.destination);
+            /*
+            setTimeout(async () => {
+                node.disconnect();
+                time();
+                node1 = await generator.createNode(audioCtx, undefined, undefined, true);
+                time("Faust SP Node generated");
+                node1.connect(audioCtx.destination);
+                setTimeout(() => node1.disconnect(), 6000);
+            }, 6000);
+            */
+        };
+    </script>
+</html>

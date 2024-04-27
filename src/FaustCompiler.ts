@@ -127,7 +127,7 @@ class FaustCompiler implements IFaustCompiler {
             const factory = table[shaKey];
             const { code, json, poly } = factory;
             const ab = str2ab(atob(code))
-            awaited.push(WebAssembly.compile(ab).then(module => this.gFactories.set(shaKey, { shaKey, cfactory: 0, code: ab, module, json: JSON.stringify(json), poly })));
+            awaited.push(WebAssembly.compile(ab).then(module => this.gFactories.set(shaKey, { shaKey, cfactory: 0, code: ab, module, json: JSON.stringify(json), poly, soundfiles: {} })));
         }
         return Promise.all(awaited);
     }
@@ -167,7 +167,7 @@ class FaustCompiler implements IFaustCompiler {
                 const ui8Code = this.intVec2intArray(faustDspWasm.data);
                 faustDspWasm.data.delete();
                 const module = await WebAssembly.compile(ui8Code);
-                const factory: FaustDspFactory = { shaKey, cfactory: faustDspWasm.cfactory, code: ui8Code, module, json: faustDspWasm.json, poly };
+                const factory: FaustDspFactory = { shaKey, cfactory: faustDspWasm.cfactory, code: ui8Code, module, json: faustDspWasm.json, poly, soundfiles: {} };
                 // Factory C++ side can be deallocated immediately
                 this.deleteDSPFactory(factory);
                 // Keep the compiled factory in the cache

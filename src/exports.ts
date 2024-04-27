@@ -10,6 +10,7 @@ export { default as FaustCmajor } from "./FaustCmajor";
 export { default as LibFaust } from "./LibFaust";
 export { default as WavEncoder } from "./WavEncoder";
 export { default as WavDecoder } from "./WavDecoder";
+export { default as SoundfileReader } from "./SoundfileReader";
 
 export * from "./FaustAudioWorkletNode";
 export * from "./FaustAudioWorkletProcessor";

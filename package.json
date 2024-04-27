@@ -9,9 +9,9 @@
   "scripts": {
     "build": "npm run build-cjs && npm run build-cjs-bundle && npm run build-esm && npm run build-esm-bundle && node postbuild-bundled.js & npm run build-types & npm run build-types-bundle",
     "build-cjs": "esbuild src/index.ts --target=es2019 --bundle --sourcemap --outdir=dist/cjs --format=iife --external:fs --external:url",
-    "build-cjs-bundle": "node prebuild-bundled.js && esbuild src/index-bundle-iife.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/cjs-bundle/index.js --format=iife --external:fs --external:url --external:path && node postbuild-bundled.js",
+    "build-cjs-bundle": "node prebuild-bundled.js && esbuild src/index-bundle-iife.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/cjs-bundle/index.js --format=iife --external:fs --external:url --external:path --external:ws && node postbuild-bundled.js",
     "build-esm": "esbuild src/index.ts --target=es2019 --bundle --sourcemap --outdir=dist/esm --format=esm --external:fs --external:url",
-    "build-esm-bundle": "node prebuild-bundled.js && esbuild src/index-bundle.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/esm-bundle/index.js --format=esm --external:fs --external:url --external:path && node postbuild-bundled.js",
+    "build-esm-bundle": "node prebuild-bundled.js && esbuild src/index-bundle.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/esm-bundle/index.js --format=esm --external:fs --external:url --external:path --external:ws && node postbuild-bundled.js",
     "build-types": "dts-bundle-generator -o dist/cjs/index.d.ts src/index.ts --external-imports",
     "build-types-bundle": "dts-bundle-generator -o dist/cjs-bundle/index.d.ts src/index-bundle.ts --external-imports",
     "postbuild": "node postbuild.js"
@@ -27,9 +27,9 @@
     "signal processing"
   ],
   "bin": {
-      "faust2sndfile-ts": "scripts/faust2sndfile.js",
-      "faust2svg-ts": "scripts/faust2svg.js",
-      "faust2wasm-ts": "scripts/faust2wasm.js"
+    "faust2sndfile-ts": "scripts/faust2sndfile.js",
+    "faust2svg-ts": "scripts/faust2svg.js",
+    "faust2wasm-ts": "scripts/faust2wasm.js"
   },
   "author": "Grame-CNCM",
   "license": "LGPL-3.0",
@@ -37,16 +37,16 @@
     "url": "https://github.com/grame-cncm/faustwasm/issues"
   },
   "homepage": "https://github.com/grame-cncm/faustwasm#readme",
-  "dependencies": {
-    "@types/emscripten": "^1.39.5"
-  },
   "devDependencies": {
-    "@aws-crypto/sha256-js": "^2.0.1",
+    "@aws-crypto/sha256-js": "^5.2.0",
     "@shren/faust-ui": "^1.1.9",
-    "@types/node": "^16.11.7",
-    "@types/webmidi": "^2.0.6",
-    "dts-bundle-generator": "^6.13.0",
-    "esbuild": "^0.14.27",
-    "typescript": "^4.4.4"
+    "@types/node": "^20.12.7",
+    "@types/webmidi": "^2.0.10",
+    "dts-bundle-generator": "^9.5.1",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@types/emscripten": "^1.39.10"
   }
 }
