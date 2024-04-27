@@ -133,16 +133,16 @@ export class WasmAllocator {
  */
 export class Soundfile {
     /** Maximum number of soundfile parts. */
-    static get MAX_SOUNDFILE_PARTS() { return 256; }
+    static MAX_SOUNDFILE_PARTS = 256;
     
     /** Maximum number of channels. */
-    static get MAX_CHAN() { return 64; }
+    static MAX_CHAN = 64;
     
     /** Maximum buffer size in frames. */
-    static get BUFFER_SIZE() { return 1024; }
+    static BUFFER_SIZE = 1024;
     
     /** Default sample rate. */
-    static get SAMPLE_RATE() { return 44100; }
+    static SAMPLE_RATE = 44100;
     
     /** Pointer to the soundfile structure in wasm memory */
     private readonly fPtr: number;
