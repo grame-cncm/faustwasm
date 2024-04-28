@@ -1,13 +1,11 @@
 declare name "DroneLAN";
 declare author "Developpement Grame - CNCM par Elodie Rabibisoa et Romain Constant.";
+declare soundfiles "https://raw.githubusercontent.com/grame-cncm/GameLAN/master/drone/";
 
 import ("stdfaust.lib");
 
-declare soundfiles "https://raw.githubusercontent.com/grame-cncm/GameLAN/master/drone/";
 // 2 drones :
-process = par(i, 1, (multi(i) :> _* 1)) :>_ <:_,_;
-
-// select_drone = hslider("[1]Drones[style:radio{'1':0;'2':1}]", 0, 0, 1, 1);
+process = par(i, 1, (multi(i) :> _));
 
 // 4 sounds per drone :
 multi(N) = par(i, 2, so.loop(drone(N), i) *(0.25) * volume(i));
