@@ -5,7 +5,13 @@ import type { AudioData, FaustDspMeta, FaustUIItem, LooseFaustDspFactory } from 
 class SoundfileReader {
     static get fallbackPaths() { return [location.href, location.origin, "http://127.0.0.1:8000"]; }
 
-    static toAudioData(audioBuffer: AudioBuffer) {
+    /**
+     * Convert an audio buffer to audio data.
+     * 
+     * @param audioBuffer : the audio buffer to convert
+     * @returns : the audio data
+     */
+    private static toAudioData(audioBuffer: AudioBuffer): AudioData {
         const { sampleRate, numberOfChannels } = audioBuffer;
         return {
             sampleRate,
@@ -13,7 +19,13 @@ class SoundfileReader {
         } as AudioData;
     }
 
-    private static findSoundfilesFromMeta(dspMeta: FaustDspMeta) {
+    /**
+     * Extract the URLs from the metadata.
+     * 
+     * @param dspMeta : the metadata
+     * @returns : the URLs
+     */
+    private static findSoundfilesFromMeta(dspMeta: FaustDspMeta): LooseFaustDspFactory["soundfiles"] {
         const soundfiles: LooseFaustDspFactory["soundfiles"] = {};
         const callback = (item: FaustUIItem) => {
             if (item.type === "soundfile") {
@@ -41,7 +53,15 @@ class SoundfileReader {
             return false;
         }
     }
-    private static async fetchSoundfile(url: string, audioCtx: BaseAudioContext) {
+
+    /**
+     * Fetch the soundfile.
+     * 
+     * @param url : the url of the soundfile
+     * @param audioCtx : the audio context
+     * @returns : the audio data
+     */
+    private static async fetchSoundfile(url: string, audioCtx: BaseAudioContext): Promise<AudioData> {
         console.log(`Loading sound file from ${url}`);
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Failed to load sound file from ${url}: ${response.statusText}`);
@@ -50,15 +70,33 @@ class SoundfileReader {
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
         return this.toAudioData(audioBuffer);
     }
-    private static async loadSoundfile(filename: string, metaUrls: string[], soundfiles: LooseFaustDspFactory["soundfiles"], audioCtx: BaseAudioContext) {
+
+    /**
+     * Load the soundfile.
+     * 
+     * @param filename : the filename
+     * @param metaUrls : the metadata URLs
+     * @param soundfiles : the soundfiles
+     * @param audioCtx : the audio context
+     */
+    private static async loadSoundfile(filename: string, metaUrls: string[], soundfiles: LooseFaustDspFactory["soundfiles"], audioCtx: BaseAudioContext): Promise<void> {
         if (soundfiles[filename]) return;
-        const urlsToCheck = [filename, ...[...metaUrls, ...this.fallbackPaths].map(path => new URL(filename, path.endsWith("/") ? path : `${path}/`).href)];
+        const urlsToCheck = [filename, ...[...metaUrls, ...this.fallbackPaths].map(path => new URL(filename, path).href)];
         const checkResults = await Promise.all(urlsToCheck.map(url => this.checkFileExists(url)));
         const successIndex = checkResults.findIndex(r => !!r);
         if (successIndex === -1) throw new Error(`Failed to load sound file ${filename}, all check failed.`);
         soundfiles[filename] = await this.fetchSoundfile(urlsToCheck[successIndex], audioCtx);
     }
-    static async loadSoundfiles(dspMeta: FaustDspMeta, soundfilesIn: LooseFaustDspFactory["soundfiles"], audioCtx: BaseAudioContext) {
+
+    /**
+     * Load the soundfiles, public API.
+     * 
+     * @param dspMeta : the metadata
+     * @param soundfilesIn : the soundfiles
+     * @param audioCtx : the audio context
+     * @returns : the soundfiles
+     */
+    static async loadSoundfiles(dspMeta: FaustDspMeta, soundfilesIn: LooseFaustDspFactory["soundfiles"], audioCtx: BaseAudioContext): Promise<LooseFaustDspFactory["soundfiles"]> {
         const metaUrls = FaustBaseWebAudioDsp.extractUrlsFromMeta(dspMeta);
         const soundfiles = this.findSoundfilesFromMeta(dspMeta);
         for (const id in soundfiles) {
