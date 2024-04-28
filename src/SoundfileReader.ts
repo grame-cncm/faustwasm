@@ -3,7 +3,7 @@ import type { AudioData, FaustDspMeta, FaustUIItem, LooseFaustDspFactory } from 
 
 /** Read metadata and fetch soundfiles */
 class SoundfileReader {
-    static get fallbackPaths() { return [location.href, location.origin, "http://127.0.0.1:8000"]; }
+    static get fallbackPaths() { return [location.href, location.origin]; }
 
     /**
      * Convert an audio buffer to audio data.
