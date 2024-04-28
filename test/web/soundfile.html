@@ -50,7 +50,7 @@ volume(1) = hslider("Volume 1 [acc:0 1 -10 0 0][hidden:1]", 0.2, 0, 1, 0.001) : 
             for (let i = 0; i < buffer.length; i++) {
                 buffer[i] = Math.sin(i * 100 / audioCtx.sampleRate * 2 * Math.PI) * (buffer.length - i) / buffer.length;
             }
-            generator.factory.soundfiles["something_new"] = { audioBuffer: [buffer], sampleRate: audioCtx.sampleRate };
+            generator.addSoundfile("something_new", { audioBuffer: [buffer], sampleRate: audioCtx.sampleRate });
             node = await generator.createNode(audioCtx);
             time("Faust AW Node generated");
             node.connect(audioCtx.destination);
