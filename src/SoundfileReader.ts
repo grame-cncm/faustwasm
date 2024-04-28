@@ -25,7 +25,7 @@ class SoundfileReader {
      * @param dspMeta : the metadata
      * @returns : the URLs
      */
-    private static findSoundfilesFromMeta(dspMeta: FaustDspMeta): LooseFaustDspFactory["soundfiles"] {
+    static findSoundfilesFromMeta(dspMeta: FaustDspMeta): LooseFaustDspFactory["soundfiles"] {
         const soundfiles: LooseFaustDspFactory["soundfiles"] = {};
         const callback = (item: FaustUIItem) => {
             if (item.type === "soundfile") {
