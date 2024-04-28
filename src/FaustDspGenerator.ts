@@ -35,6 +35,11 @@ export interface IFaustMonoDspGenerator {
     addSoundfile(id: string, audioData: AudioData): void;
 
     /**
+     * Get a list of soundfiles needed, call after `compile()`
+     */
+    getSoundfileList(): string[];
+
+    /**
      * Create a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
      *
      * @param context - the WebAudio context
@@ -135,6 +140,11 @@ export interface IFaustPolyDspGenerator {
     addSoundfile(id: string, audioData: AudioData): void;
 
     /**
+     * Get a list of soundfiles needed, call after `compile()`
+     */
+    getSoundfileList(): string[];
+
+    /**
      * Create a polyphonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
      *
      * @param context the WebAudio context
@@ -220,9 +230,16 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
             return null;
         }
     }
+
     addSoundfile(id: string, audioData: AudioData) {
         if (!this.factory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
         this.factory.soundfiles[id] = audioData;
+    }
+    getSoundfileList() {
+        if (!this.factory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
+        const meta = JSON.parse(this.factory.json);
+        const map = SoundfileReader.findSoundfilesFromMeta(meta);
+        return Object.keys(map);
     }
 
     async createNode<SP extends boolean = false>(
@@ -530,6 +547,15 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
     addSoundfile(id: string, audioData: AudioData) {
         if (!this.voiceFactory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
         this.voiceFactory.soundfiles[id] = audioData;
+    }
+    getSoundfileList() {
+        if (!this.voiceFactory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
+        const meta = JSON.parse(this.voiceFactory.json);
+        const map = SoundfileReader.findSoundfilesFromMeta(meta);
+        if (!this.effectFactory) return Object.keys(map);
+        const effectMeta = JSON.parse(this.effectFactory.json);
+        const effectMap = SoundfileReader.findSoundfilesFromMeta(effectMeta);
+        return Object.keys({ ...effectMap, ...map });
     }
 
     async createNode<SP extends boolean = false>(
