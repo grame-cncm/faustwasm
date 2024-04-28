@@ -712,7 +712,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                 chan = audioData.audioBuffer.length;
                 len = audioData.audioBuffer[0].length;
             } else {
-                length = Soundfile.BUFFER_SIZE;
+                len = Soundfile.BUFFER_SIZE;
                 chan = 1;
             }
             curChan = Math.max(curChan, chan);

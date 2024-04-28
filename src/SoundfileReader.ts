@@ -52,7 +52,7 @@ class SoundfileReader {
     }
     private static async loadSoundfile(filename: string, metaUrls: string[], soundfiles: LooseFaustDspFactory["soundfiles"], audioCtx: BaseAudioContext) {
         if (soundfiles[filename]) return;
-        const urlsToCheck = [filename, ...[...metaUrls, ...this.fallbackPaths].map(path => new URL(filename, path).href)];
+        const urlsToCheck = [filename, ...[...metaUrls, ...this.fallbackPaths].map(path => new URL(filename, path.endsWith("/") ? path : `${path}/`).href)];
         const checkResults = await Promise.all(urlsToCheck.map(url => this.checkFileExists(url)));
         const successIndex = checkResults.findIndex(r => !!r);
         if (successIndex === -1) throw new Error(`Failed to load sound file ${filename}, all check failed.`);
