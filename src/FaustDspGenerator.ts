@@ -221,13 +221,13 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
     }
 
     addSoundfiles(soundfileMap: Record<string, AudioData>) {
-        if (!this.factory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
+        if (!this.factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
         for (const id in soundfileMap) {
             this.factory.soundfiles[id] = soundfileMap[id];
         }
     }
     getSoundfileList() {
-        if (!this.factory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
+        if (!this.factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
         const meta = JSON.parse(this.factory.json);
         const map = SoundfileReader.findSoundfilesFromMeta(meta);
         return Object.keys(map);
@@ -536,13 +536,13 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
     }
 
     addSoundfiles(soundfileMap: Record<string, AudioData>) {
-        if (!this.voiceFactory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
+        if (!this.voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
         for (const id in soundfileMap) {
             this.voiceFactory.soundfiles[id] = soundfileMap[id];
         }
     }
     getSoundfileList() {
-        if (!this.voiceFactory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
+        if (!this.voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
         const meta = JSON.parse(this.voiceFactory.json);
         const map = SoundfileReader.findSoundfilesFromMeta(meta);
         if (!this.effectFactory) return Object.keys(map);
