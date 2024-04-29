@@ -10,7 +10,21 @@ import type { IFaustCompiler } from "./FaustCompiler";
 import type { FaustDspFactory, FaustUIDescriptor, FaustDspMeta, FFTUtils, LooseFaustDspFactory, AudioData } from "./types";
 import SoundfileReader from "./SoundfileReader";
 
-export interface IFaustMonoDspGenerator {
+export interface GeneratorSupportingSoundfiles {
+    /**
+     * Attach a map of id - audio data, call after `compile()` before `createNode()`
+     * 
+     * @param soundfileMap a map of id - `AudioData` as an object where `AudioData` contains channel data as `audioBuffer: Float32Array[]` and `sampleRate: number`
+     */
+    addSoundfiles(soundfileMap: Record<string, AudioData>): void;
+
+    /**
+     * Get a list of soundfiles needed, call after `compile()`
+     */
+    getSoundfileList(): string[];
+}
+
+export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
     /**
      * Compile a monophonic DSP factory from given code.
      * 
@@ -26,18 +40,6 @@ export interface IFaustMonoDspGenerator {
         meta?: FaustDspMeta;
     } | null>;
 
-    /**
-     * Attach a soundfile with audio data, call after `compile()` before `createNode()`
-     * 
-     * @param id soundfile identifier
-     * @param audioData AudioData object that contains channel data as `audioBuffer: Float32Array[]` and `sampleRate: number`
-     */
-    addSoundfile(id: string, audioData: AudioData): void;
-
-    /**
-     * Get a list of soundfiles needed, call after `compile()`
-     */
-    getSoundfileList(): string[];
 
     /**
      * Create a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
@@ -115,7 +117,7 @@ export interface IFaustMonoDspGenerator {
     getUI(): FaustUIDescriptor;
 }
 
-export interface IFaustPolyDspGenerator {
+export interface IFaustPolyDspGenerator extends GeneratorSupportingSoundfiles {
     /**
      * Compile a monophonic DSP factory from given code.
      * 
@@ -130,19 +132,6 @@ export interface IFaustPolyDspGenerator {
         voiceFactory: FaustDspFactory | null;
         effectFactory?: FaustDspFactory | null;
     } | null>;
-
-    /**
-     * Attach a soundfile with audio data, call after `compile()` before `createNode()`
-     * 
-     * @param id soundfile identifier
-     * @param audioData AudioData object that contains channel data as `audioBuffer: Float32Array[]` and `sampleRate: number`
-     */
-    addSoundfile(id: string, audioData: AudioData): void;
-
-    /**
-     * Get a list of soundfiles needed, call after `compile()`
-     */
-    getSoundfileList(): string[];
 
     /**
      * Create a polyphonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
@@ -231,9 +220,11 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
         }
     }
 
-    addSoundfile(id: string, audioData: AudioData) {
+    addSoundfiles(soundfileMap: Record<string, AudioData>) {
         if (!this.factory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
-        this.factory.soundfiles[id] = audioData;
+        for (const id in soundfileMap) {
+            this.factory.soundfiles[id] = soundfileMap[id];
+        }
     }
     getSoundfileList() {
         if (!this.factory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
@@ -544,9 +535,11 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
         }
     }
 
-    addSoundfile(id: string, audioData: AudioData) {
+    addSoundfiles(soundfileMap: Record<string, AudioData>) {
         if (!this.voiceFactory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
-        this.voiceFactory.soundfiles[id] = audioData;
+        for (const id in soundfileMap) {
+            this.voiceFactory.soundfiles[id] = soundfileMap[id];
+        }
     }
     getSoundfileList() {
         if (!this.voiceFactory) throw Error("DSP not compiled, no factory found. Did you call compile() ?");
