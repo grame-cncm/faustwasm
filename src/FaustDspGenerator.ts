@@ -87,12 +87,14 @@ export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
      * @param sampleRate - the sample rate in Hz
      * @param bufferSize - the buffer size in frames
      * @param factory - default is the compiled factory
+     * @param context - if this exists, will be used to fetch soundfiles online
      * @returns the compiled processor or 'null' if failure
      */
     createOfflineProcessor(
         sampleRate: number,
         bufferSize: number,
-        factory?: LooseFaustDspFactory
+        factory?: LooseFaustDspFactory,
+        context?: BaseAudioContext
     ): Promise<IFaustMonoOfflineProcessor | null>;
 
     /**
@@ -166,6 +168,7 @@ export interface IFaustPolyDspGenerator extends GeneratorSupportingSoundfiles {
      * @param voiceFactory - the Faust factory for voices, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
      * @param mixerModule - the wasm Mixer module (loaded from 'mixer32.wasm' or 'mixer64.wasm' files)
      * @param effectFactory - the Faust factory for the effect, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
+     * @param context - if this exists, will be used to fetch soundfiles online
      * @returns the compiled processor or 'null' if failure
      */
     createOfflineProcessor(
@@ -175,7 +178,7 @@ export interface IFaustPolyDspGenerator extends GeneratorSupportingSoundfiles {
         voiceFactory?: LooseFaustDspFactory,
         mixerModule?: WebAssembly.Module,
         effectFactory?: LooseFaustDspFactory | null,
-        processorName?: string
+        context?: BaseAudioContext
     ): Promise<IFaustPolyOfflineProcessor | null>;
 
     /**
@@ -422,13 +425,15 @@ const dependencies = {
     async createOfflineProcessor(
         sampleRate: number,
         bufferSize: number,
-        factory = this.factory as LooseFaustDspFactory
+        factory = this.factory as LooseFaustDspFactory,
+        context?: BaseAudioContext
     ) {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
         const meta = JSON.parse(factory.json);
         const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
         const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
+        if (context) factory.soundfiles = await SoundfileReader.loadSoundfiles(meta, factory.soundfiles || {}, context);
         const monoDsp = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, bufferSize, factory.soundfiles);
         return new FaustMonoOfflineProcessor(monoDsp, bufferSize);
     }
@@ -675,7 +680,8 @@ const dependencies = {
         voices: number,
         voiceFactory = this.voiceFactory as LooseFaustDspFactory,
         mixerModule = this.mixerModule,
-        effectFactory = this.effectFactory as LooseFaustDspFactory | null
+        effectFactory = this.effectFactory as LooseFaustDspFactory | null,
+        context?: BaseAudioContext
     ) {
         if (!voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -683,6 +689,10 @@ const dependencies = {
         const effectMeta = effectFactory ? JSON.parse(effectFactory.json) : undefined;
         const instance = await FaustWasmInstantiator.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || undefined);
         const sampleSize = voiceMeta.compile_options.match("-double") ? 8 : 4;
+        if (context) {
+            voiceFactory.soundfiles = await SoundfileReader.loadSoundfiles(voiceMeta, voiceFactory.soundfiles || {}, context);
+            if (effectFactory) effectFactory.soundfiles = await SoundfileReader.loadSoundfiles(effectMeta, effectFactory.soundfiles || {}, context);
+        }
         const soundfiles = { ...effectFactory?.soundfiles, ...voiceFactory.soundfiles };
         const polyDsp = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, bufferSize, soundfiles);
         return new FaustPolyOfflineProcessor(polyDsp, bufferSize);
