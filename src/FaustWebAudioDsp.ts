@@ -134,16 +134,16 @@ export class WasmAllocator {
 export class Soundfile {
     /** Maximum number of soundfile parts. */
     static get MAX_SOUNDFILE_PARTS() { return 256; }
-    
+
     /** Maximum number of channels. */
     static get MAX_CHAN() { return 64; }
-    
+
     /** Maximum buffer size in frames. */
     static get BUFFER_SIZE() { return 1024; }
-    
+
     /** Default sample rate. */
     static get SAMPLE_RATE() { return 44100; }
-    
+
     /** Pointer to the soundfile structure in wasm memory */
     private readonly fPtr: number;
     private readonly fBuffers: number;
@@ -332,10 +332,10 @@ export class Soundfile {
 }
 
 /**
- * DSP implementation: mimic the C++ 'dsp' class:
+ * DSP implementation that mimic the C++ 'dsp' class:
  * - adding MIDI control: metadata are decoded and incoming MIDI messages will control the associated controllers
  * - an output handler can be set to treat produced output controllers (like 'bargraph') 
- * - regular controllers are handled using setParamValue/getParamValue
+ * - regular controllers are handled using setParamValue/getParamValue and getParams methods
  */
 export interface IFaustBaseWebAudioDsp {
     /**
@@ -465,13 +465,6 @@ export interface IFaustBaseWebAudioDsp {
     getMeta(): FaustDspMeta;
 
     /**
-     * Get DSP JSON description with its UI and metadata.
-     *
-     * @return the DSP JSON description
-     */
-    getJSON(): string;
-
-    /**
      * Get DSP UI description.
      *
      * @return the DSP UI description
@@ -484,6 +477,13 @@ export interface IFaustBaseWebAudioDsp {
     * @return the DSP UI items description
     */
     getDescriptors(): FaustUIInputItem[];
+
+    /**
+     * Get DSP JSON description with its UI and metadata.
+     *
+     * @return the DSP JSON description
+     */
+    getJSON(): string;
 
     /**
      * Start the DSP.
