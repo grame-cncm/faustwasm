@@ -6,7 +6,4 @@ declare copyright "shren2021";
 declare description "This is an oscillator";
 import("stdfaust.lib");
 
-import("LIB.dsp");
-
-
-process = os.osc(440),os.osc(FREQ);
+process = os.osc(440);
