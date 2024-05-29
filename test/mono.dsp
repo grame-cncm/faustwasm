@@ -5,4 +5,8 @@ declare license "BSD";
 declare copyright "shren2021";
 declare description "This is an oscillator";
 import("stdfaust.lib");
-process = os.osc(440);
+
+import("LIB.dsp");
+
+
+process = os.osc(440),os.osc(FREQ);
