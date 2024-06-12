@@ -60,30 +60,6 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
 
         FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
 
-        // Setup accelerometer and gyroscope handlers
-        if (this.hasAccInput) {
-            if (window.DeviceMotionEvent) {
-                window.addEventListener("devicemotion", ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
-                    if (!accelerationIncludingGravity) return;
-                    const { x, y, z } = accelerationIncludingGravity;
-                    this.propagateAcc({ x, y, z });
-                }, true);
-            } else {
-                // Browser doesn't support DeviceMotionEvent
-                console.log("Cannot set accelerometer handler");
-            }
-        }
-        if (this.hasGyrInput) {
-            if (window.DeviceMotionEvent) {
-                window.addEventListener("deviceorientation", ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
-                    this.propagateGyr({ alpha, beta, gamma });
-                }, true);
-            } else {
-                // Browser doesn't support DeviceMotionEvent
-                console.log("Cannot set gyroscope handler");
-            }
-        }
-    
         // Patch it with additional functions
         this.port.onmessage = (e: MessageEvent) => {
             if (e.data.type === "param" && this.fOutputHandler) {
@@ -95,6 +71,55 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     }
 
     // Public API
+
+    /** Setup accelerometer and gyroscope handlers */
+    async listenMotion() {
+        if (this.hasAccInput) {
+            const handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+                if (!accelerationIncludingGravity) return;
+                const { x, y, z } = accelerationIncludingGravity;
+                this.propagateAcc({ x, y, z });
+            };
+            if (window.DeviceMotionEvent) {
+                if (typeof (window.DeviceMotionEvent as any).requestPermission === "function") { // for iOS 13+
+                    try {
+                        const response = await (window.DeviceMotionEvent as any).requestPermission();
+                        if (response !== "granted") throw new Error("Unable to access the accelerometer.");
+                        window.addEventListener("devicemotion", handleDeviceMotion, true);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                } else {
+                    window.addEventListener("devicemotion", handleDeviceMotion, true);
+                }
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set the accelerometer handler.");
+            }
+        }
+        if (this.hasGyrInput) {
+            const handleDeviceOrientation = ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
+                this.propagateGyr({ alpha, beta, gamma });
+            };
+            if (window.DeviceMotionEvent) {
+                if (typeof (window.DeviceOrientationEvent as any).requestPermission === "function") { // for iOS 13+
+                    try {
+                        const response = await (window.DeviceOrientationEvent as any).requestPermission();
+                        if (response !== "granted") throw new Error("Unable to access the gyroscope.");
+                        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                } else {
+                    window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+                }
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set the gyroscope handler.");
+            }
+        }
+    }
+
     setOutputParamHandler(handler: OutputParamHandler | null) {
         this.fOutputHandler = handler;
     }

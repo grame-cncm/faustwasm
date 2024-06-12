@@ -492,6 +492,7 @@ const activateMonoDSP = (dsp) => {
     }
 
     // Setup UI
+    DSP.listenMotion();
     faustUI = new FaustUI({ ui: DSP.getUI(), root: faustUIRoot });
     faustUI.paramChangeByUI = (path, value) => DSP.setParamValue(path, value);
     DSP.setOutputParamHandler(output_handler);
@@ -519,6 +520,7 @@ const activatePolyDSP = (dsp) => {
     }
 
     // Setup UI
+    DSP.listenMotion();
     faustUI = new FaustUI({ ui: DSP.getUI(), root: faustUIRoot });
     faustUI.paramChangeByUI = (path, value) => DSP.setParamValue(path, value);
     DSP.setOutputParamHandler(output_handler);
