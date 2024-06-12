@@ -15,6 +15,8 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     protected fPlotHandler: PlotHandler | null;
     protected fUICallback: UIHandler;
     protected fDescriptor: FaustUIInputItem[];
+    #hasAccInput = false;
+    #hasGyrInput = false;
 
     constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"], nodeOptions: Partial<FaustAudioWorkletNodeOptions> = {}) {
 
@@ -47,10 +49,41 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
                 // Keep inputs adresses
                 this.fInputsItems.push(item.address);
                 this.fDescriptor.push(item);
+                if (!item.meta) return;
+                item.meta.forEach((meta) => {
+                    const { midi, acc, gyr } = meta;
+                    if (acc) this.#hasAccInput = true;
+                    if (gyr) this.#hasGyrInput = true;
+                });
             }
         }
+
         FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
 
+        // Setup accelerometer and gyroscope handlers
+        if (this.hasAccInput) {
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("devicemotion", ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+                    if (!accelerationIncludingGravity) return;
+                    const { x, y, z } = accelerationIncludingGravity;
+                    this.propagateAcc({ x, y, z });
+                }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set accelerometer handler");
+            }
+        }
+        if (this.hasGyrInput) {
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("deviceorientation", ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
+                    this.propagateGyr({ alpha, beta, gamma });
+                }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set gyroscope handler");
+            }
+        }
+    
         // Patch it with additional functions
         this.port.onmessage = (e: MessageEvent) => {
             if (e.data.type === "param" && this.fOutputHandler) {
@@ -126,13 +159,15 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         this.port.postMessage(e);
     }
 
-    propagateAcc(event: DeviceMotionEvent) {
-        if (!event) return;
-        const e = { type: "acc", data: event };
+    get hasAccInput() { return this.#hasAccInput; }
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
+        if (!accelerationIncludingGravity) return;
+        const e = { type: "acc", data: accelerationIncludingGravity };
         this.port.postMessage(e);
     }
 
-    propagateGyr(event: DeviceOrientationEvent) {
+    get hasGyrInput() { return this.#hasGyrInput; }
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
         if (!event) return;
         const e = { type: "gyr", data: event };
         this.port.postMessage(e);
@@ -170,6 +205,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         this.port.postMessage({ type: "destroy" });
         this.port.close();
     }
+
 }
 
 /**
