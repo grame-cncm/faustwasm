@@ -1,8 +1,6 @@
 import type { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance } from "./FaustDspInstance";
-
 import type { AudioData, FaustDspMeta, FaustUIDescriptor, FaustUIGroup, FaustUIInputItem, FaustUIItem, LooseFaustDspFactory } from "./types";
-import type { UpdatableValueConverter } from "./FaustSensors";
-import { Axis, convertToAxis, Curve, convertToCurve, buildHandler } from "./FaustSensors"
+import FaustSensors, { Axis, Curve, UpdatableValueConverter } from "./FaustSensors";
 
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;
@@ -14,10 +12,10 @@ export type MetadataHandler = (key: string, value: string) => void;
 export type UIHandler = (item: FaustUIItem) => void;
 
 // Accelerometer or gyroscope handler
-type SensorEventHandler = (val: number) => void;
+export type SensorEventHandler = (val: number) => void;
 
 // Define a type for the accelerometer or gyroscope handlers
-type SensorEventHandlers = {
+export type SensorEventHandlers = {
     x: SensorEventHandler[];
     y: SensorEventHandler[];
     z: SensorEventHandler[];
@@ -512,6 +510,16 @@ export interface IFaustBaseWebAudioDsp {
      * Destroy the DSP.
      */
     destroy(): void;
+
+    /** Indicating if the DSP handles the accelerometer */
+    readonly hasAccInput: boolean;
+    /** Accelerometer handling */
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>): void;
+
+    /** Indicating if the DSP handles the gyroscope */
+    readonly hasGyrInput: boolean;
+    /** Gyroscope handling */
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">): void;
 }
 
 export interface IFaustMonoWebAudioDsp extends IFaustBaseWebAudioDsp { }
@@ -598,8 +606,8 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             this.fDescriptor.push(item);
             if (!item.meta) return;
             item.meta.forEach((meta) => {
+                const { midi, acc, gyr } = meta;
                 // Parse 'midi' metadata
-                const { midi } = meta;
                 if (midi) {
                     const strMidi = midi.trim();
                     if (strMidi === "pitchwheel") {
@@ -612,16 +620,14 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                     }
                 }
                 // Parse 'acc' metadata
-                const { acc } = meta;
                 if (acc) {
                     const numAcc: number[] = acc.trim().split(" ").map(Number);
-                    this.setupAccHandler(item.address, convertToAxis(numAcc[0]), convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
+                    this.setupAccHandler(item.address, FaustSensors.convertToAxis(numAcc[0]), FaustSensors.convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
                 }
                 // Parse 'gyr' metadata
-                const { gyr } = meta;
                 if (gyr) {
                     const numAcc: number[] = gyr.trim().split(" ").map(Number);
-                    this.setupGyrHandler(item.address, convertToAxis(numAcc[0]), convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
+                    this.setupGyrHandler(item.address, FaustSensors.convertToAxis(numAcc[0]), FaustSensors.convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
                 }
             });
         } else if (item.type === "soundfile") {
@@ -680,13 +686,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         return trimmed.split(";").map(str => str.length <= 2 ? '' : str.substring(1, str.length - 1));
     }
 
-    // Accelerometer and gyroscope handling
-    propagateAcc(event: DeviceMotionEvent) {
+    get hasAccInput() { return this.fAcc.x.length + this.fAcc.y.length + this.fAcc.z.length > 0; }
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
 
         // Get accelerometervalues
-        const x = event.accelerationIncludingGravity!.x;
-        const y = event.accelerationIncludingGravity!.y;
-        const z = event.accelerationIncludingGravity!.z;
+        const { x, y, z } = accelerationIncludingGravity;
 
         // Call the accelerometer handlers
         if (x !== null) this.fAcc.x.forEach(handler => handler(x));
@@ -694,13 +698,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         if (z !== null) this.fAcc.z.forEach(handler => handler(z));
     }
 
-    // Accelerometer and gyroscope handling
-    propagateGyr(event: DeviceOrientationEvent) {
+    get hasGyrInput() { return this.fGyr.x.length + this.fGyr.y.length + this.fGyr.z.length > 0; }
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
 
         // Get gyroscope values
-        const alpha = event!.alpha;
-        const beta = event!.beta;
-        const gamma = event!.gamma;
+        const { alpha, beta, gamma } = event;
 
         // Call the gyroscope handlers
         if (alpha !== null) this.fGyr.x.forEach(handler => handler(alpha));
@@ -708,10 +710,10 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         if (gamma !== null) this.fGyr.z.forEach(handler => handler(gamma));
     }
 
-    // Build the accelerometer handler
+    /** Build the accelerometer handler */
     private setupAccHandler(path: string, axis: Axis, curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number) {
 
-        const handler: UpdatableValueConverter = buildHandler(curve, amin, amid, amax, min, init, max);
+        const handler: UpdatableValueConverter = FaustSensors.buildHandler(curve, amin, amid, amax, min, init, max);
         switch (axis) {
             case Axis.x:
                 this.fAcc.x.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
@@ -725,10 +727,10 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         }
     }
 
-    // Build the gyroscope handler
+    /** Build the gyroscope handler */
     private setupGyrHandler(path: string, axis: Axis, curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number) {
 
-        const handler: UpdatableValueConverter = buildHandler(curve, amin, amid, amax, min, init, max);
+        const handler: UpdatableValueConverter = FaustSensors.buildHandler(curve, amin, amid, amax, min, init, max);
         switch (axis) {
             case Axis.x:
                 this.fGyr.x.push((val) => this.setParamValue(path, handler.uiToFaust(val)));

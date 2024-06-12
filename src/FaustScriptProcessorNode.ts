@@ -16,6 +16,30 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
         this.fInputs = new Array(this.fDSPCode.getNumInputs());
         this.fOutputs = new Array(this.fDSPCode.getNumOutputs());
 
+        // Setup accelerometer and gyroscope handlers
+        if (this.hasAccInput) {
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("devicemotion", ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+                    if (!accelerationIncludingGravity) return;
+                    const { x, y, z } = accelerationIncludingGravity;
+                    this.propagateAcc({ x, y, z });
+                }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set accelerometer handler");
+            }
+        }
+        if (this.hasGyrInput) {
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("deviceorientation", ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
+                    this.propagateGyr({ alpha, beta, gamma });
+                }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set gyroscope handler");
+            }
+        }
+    
         this.onaudioprocess = (e) => {
 
             // Read inputs
@@ -68,6 +92,16 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
     stop() { this.fDSPCode.stop(); }
 
     destroy() { this.fDSPCode.destroy(); }
+
+    get hasAccInput() { return this.fDSPCode.hasAccInput; }
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
+        this.fDSPCode.propagateAcc(accelerationIncludingGravity);
+    }
+
+    get hasGyrInput() { return this.fDSPCode.hasGyrInput; }
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
+        this.fDSPCode.propagateGyr(event);
+    }
 }
 
 export class FaustMonoScriptProcessorNode extends FaustScriptProcessorNode<false> implements IFaustMonoWebAudioDsp {

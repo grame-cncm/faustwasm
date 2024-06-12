@@ -126,15 +126,33 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
             switch (msg.type) {
                 // Sensors messages
-                case "acc": this.propagateAcc(msg.data); break;
-                case "gyr": this.propagateGyr(msg.data); break;
+                case "acc": {
+                    this.propagateAcc(msg.data);
+                    break;
+                }
+                case "gyr": {
+                    this.propagateGyr(msg.data);
+                    break;
+                }
                 // Generic MIDI message
-                case "midi": this.midiMessage(msg.data); break;
+                case "midi": {
+                    this.midiMessage(msg.data);
+                    break;
+                }
                 // Typed MIDI message
-                case "ctrlChange": this.ctrlChange(msg.data[0], msg.data[1], msg.data[2]); break;
-                case "pitchWheel": this.pitchWheel(msg.data[0], msg.data[1]); break;
+                case "ctrlChange": {
+                    this.ctrlChange(msg.data[0], msg.data[1], msg.data[2]);
+                    break;
+                }
+                case "pitchWheel": {
+                    this.pitchWheel(msg.data[0], msg.data[1]);
+                    break;
+                }
                 // Generic data message
-                case "param": this.setParamValue(msg.data.path, msg.data.value); break;
+                case "param": {
+                    this.setParamValue(msg.data.path, msg.data.value);
+                    break;
+                }
                 // Plot handler set on demand
                 case "setPlotHandler": {
                     if (msg.data) {
@@ -179,11 +197,11 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             this.fDSPCode.pitchWheel(channel, wheel);
         }
 
-        protected propagateAcc(event: DeviceMotionEvent) {
-            this.fDSPCode.propagateAcc(event);
+        protected propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
+            this.fDSPCode.propagateAcc(accelerationIncludingGravity);
         }
 
-        protected propagateGyr(event: DeviceOrientationEvent) {
+        protected propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
             this.fDSPCode.propagateGyr(event);
         }
     }
