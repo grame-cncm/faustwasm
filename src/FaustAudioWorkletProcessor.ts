@@ -125,6 +125,9 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             const msg = e.data;
 
             switch (msg.type) {
+                // Sensors messages
+                case "acc": this.propagateAcc(msg.data); break;
+                case "gyr": this.propagateGyr(msg.data); break;
                 // Generic MIDI message
                 case "midi": this.midiMessage(msg.data); break;
                 // Typed MIDI message
@@ -174,6 +177,14 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
         protected pitchWheel(channel: number, wheel: number) {
             this.fDSPCode.pitchWheel(channel, wheel);
+        }
+
+        protected propagateAcc(event: DeviceMotionEvent) {
+            this.fDSPCode.propagateAcc(event);
+        }
+
+        protected propagateGyr(event: DeviceOrientationEvent) {
+            this.fDSPCode.propagateGyr(event);
         }
     }
 

@@ -126,6 +126,18 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         this.port.postMessage(e);
     }
 
+    propagateAcc(event: DeviceMotionEvent) {
+        if (!event) return;
+        const e = { type: "acc", data: event };
+        this.port.postMessage(e);
+    }
+
+    propagateGyr(event: DeviceOrientationEvent) {
+        if (!event) return;
+        const e = { type: "gyr", data: event };
+        this.port.postMessage(e);
+    }
+
     setParamValue(path: string, value: number) {
         const e = { type: "param", data: { path, value } };
         this.port.postMessage(e);

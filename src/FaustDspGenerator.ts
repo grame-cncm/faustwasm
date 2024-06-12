@@ -252,6 +252,22 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
         if (sp) {
             const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
             const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize, factory.soundfiles);
+
+            // Setup accelerometer and gyroscope handlers
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("devicemotion", (event: DeviceMotionEvent) => { monoDsp.propagateAcc(event) }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set accelerometer handler");
+            }
+
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("deviceorientation", (event: DeviceOrientationEvent) => { monoDsp.propagateGyr(event) }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set gyroscope handler");
+            }
+
             const sp = context.createScriptProcessor(bufferSize, monoDsp.getNumInputs(), monoDsp.getNumOutputs()) as FaustMonoScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustMonoScriptProcessorNode.prototype);
             sp.init(monoDsp);
@@ -302,7 +318,23 @@ const dependencies = {
                 }
             }
             // Create the AWN
-            const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize)
+            const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
+
+            // Setup accelerometer and gyroscope handlers
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("devicemotion", (event: DeviceMotionEvent) => { node.propagateAcc(event) }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set accelerometer handler");
+            }
+
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("deviceorientation", (event: DeviceOrientationEvent) => { node.propagateGyr(event) }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set gyroscope handler");
+            }
+
             return node as SP extends true ? FaustMonoScriptProcessorNode : FaustMonoAudioWorkletNode;
         }
     }
@@ -578,6 +610,22 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
             const instance = await FaustWasmInstantiator.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || undefined);
             const soundfiles = { ...effectFactory?.soundfiles, ...voiceFactory.soundfiles };
             const polyDsp = new FaustPolyWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize, soundfiles);
+
+            // Setup accelerometer and gyroscope handlers
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("devicemotion", (event: DeviceMotionEvent) => { polyDsp.propagateAcc(event) }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set accelerometer handler");
+            }
+
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("deviceorientation", (event: DeviceOrientationEvent) => { polyDsp.propagateGyr(event) }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set gyroscope handler");
+            }
+
             const sp = context.createScriptProcessor(bufferSize, polyDsp.getNumInputs(), polyDsp.getNumOutputs()) as FaustPolyScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustPolyScriptProcessorNode.prototype);
             sp.init(polyDsp);
@@ -632,6 +680,22 @@ const dependencies = {
             }
             // Create the AWN
             const node = new FaustPolyAudioWorkletNode(context, processorName, voiceFactory, mixerModule, voices, sampleSize, effectFactory || undefined);
+
+            // Setup accelerometer and gyroscope handlers
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("devicemotion", (event: DeviceMotionEvent) => { node.propagateAcc(event) }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set accelerometer handler");
+            }
+
+            if (window.DeviceMotionEvent) {
+                window.addEventListener("deviceorientation", (event: DeviceOrientationEvent) => { node.propagateGyr(event) }, true);
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set gyroscope handler");
+            }
+
             return node as SP extends true ? FaustPolyScriptProcessorNode : FaustPolyAudioWorkletNode;
         }
     }

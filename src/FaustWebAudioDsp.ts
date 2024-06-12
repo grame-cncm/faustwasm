@@ -1,5 +1,8 @@
 import type { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance } from "./FaustDspInstance";
+
 import type { AudioData, FaustDspMeta, FaustUIDescriptor, FaustUIGroup, FaustUIInputItem, FaustUIItem, LooseFaustDspFactory } from "./types";
+import type { UpdatableValueConverter } from "./FaustSensors";
+import { Axis, convertToAxis, Curve, convertToCurve, buildHandler } from "./FaustSensors"
 
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;
@@ -9,6 +12,16 @@ export type MetadataHandler = (key: string, value: string) => void;
 
 // Implementation API
 export type UIHandler = (item: FaustUIItem) => void;
+
+// Accelerometer or gyroscope handler
+type SensorEventHandler = (val: number) => void;
+
+// Define a type for the accelerometer or gyroscope handlers
+type SensorEventHandlers = {
+    x: SensorEventHandler[];
+    y: SensorEventHandler[];
+    z: SensorEventHandler[];
+};
 
 /** Definition of the AudioBufferItem type */
 export interface AudioBufferItem {
@@ -557,6 +570,10 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     /** Keep the end of memory offset before soundfiles */
     protected fEndMemory: number;
 
+    // Accelerometer handling
+    protected fAcc: SensorEventHandlers; // array of accelerometer handlers on x,y,y axes, to be called with DeviceMotionEvent
+    protected fGyr: SensorEventHandlers; // array of gyroscope handlers on alpha,beta,gama axes, to be called with DeviceMotionEvent
+
     // Buffers in wasm memory
     protected fAudioInputs!: number;
     protected fAudioOutputs!: number;
@@ -579,18 +596,32 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             this.fInputsItems.push(item.address);
             this.fPathTable[item.address] = item.index;
             this.fDescriptor.push(item);
-            // Parse 'midi' metadata
             if (!item.meta) return;
             item.meta.forEach((meta) => {
+                // Parse 'midi' metadata
                 const { midi } = meta;
-                if (!midi) return;
-                const strMidi = midi.trim();
-                if (strMidi === "pitchwheel") {
-                    this.fPitchwheelLabel.push({ path: item.address, min: item.min as number, max: item.max as number });
-                } else {
-                    const matched = strMidi.match(/^ctrl\s(\d+)/);
-                    if (!matched) return;
-                    this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min as number, max: item.max as number });
+                if (midi) {
+                    const strMidi = midi.trim();
+                    if (strMidi === "pitchwheel") {
+                        this.fPitchwheelLabel.push({ path: item.address, min: item.min as number, max: item.max as number });
+                    } else {
+                        const matched = strMidi.match(/^ctrl\s(\d+)/);
+                        if (matched) {
+                            this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min as number, max: item.max as number });
+                        }
+                    }
+                }
+                // Parse 'acc' metadata
+                const { acc } = meta;
+                if (acc) {
+                    const numAcc: number[] = acc.trim().split(" ").map(Number);
+                    this.setupAccHandler(item.address, convertToAxis(numAcc[0]), convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
+                }
+                // Parse 'gyr' metadata
+                const { gyr } = meta;
+                if (gyr) {
+                    const numAcc: number[] = gyr.trim().split(" ").map(Number);
+                    this.setupGyrHandler(item.address, convertToAxis(numAcc[0]), convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
                 }
             });
         } else if (item.type === "soundfile") {
@@ -610,6 +641,8 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         this.fPtrSize = sampleSize; // Done on wast/wasm backend side
         this.fSampleSize = sampleSize;
         this.fSoundfileBuffers = soundfiles;
+        this.fAcc = { x: [], y: [], z: [] };
+        this.fGyr = { x: [], y: [], z: [] };
     }
 
     // Tools
@@ -646,6 +679,69 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         // Split the string into an array of strings and remove first and last characters
         return trimmed.split(";").map(str => str.length <= 2 ? '' : str.substring(1, str.length - 1));
     }
+
+    // Accelerometer and gyroscope handling
+    propagateAcc(event: DeviceMotionEvent) {
+
+        // Get accelerometervalues
+        const x = event.accelerationIncludingGravity!.x;
+        const y = event.accelerationIncludingGravity!.y;
+        const z = event.accelerationIncludingGravity!.z;
+
+        // Call the accelerometer handlers
+        if (x !== null) this.fAcc.x.forEach(handler => handler(x));
+        if (y !== null) this.fAcc.y.forEach(handler => handler(y));
+        if (z !== null) this.fAcc.z.forEach(handler => handler(z));
+    }
+
+    // Accelerometer and gyroscope handling
+    propagateGyr(event: DeviceOrientationEvent) {
+
+        // Get gyroscope values
+        const alpha = event!.alpha;
+        const beta = event!.beta;
+        const gamma = event!.gamma;
+
+        // Call the gyroscope handlers
+        if (alpha !== null) this.fGyr.x.forEach(handler => handler(alpha));
+        if (beta !== null) this.fGyr.y.forEach(handler => handler(beta));
+        if (gamma !== null) this.fGyr.z.forEach(handler => handler(gamma));
+    }
+
+    // Build the accelerometer handler
+    private setupAccHandler(path: string, axis: Axis, curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number) {
+
+        const handler: UpdatableValueConverter = buildHandler(curve, amin, amid, amax, min, init, max);
+        switch (axis) {
+            case Axis.x:
+                this.fAcc.x.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+            case Axis.y:
+                this.fAcc.y.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+            case Axis.z:
+                this.fAcc.z.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+        }
+    }
+
+    // Build the gyroscope handler
+    private setupGyrHandler(path: string, axis: Axis, curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number) {
+
+        const handler: UpdatableValueConverter = buildHandler(curve, amin, amid, amax, min, init, max);
+        switch (axis) {
+            case Axis.x:
+                this.fGyr.x.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+            case Axis.y:
+                this.fGyr.y.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+            case Axis.z:
+                this.fGyr.z.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+        }
+    }
+
 
     static extractUrlsFromMeta(dspMeta: FaustDspMeta): string[] {
         // Find the entry with the "soundfiles" key
@@ -911,6 +1007,7 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
             // Init soundfiles memory
             this.initSoundfileMemory(allocator, this.fDSP);
         }
+
     }
 
     private initMemory(): number {

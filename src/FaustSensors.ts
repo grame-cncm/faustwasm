@@ -13,13 +13,55 @@ export interface AccParams {
     label: string;
 }
 
-// Enum describing the axis of the accelerometer
+// Enum describing the axis of the accelerometer or gyroscope
 export enum Axis { x, y, z };
+
+/**
+ * Function to convert a number to an axis type
+ * 
+ * @param value : number
+ * @returns : axis type
+ */
+export function convertToAxis(value: number): Axis {
+    switch (value) {
+        case 0:
+            return Axis.x;
+        case 1:
+            return Axis.y;
+        case 2:
+            return Axis.z;
+        default:
+            console.error("Error: Axis not found value: " + value);
+            return Axis.x;
+    }
+}
 
 // Enum describing the curve of the accelerometer
 export enum Curve { Up, Down, UpDown, DownUp };
 
-// Object describing value off accelerometer metadata values.
+/**
+ * Function to convert a number to a curve type
+ * 
+ * @param value : number
+ * @returns : curve type
+ */
+export function convertToCurve(value: number): Curve {
+    switch (value) {
+        case 0:
+            return Curve.Up;
+        case 1:
+            return Curve.Down;
+        case 2:
+            return Curve.UpDown;
+        case 3:
+            return Curve.DownUp;
+        default:
+            console.error("Error: Curve not found value: " + value);
+            return Curve.Up;
+    }
+}
+
+// Object describing value off accelerometer metadata values
 class AccMeta {
     axis: Axis;
     curve: Curve;
@@ -128,7 +170,7 @@ interface ValueConverter {
  * UpdatableValueConverter interface
  */
 
-interface UpdatableValueConverter extends ValueConverter {
+export interface UpdatableValueConverter extends ValueConverter {
     fActive: boolean;
 
     setMappingValues: (amin: number, amid: number, amax: number, min: number, init: number, max: number) => void;
@@ -139,9 +181,9 @@ interface UpdatableValueConverter extends ValueConverter {
 }
 
 /**
- * AccUpConverter class, convert accelerometer value to Faust value
+ * UpConverter class, convert accelerometer value to Faust value
  */
-export class AccUpConverter implements UpdatableValueConverter {
+export class UpConverter implements UpdatableValueConverter {
     fA2F: Interpolator3pt;
     fF2A: Interpolator3pt;
     fActive: boolean = true;
@@ -168,9 +210,9 @@ export class AccUpConverter implements UpdatableValueConverter {
 }
 
 /**
- * AccDownConverter class, convert accelerometer value to Faust value
+ * DownConverter class, convert accelerometer value to Faust value
  */
-export class AccDownConverter implements UpdatableValueConverter {
+export class DownConverter implements UpdatableValueConverter {
     fA2F: Interpolator3pt;
     fF2A: Interpolator3pt;
     fActive: boolean = true;
@@ -196,9 +238,9 @@ export class AccDownConverter implements UpdatableValueConverter {
 }
 
 /**
- * AccUpDownConverter class, convert accelerometer value to Faust value
+ * UpDownConverter class, convert accelerometer value to Faust value
  */
-export class AccUpDownConverter {
+export class UpDownConverter implements UpdatableValueConverter {
     fA2F: Interpolator3pt;
     fF2A: Interpolator;
     fActive: boolean = true;
@@ -224,9 +266,9 @@ export class AccUpDownConverter {
 }
 
 /**
- * AccDownUpConverter class, convert accelerometer value to Faust value
+ * DownUpConverter class, convert accelerometer value to Faust value
  */
-export class AccDownUpConverter {
+export class DownUpConverter implements UpdatableValueConverter {
     fA2F: Interpolator3pt;
     fF2A: Interpolator;
     fActive: boolean = true;
@@ -249,4 +291,31 @@ export class AccDownUpConverter {
 
     setActive(onOff: boolean): void { this.fActive = onOff };
     getActive(): boolean { return this.fActive };
+}
+
+/**
+ * Public function to build the accelerometer handler
+ *
+ * @param curve : Curve type
+ * @param amin : number 
+ * @param amid : number 
+ * @param amax : number 
+ * @param min : number 
+ * @param init : number 
+ * @param max : number 
+ * @returns : UpdatableValueConverter built for the given curve
+ */
+export function buildHandler(curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number): UpdatableValueConverter {
+    switch (curve) {
+        case Curve.Up:
+            return new UpConverter(amin, amid, amax, min, init, max);
+        case Curve.Down:
+            return new DownConverter(amin, amid, amax, min, init, max);
+        case Curve.UpDown:
+            return new UpDownConverter(amin, amid, amax, min, init, max);
+        case Curve.DownUp:
+            return new DownUpConverter(amin, amid, amax, min, init, max);
+        default:
+            return new UpConverter(amin, amid, amax, min, init, max);
+    }
 }
