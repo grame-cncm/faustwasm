@@ -15,7 +15,7 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
 
         this.fInputs = new Array(this.fDSPCode.getNumInputs());
         this.fOutputs = new Array(this.fDSPCode.getNumOutputs());
-    
+
         this.onaudioprocess = (e) => {
 
             // Read inputs
@@ -33,11 +33,11 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
 
         this.start();
     }
-    
+
     // Public API
 
     /** Setup accelerometer and gyroscope handlers */
-    async listenMotion() {
+    async listenSensors() {
         if (this.hasAccInput) {
             const handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
                 if (!accelerationIncludingGravity) return;

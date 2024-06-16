@@ -211,7 +211,7 @@ const createFaustUI = async (faustNode) => {
     let motionHandlersBound = false;
     $buttonDsp.onclick = async () => {
         if (!motionHandlersBound) {
-            await faustNode.listenMotion();
+            await faustNode.listenSensors();
             motionHandlersBound = true;
         }
         if (audioContext.state === "running") {

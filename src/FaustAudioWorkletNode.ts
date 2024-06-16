@@ -73,7 +73,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     // Public API
 
     /** Setup accelerometer and gyroscope handlers */
-    async listenMotion() {
+    async listenSensors() {
         if (this.hasAccInput) {
             const handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
                 if (!accelerationIncludingGravity) return;
