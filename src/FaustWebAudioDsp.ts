@@ -514,7 +514,7 @@ export interface IFaustBaseWebAudioDsp {
     /** Indicating if the DSP handles the accelerometer */
     readonly hasAccInput: boolean;
     /** Accelerometer handling */
-    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>): void;
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean): void;
 
     /** Indicating if the DSP handles the gyroscope */
     readonly hasGyrInput: boolean;
@@ -687,15 +687,22 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
 
     get hasAccInput() { return this.fAcc.x.length + this.fAcc.y.length + this.fAcc.z.length > 0; }
-    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
 
         // Get accelerometervalues
         const { x, y, z } = accelerationIncludingGravity;
 
-        // Call the accelerometer handlers
-        if (x !== null) this.fAcc.x.forEach(handler => handler(x));
-        if (y !== null) this.fAcc.y.forEach(handler => handler(y));
-        if (z !== null) this.fAcc.z.forEach(handler => handler(z));
+        if (invert) {
+            // Call the accelerometer handlers
+            if (x !== null) this.fAcc.x.forEach(handler => handler(-x));
+            if (y !== null) this.fAcc.y.forEach(handler => handler(-y));
+            if (z !== null) this.fAcc.z.forEach(handler => handler(-z));
+        } else {
+            // Call the accelerometer handlers
+            if (x !== null) this.fAcc.x.forEach(handler => handler(x));
+            if (y !== null) this.fAcc.y.forEach(handler => handler(y));
+            if (z !== null) this.fAcc.z.forEach(handler => handler(z));
+        }
     }
 
     get hasGyrInput() { return this.fGyr.x.length + this.fGyr.y.length + this.fGyr.z.length > 0; }
