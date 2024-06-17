@@ -6,9 +6,11 @@ import FaustWasmInstantiator from "./FaustWasmInstantiator";
 import { FaustMonoOfflineProcessor, FaustPolyOfflineProcessor, IFaustMonoOfflineProcessor, IFaustPolyOfflineProcessor } from "./FaustOfflineProcessor";
 import { FaustMonoScriptProcessorNode, FaustPolyScriptProcessorNode } from "./FaustScriptProcessorNode";
 import { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp, FaustWebAudioDspVoice, IFaustMonoWebAudioNode, IFaustPolyWebAudioNode, Soundfile, WasmAllocator } from "./FaustWebAudioDsp";
+import SoundfileReader from "./SoundfileReader";
+import FaustSensors from "./FaustSensors";
 import type { IFaustCompiler } from "./FaustCompiler";
 import type { FaustDspFactory, FaustUIDescriptor, FaustDspMeta, FFTUtils, LooseFaustDspFactory, AudioData } from "./types";
-import SoundfileReader from "./SoundfileReader";
+
 
 export interface GeneratorSupportingSoundfiles {
     /**
@@ -252,6 +254,7 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
         if (sp) {
             const instance = await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
             const monoDsp = new FaustMonoWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize, factory.soundfiles);
+
             const sp = context.createScriptProcessor(bufferSize, monoDsp.getNumInputs(), monoDsp.getNumOutputs()) as FaustMonoScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustMonoScriptProcessorNode.prototype);
             sp.init(monoDsp);
@@ -282,6 +285,8 @@ var ${Soundfile.name} = ${Soundfile.toString()}
 var Soundfile = ${Soundfile.name};
 var ${WasmAllocator.name} = ${WasmAllocator.toString()}
 var WasmAllocator = ${WasmAllocator.name};
+var ${FaustSensors.name} = ${FaustSensors.toString()}
+var FaustSensors = ${FaustSensors.name};
 // Put them in dependencies
 const dependencies = {
     FaustBaseWebAudioDsp,
@@ -302,7 +307,8 @@ const dependencies = {
                 }
             }
             // Create the AWN
-            const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize)
+            const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
+
             return node as SP extends true ? FaustMonoScriptProcessorNode : FaustMonoAudioWorkletNode;
         }
     }
@@ -345,6 +351,8 @@ var ${Soundfile.name} = ${Soundfile.toString()}
 var Soundfile = ${Soundfile.name};
 var ${WasmAllocator.name} = ${WasmAllocator.toString()}
 var WasmAllocator = ${WasmAllocator.name};
+var ${FaustSensors.name} = ${FaustSensors.toString()}
+var FaustSensors = ${FaustSensors.name};
 var FFTUtils = ${fftUtils.toString()}
 // Put them in dependencies
 const dependencies = {
@@ -578,6 +586,7 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
             const instance = await FaustWasmInstantiator.createAsyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory || undefined);
             const soundfiles = { ...effectFactory?.soundfiles, ...voiceFactory.soundfiles };
             const polyDsp = new FaustPolyWebAudioDsp(instance, context.sampleRate, sampleSize, bufferSize, soundfiles);
+
             const sp = context.createScriptProcessor(bufferSize, polyDsp.getNumInputs(), polyDsp.getNumOutputs()) as FaustPolyScriptProcessorNode;
             Object.setPrototypeOf(sp, FaustPolyScriptProcessorNode.prototype);
             sp.init(polyDsp);
@@ -611,6 +620,8 @@ var ${Soundfile.name} = ${Soundfile.toString()}
 var Soundfile = ${Soundfile.name};
 var ${WasmAllocator.name} = ${WasmAllocator.toString()}
 var WasmAllocator = ${WasmAllocator.name};
+var ${FaustSensors.name} = ${FaustSensors.toString()}
+var FaustSensors = ${FaustSensors.name};
 // Put them in dependencies
 const dependencies = {
     FaustBaseWebAudioDsp,
@@ -632,6 +643,7 @@ const dependencies = {
             }
             // Create the AWN
             const node = new FaustPolyAudioWorkletNode(context, processorName, voiceFactory, mixerModule, voices, sampleSize, effectFactory || undefined);
+
             return node as SP extends true ? FaustPolyScriptProcessorNode : FaustPolyAudioWorkletNode;
         }
     }

@@ -81,6 +81,16 @@ export class FaustOfflineProcessor<Poly extends boolean = false> {
 
     destroy() { this.fDSPCode.destroy(); }
 
+    get hasAccInput() { return this.fDSPCode.hasAccInput; }
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
+        this.fDSPCode.propagateAcc(accelerationIncludingGravity);
+    }
+
+    get hasGyrInput() { return this.fDSPCode.hasGyrInput; }
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
+        this.fDSPCode.propagateGyr(event);
+    }
+
     /**
      * Render frames in an array.
      *

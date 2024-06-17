@@ -15,6 +15,8 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     protected fPlotHandler: PlotHandler | null;
     protected fUICallback: UIHandler;
     protected fDescriptor: FaustUIInputItem[];
+    #hasAccInput = false;
+    #hasGyrInput = false;
 
     constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"], nodeOptions: Partial<FaustAudioWorkletNodeOptions> = {}) {
 
@@ -47,8 +49,15 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
                 // Keep inputs adresses
                 this.fInputsItems.push(item.address);
                 this.fDescriptor.push(item);
+                if (!item.meta) return;
+                item.meta.forEach((meta) => {
+                    const { midi, acc, gyr } = meta;
+                    if (acc) this.#hasAccInput = true;
+                    if (gyr) this.#hasGyrInput = true;
+                });
             }
         }
+
         FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
 
         // Patch it with additional functions
@@ -62,6 +71,55 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     }
 
     // Public API
+
+    /** Setup accelerometer and gyroscope handlers */
+    async listenSensors() {
+        if (this.hasAccInput) {
+            const handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+                if (!accelerationIncludingGravity) return;
+                const { x, y, z } = accelerationIncludingGravity;
+                this.propagateAcc({ x, y, z });
+            };
+            if (window.DeviceMotionEvent) {
+                if (typeof (window.DeviceMotionEvent as any).requestPermission === "function") { // for iOS 13+
+                    try {
+                        const response = await (window.DeviceMotionEvent as any).requestPermission();
+                        if (response !== "granted") throw new Error("Unable to access the accelerometer.");
+                        window.addEventListener("devicemotion", handleDeviceMotion, true);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                } else {
+                    window.addEventListener("devicemotion", handleDeviceMotion, true);
+                }
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set the accelerometer handler.");
+            }
+        }
+        if (this.hasGyrInput) {
+            const handleDeviceOrientation = ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
+                this.propagateGyr({ alpha, beta, gamma });
+            };
+            if (window.DeviceMotionEvent) {
+                if (typeof (window.DeviceOrientationEvent as any).requestPermission === "function") { // for iOS 13+
+                    try {
+                        const response = await (window.DeviceOrientationEvent as any).requestPermission();
+                        if (response !== "granted") throw new Error("Unable to access the gyroscope.");
+                        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                } else {
+                    window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+                }
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set the gyroscope handler.");
+            }
+        }
+    }
+
     setOutputParamHandler(handler: OutputParamHandler | null) {
         this.fOutputHandler = handler;
     }
@@ -126,6 +184,20 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         this.port.postMessage(e);
     }
 
+    get hasAccInput() { return this.#hasAccInput; }
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
+        if (!accelerationIncludingGravity) return;
+        const e = { type: "acc", data: accelerationIncludingGravity };
+        this.port.postMessage(e);
+    }
+
+    get hasGyrInput() { return this.#hasGyrInput; }
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
+        if (!event) return;
+        const e = { type: "gyr", data: event };
+        this.port.postMessage(e);
+    }
+
     setParamValue(path: string, value: number) {
         const e = { type: "param", data: { path, value } };
         this.port.postMessage(e);
@@ -158,6 +230,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         this.port.postMessage({ type: "destroy" });
         this.port.close();
     }
+
 }
 
 /**

@@ -25,6 +25,7 @@ const AudioCtx = window.AudioContext || window.webkitAudioContext;
 const audioContext = new AudioCtx({ latencyHint: 0.00001, echoCancellation: false, autoGainControl: false, noiseSuppression: false });
 audioContext.destination.channelInterpretation = "discrete";
 audioContext.suspend();
+$buttonDsp.disabled = true;
 
 /**
  * @param {FaustAudioWorkletNode} faustNode 
@@ -106,17 +107,6 @@ const buildMidiDeviceMenu = async (faustNode) => {
         currentInput.addEventListener("midimessage", handleMidiMessage);
     };
 };
-
-$buttonDsp.disabled = true;
-$buttonDsp.onclick = () => {
-    if (audioContext.state === "running") {
-        $buttonDsp.textContent = "Suspended";
-        audioContext.suspend();
-    } else if (audioContext.state === "suspended") {
-        $buttonDsp.textContent = "Running";
-        audioContext.resume();
-    }
-}
 
 /**
  * Creates a Faust audio node for use in the Web Audio API.
@@ -207,6 +197,8 @@ const createFaustUI = async (faustNode) => {
 };
 
 (async () => {
+    // To test the ScriptProcessorNode mode
+    //const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP", 0, true);
     const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP");
     await createFaustUI(faustNode);
     faustNode.connect(audioContext.destination);
@@ -216,4 +208,18 @@ const createFaustUI = async (faustNode) => {
     else $spanMidiInput.hidden = true;
     $buttonDsp.disabled = false;
     document.title = name;
+    let motionHandlersBound = false;
+    $buttonDsp.onclick = async () => {
+        if (!motionHandlersBound) {
+            await faustNode.listenSensors();
+            motionHandlersBound = true;
+        }
+        if (audioContext.state === "running") {
+            $buttonDsp.textContent = "Suspended";
+            audioContext.suspend();
+        } else if (audioContext.state === "suspended") {
+            $buttonDsp.textContent = "Running";
+            audioContext.resume();
+        }
+    }
 })();

@@ -1,5 +1,6 @@
 import type { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance } from "./FaustDspInstance";
 import type { AudioData, FaustDspMeta, FaustUIDescriptor, FaustUIGroup, FaustUIInputItem, FaustUIItem, LooseFaustDspFactory } from "./types";
+import FaustSensors, { Axis, Curve, UpdatableValueConverter } from "./FaustSensors";
 
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;
@@ -9,6 +10,16 @@ export type MetadataHandler = (key: string, value: string) => void;
 
 // Implementation API
 export type UIHandler = (item: FaustUIItem) => void;
+
+// Accelerometer or gyroscope handler
+export type SensorEventHandler = (val: number) => void;
+
+// Define a type for the accelerometer or gyroscope handlers
+export type SensorEventHandlers = {
+    x: SensorEventHandler[];
+    y: SensorEventHandler[];
+    z: SensorEventHandler[];
+};
 
 /** Definition of the AudioBufferItem type */
 export interface AudioBufferItem {
@@ -134,16 +145,16 @@ export class WasmAllocator {
 export class Soundfile {
     /** Maximum number of soundfile parts. */
     static get MAX_SOUNDFILE_PARTS() { return 256; }
-    
+
     /** Maximum number of channels. */
     static get MAX_CHAN() { return 64; }
-    
+
     /** Maximum buffer size in frames. */
     static get BUFFER_SIZE() { return 1024; }
-    
+
     /** Default sample rate. */
     static get SAMPLE_RATE() { return 44100; }
-    
+
     /** Pointer to the soundfile structure in wasm memory */
     private readonly fPtr: number;
     private readonly fBuffers: number;
@@ -332,10 +343,10 @@ export class Soundfile {
 }
 
 /**
- * DSP implementation: mimic the C++ 'dsp' class:
+ * DSP implementation that mimic the C++ 'dsp' class:
  * - adding MIDI control: metadata are decoded and incoming MIDI messages will control the associated controllers
  * - an output handler can be set to treat produced output controllers (like 'bargraph') 
- * - regular controllers are handled using setParamValue/getParamValue
+ * - regular controllers are handled using setParamValue/getParamValue and getParams methods
  */
 export interface IFaustBaseWebAudioDsp {
     /**
@@ -465,13 +476,6 @@ export interface IFaustBaseWebAudioDsp {
     getMeta(): FaustDspMeta;
 
     /**
-     * Get DSP JSON description with its UI and metadata.
-     *
-     * @return the DSP JSON description
-     */
-    getJSON(): string;
-
-    /**
      * Get DSP UI description.
      *
      * @return the DSP UI description
@@ -484,6 +488,13 @@ export interface IFaustBaseWebAudioDsp {
     * @return the DSP UI items description
     */
     getDescriptors(): FaustUIInputItem[];
+
+    /**
+     * Get DSP JSON description with its UI and metadata.
+     *
+     * @return the DSP JSON description
+     */
+    getJSON(): string;
 
     /**
      * Start the DSP.
@@ -499,6 +510,16 @@ export interface IFaustBaseWebAudioDsp {
      * Destroy the DSP.
      */
     destroy(): void;
+
+    /** Indicating if the DSP handles the accelerometer */
+    readonly hasAccInput: boolean;
+    /** Accelerometer handling */
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>): void;
+
+    /** Indicating if the DSP handles the gyroscope */
+    readonly hasGyrInput: boolean;
+    /** Gyroscope handling */
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">): void;
 }
 
 export interface IFaustMonoWebAudioDsp extends IFaustBaseWebAudioDsp { }
@@ -557,6 +578,10 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     /** Keep the end of memory offset before soundfiles */
     protected fEndMemory: number;
 
+    // Accelerometer handling
+    protected fAcc: SensorEventHandlers; // array of accelerometer handlers on x,y,y axes, to be called with DeviceMotionEvent
+    protected fGyr: SensorEventHandlers; // array of gyroscope handlers on alpha,beta,gama axes, to be called with DeviceMotionEvent
+
     // Buffers in wasm memory
     protected fAudioInputs!: number;
     protected fAudioOutputs!: number;
@@ -579,18 +604,30 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             this.fInputsItems.push(item.address);
             this.fPathTable[item.address] = item.index;
             this.fDescriptor.push(item);
-            // Parse 'midi' metadata
             if (!item.meta) return;
             item.meta.forEach((meta) => {
-                const { midi } = meta;
-                if (!midi) return;
-                const strMidi = midi.trim();
-                if (strMidi === "pitchwheel") {
-                    this.fPitchwheelLabel.push({ path: item.address, min: item.min as number, max: item.max as number });
-                } else {
-                    const matched = strMidi.match(/^ctrl\s(\d+)/);
-                    if (!matched) return;
-                    this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min as number, max: item.max as number });
+                const { midi, acc, gyr } = meta;
+                // Parse 'midi' metadata
+                if (midi) {
+                    const strMidi = midi.trim();
+                    if (strMidi === "pitchwheel") {
+                        this.fPitchwheelLabel.push({ path: item.address, min: item.min as number, max: item.max as number });
+                    } else {
+                        const matched = strMidi.match(/^ctrl\s(\d+)/);
+                        if (matched) {
+                            this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min as number, max: item.max as number });
+                        }
+                    }
+                }
+                // Parse 'acc' metadata
+                if (acc) {
+                    const numAcc: number[] = acc.trim().split(" ").map(Number);
+                    this.setupAccHandler(item.address, FaustSensors.convertToAxis(numAcc[0]), FaustSensors.convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
+                }
+                // Parse 'gyr' metadata
+                if (gyr) {
+                    const numAcc: number[] = gyr.trim().split(" ").map(Number);
+                    this.setupGyrHandler(item.address, FaustSensors.convertToAxis(numAcc[0]), FaustSensors.convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
                 }
             });
         } else if (item.type === "soundfile") {
@@ -610,6 +647,8 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         this.fPtrSize = sampleSize; // Done on wast/wasm backend side
         this.fSampleSize = sampleSize;
         this.fSoundfileBuffers = soundfiles;
+        this.fAcc = { x: [], y: [], z: [] };
+        this.fGyr = { x: [], y: [], z: [] };
     }
 
     // Tools
@@ -646,6 +685,65 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         // Split the string into an array of strings and remove first and last characters
         return trimmed.split(";").map(str => str.length <= 2 ? '' : str.substring(1, str.length - 1));
     }
+
+    get hasAccInput() { return this.fAcc.x.length + this.fAcc.y.length + this.fAcc.z.length > 0; }
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
+
+        // Get accelerometervalues
+        const { x, y, z } = accelerationIncludingGravity;
+
+        // Call the accelerometer handlers
+        if (x !== null) this.fAcc.x.forEach(handler => handler(x));
+        if (y !== null) this.fAcc.y.forEach(handler => handler(y));
+        if (z !== null) this.fAcc.z.forEach(handler => handler(z));
+    }
+
+    get hasGyrInput() { return this.fGyr.x.length + this.fGyr.y.length + this.fGyr.z.length > 0; }
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
+
+        // Get gyroscope values
+        const { alpha, beta, gamma } = event;
+
+        // Call the gyroscope handlers
+        if (alpha !== null) this.fGyr.x.forEach(handler => handler(alpha));
+        if (beta !== null) this.fGyr.y.forEach(handler => handler(beta));
+        if (gamma !== null) this.fGyr.z.forEach(handler => handler(gamma));
+    }
+
+    /** Build the accelerometer handler */
+    private setupAccHandler(path: string, axis: Axis, curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number) {
+
+        const handler: UpdatableValueConverter = FaustSensors.buildHandler(curve, amin, amid, amax, min, init, max);
+        switch (axis) {
+            case Axis.x:
+                this.fAcc.x.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+            case Axis.y:
+                this.fAcc.y.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+            case Axis.z:
+                this.fAcc.z.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+        }
+    }
+
+    /** Build the gyroscope handler */
+    private setupGyrHandler(path: string, axis: Axis, curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number) {
+
+        const handler: UpdatableValueConverter = FaustSensors.buildHandler(curve, amin, amid, amax, min, init, max);
+        switch (axis) {
+            case Axis.x:
+                this.fGyr.x.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+            case Axis.y:
+                this.fGyr.y.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+            case Axis.z:
+                this.fGyr.z.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                break;
+        }
+    }
+
 
     static extractUrlsFromMeta(dspMeta: FaustDspMeta): string[] {
         // Find the entry with the "soundfiles" key
@@ -911,6 +1009,7 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
             // Init soundfiles memory
             this.initSoundfileMemory(allocator, this.fDSP);
         }
+
     }
 
     private initMemory(): number {

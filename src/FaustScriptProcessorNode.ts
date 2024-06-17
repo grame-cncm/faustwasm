@@ -33,7 +33,57 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
 
         this.start();
     }
+
     // Public API
+
+    /** Setup accelerometer and gyroscope handlers */
+    async listenSensors() {
+        if (this.hasAccInput) {
+            const handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+                if (!accelerationIncludingGravity) return;
+                const { x, y, z } = accelerationIncludingGravity;
+                this.propagateAcc({ x, y, z });
+            };
+            if (window.DeviceMotionEvent) {
+                if (typeof (window.DeviceMotionEvent as any).requestPermission === "function") { // for iOS 13+
+                    try {
+                        const response = await (window.DeviceMotionEvent as any).requestPermission();
+                        if (response !== "granted") throw new Error("Unable to access the accelerometer.");
+                        window.addEventListener("devicemotion", handleDeviceMotion, true);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                } else {
+                    window.addEventListener("devicemotion", handleDeviceMotion, true);
+                }
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set the accelerometer handler.");
+            }
+        }
+        if (this.hasGyrInput) {
+            const handleDeviceOrientation = ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
+                this.propagateGyr({ alpha, beta, gamma });
+            };
+            if (window.DeviceMotionEvent) {
+                if (typeof (window.DeviceOrientationEvent as any).requestPermission === "function") { // for iOS 13+
+                    try {
+                        const response = await (window.DeviceOrientationEvent as any).requestPermission();
+                        if (response !== "granted") throw new Error("Unable to access the gyroscope.");
+                        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                } else {
+                    window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+                }
+            } else {
+                // Browser doesn't support DeviceMotionEvent
+                console.log("Cannot set the gyroscope handler.");
+            }
+        }
+    }
+
     compute(input: Float32Array[], output: Float32Array[]) { return this.fDSPCode.compute(input, output); }
 
     setOutputParamHandler(handler: OutputParamHandler) { this.fDSPCode.setOutputParamHandler(handler); }
@@ -68,6 +118,16 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
     stop() { this.fDSPCode.stop(); }
 
     destroy() { this.fDSPCode.destroy(); }
+
+    get hasAccInput() { return this.fDSPCode.hasAccInput; }
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
+        this.fDSPCode.propagateAcc(accelerationIncludingGravity);
+    }
+
+    get hasGyrInput() { return this.fDSPCode.hasGyrInput; }
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
+        this.fDSPCode.propagateGyr(event);
+    }
 }
 
 export class FaustMonoScriptProcessorNode extends FaustScriptProcessorNode<false> implements IFaustMonoWebAudioDsp {
