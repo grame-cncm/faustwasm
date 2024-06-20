@@ -59,6 +59,9 @@ node scripts/faust2wasm.js test/poly.dsp test/out -poly
 ```
 will create a set of files: `poly.js`, `poly.wasm`, `poly.json`, `poly.html` (and possibly `poly_effect.wasm`, `poly_effect.json`) in the `out` folder.
 
+
+#### Creating a Progressive Web Application of a Faust DSP
+
 You can create a standalone Progressive Web Application using the same command line:
 
 ```bash
