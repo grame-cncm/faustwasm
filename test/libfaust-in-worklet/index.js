@@ -1,13 +1,13 @@
 //@ts-check
 const div = document.getElementById("log");
 const log = (/** @type {string} */str) => div.innerHTML += str.replace("\n", "<br />") + "<br />";
-const options = "-ftz 2";
 
 (async () => {
     const ctx = new AudioContext();
     globalThis.ctx = ctx;
     globalThis.faustModule = await faustwasm.instantiateFaustModule();
     const post = async () => {
+        const options = "-ftz 2";
         const {
             instantiateFaustModule,
             LibFaust,
@@ -28,7 +28,7 @@ const options = "-ftz 2";
         const libFaust = new LibFaust(faustModule);
         const compiler = new FaustCompiler(libFaust);
         console.log(compiler.version());
-        await gen.compile(compiler, 'dsp', code, "-ftz 0");
+        await gen.compile(compiler, 'dsp', code, options);
 
         console.log(await gen.createAudioWorkletProcessor());
         const processor = await gen.createOfflineProcessor(48000, 128);

@@ -62,20 +62,20 @@ will create a set of files: `poly.js`, `poly.wasm`, `poly.json`, `poly.html` (an
 You can create a standalone Progressive Web Application using the same command line:
 
 ```bash
-rm -rf test/out # make sure you are under the faustwasm directory.
-node scripts/faust2wasm.js test/rev.dsp test/out -standalone
+node scripts/faust2wasm.js test/rev.dsp test/rev -standalone
 ```
-will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `rev.js`, `rev.wasm`, `rev.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `out` folder.
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `rev.js`, `rev.wasm`, `rev.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
 
-The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. 
+The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. To test, be sure to launch a local web server at the `test` folder level, then go inside `test\rev` folder. 
 
 A standalone polyphonic and MIDI standalone Progressive Web Application can be created with:
 
 ```bash
-rm -rf test/out # make sure you are under the faustwasm directory.
-node scripts/faust2wasm.js test/organ1.dsp test/out -standalone
+node scripts/faust2wasm.js test/organ1.dsp test/organ1 -poly -standalone
 ```
-will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `organ1.js`, `organ1.wasm`, `organ1.json`, `organ1_effect.wasm`, `organ1_effect.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `out` folder.
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `organ1.js`, `organ1.wasm`, `organ1.json`, `organ1_effect.wasm`, `organ1_effect.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `organ1` folder.
+
+To test, be sure to launch a local web server at the `test` folder level, then go inside `test\organ1` folder. 
 
 #### Generate SVG Diagrams of a Faust DSP
 
@@ -234,6 +234,8 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 ```
 
 ### Projects examples
+
+Several examples can be tested by launching a local web server at the faustwasm root level, and going in `test/faustlive-wasm` and `libfaust-in-worklet` folders.
 
 The package is used in the following projects:
 

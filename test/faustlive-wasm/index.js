@@ -386,21 +386,21 @@ const uploadOn = (e) => {
             alert("WebAssembly is not supported in this browser !");
             reject("WebAssembly is not supported in this browser !");
         }
-    
+
         // CASE 1 : THE DROPPED OBJECT IS A URL TO SOME FAUST CODE
         if (e.dataTransfer.getData('URL') && e.dataTransfer.getData('URL').split(':').shift() != "file") {
             const url = e.dataTransfer.getData('URL');
             let filename = url.toString().split('/').pop();
             filename = filename.toString().split('.').shift();
             const xmlhttp = new XMLHttpRequest();
-    
+
             xmlhttp.onreadystatechange = () => {
                 if (xmlhttp.readyState === 4 && xmlhttp.status === 200) {
                     dsp_code = xmlhttp.responseText;
                     callback(dsp_code);
                 }
             }
-    
+
             try {
                 xmlhttp.open("GET", url, false);
                 // Avoid error "mal formé" on firefox
@@ -410,10 +410,10 @@ const uploadOn = (e) => {
                 alert(err);
                 reject(err);
             }
-    
+
         } else if (e.dataTransfer.getData('URL').split(':').shift() != "file") {
             dsp_code = e.dataTransfer.getData('text');
-    
+
             // CASE 2 : THE DROPPED OBJECT IS SOME FAUST CODE
             if (dsp_code) {
                 callback(dsp_code);
@@ -423,17 +423,17 @@ const uploadOn = (e) => {
                 /** @type {FileList} */
                 const files = e.target.files || e.dataTransfer.files;
                 const file = files[0];
-    
+
                 if (location.host.indexOf("sitepointstatic") >= 0) return;
-    
+
                 const request = new XMLHttpRequest();
                 if (request.upload) {
-    
+
                     const reader = new FileReader();
                     const ext = file.name.toString().split('.').pop();
                     const filename = file.name.toString().split('.').shift();
                     let type;
-    
+
                     if (ext === "dsp") {
                         type = "dsp";
                         reader.readAsText(file);
@@ -441,7 +441,7 @@ const uploadOn = (e) => {
                         type = "json";
                         reader.readAsText(file);
                     }
-    
+
                     reader.onloadend = (e) => {
                         dsp_code = reader.result;
                         callback(dsp_code);
@@ -492,7 +492,7 @@ const activateMonoDSP = (dsp) => {
     }
 
     // Setup UI
-    DSP.listenMotion();
+    DSP.listenSensors();
     faustUI = new FaustUI({ ui: DSP.getUI(), root: faustUIRoot });
     faustUI.paramChangeByUI = (path, value) => DSP.setParamValue(path, value);
     DSP.setOutputParamHandler(output_handler);
@@ -520,7 +520,7 @@ const activatePolyDSP = (dsp) => {
     }
 
     // Setup UI
-    DSP.listenMotion();
+    DSP.listenSensors();
     faustUI = new FaustUI({ ui: DSP.getUI(), root: faustUIRoot });
     faustUI.paramChangeByUI = (path, value) => DSP.setParamValue(path, value);
     DSP.setOutputParamHandler(output_handler);
