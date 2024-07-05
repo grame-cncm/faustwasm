@@ -39,11 +39,21 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
     /** Setup accelerometer and gyroscope handlers */
     async listenSensors() {
         if (this.hasAccInput) {
-            const handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
-                if (!accelerationIncludingGravity) return;
-                const { x, y, z } = accelerationIncludingGravity;
-                this.propagateAcc({ x, y, z });
-            };
+            const isAndroid: boolean = /Android/i.test(navigator.userAgent);
+            let handleDeviceMotion = null;
+            if (isAndroid) {
+                handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+                    if (!accelerationIncludingGravity) return;
+                    const { x, y, z } = accelerationIncludingGravity;
+                    this.propagateAcc({ x, y, z }, true);
+                }
+            } else {
+                handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+                    if (!accelerationIncludingGravity) return;
+                    const { x, y, z } = accelerationIncludingGravity;
+                    this.propagateAcc({ x, y, z });
+                }
+            }
             if (window.DeviceMotionEvent) {
                 if (typeof (window.DeviceMotionEvent as any).requestPermission === "function") { // for iOS 13+
                     try {
@@ -120,8 +130,8 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
     destroy() { this.fDSPCode.destroy(); }
 
     get hasAccInput() { return this.fDSPCode.hasAccInput; }
-    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
-        this.fDSPCode.propagateAcc(accelerationIncludingGravity);
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
+        this.fDSPCode.propagateAcc(accelerationIncludingGravity, invert);
     }
 
     get hasGyrInput() { return this.fDSPCode.hasGyrInput; }

@@ -1,0 +1,18 @@
+{
+  "name": "Faust FAUST_DSP",
+  "short_name": "FAUST_DSP",
+  "start_url": "/FAUST_DSP/index.html",
+  "description": "Progressive Web App for FAUST_DSP",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "scope": "/FAUST_DSP/",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "390x390",
+      "type": "image/png"
+    }
+  ]
+}

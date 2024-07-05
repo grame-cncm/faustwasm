@@ -8,8 +8,8 @@ export interface IFaustOfflineProcessor extends IFaustBaseWebAudioDsp {
     render(inputs?: Float32Array[], length?: number, onUpdate?: (sample: number) => any): Float32Array[];
 }
 
-export interface IFaustMonoOfflineProcessor extends IFaustOfflineProcessor, IFaustMonoWebAudioDsp {}
-export interface IFaustPolyOfflineProcessor extends IFaustOfflineProcessor, IFaustPolyWebAudioDsp {}
+export interface IFaustMonoOfflineProcessor extends IFaustOfflineProcessor, IFaustMonoWebAudioDsp { }
+export interface IFaustPolyOfflineProcessor extends IFaustOfflineProcessor, IFaustPolyWebAudioDsp { }
 
 export class FaustOfflineProcessor<Poly extends boolean = false> {
     protected fDSPCode!: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp;
@@ -82,8 +82,8 @@ export class FaustOfflineProcessor<Poly extends boolean = false> {
     destroy() { this.fDSPCode.destroy(); }
 
     get hasAccInput() { return this.fDSPCode.hasAccInput; }
-    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
-        this.fDSPCode.propagateAcc(accelerationIncludingGravity);
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
+        this.fDSPCode.propagateAcc(accelerationIncludingGravity, invert);
     }
 
     get hasGyrInput() { return this.fDSPCode.hasGyrInput; }

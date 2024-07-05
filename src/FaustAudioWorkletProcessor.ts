@@ -127,7 +127,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             switch (msg.type) {
                 // Sensors messages
                 case "acc": {
-                    this.propagateAcc(msg.data);
+                    this.propagateAcc(msg.data, msg.invert);
                     break;
                 }
                 case "gyr": {
@@ -197,8 +197,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             this.fDSPCode.pitchWheel(channel, wheel);
         }
 
-        protected propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>) {
-            this.fDSPCode.propagateAcc(accelerationIncludingGravity);
+        protected propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
+            this.fDSPCode.propagateAcc(accelerationIncludingGravity, invert);
         }
 
         protected propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
