@@ -23,7 +23,7 @@ const copyWebStandaloneAssets = (outputDir, dspName, poly = false) => {
 
     const templateHTMLPath = path.join(__dirname, "../assets/standalone/index.html");
     //cpSyncModify(templateHTMLPath, outputDir + `/${dspName}.html`, "FAUST_DSP", dspName);
-    cpSyncModify(templateHTMLPath, outputDir + `/index.html`, "FAUST_DSP", dspName);
+    cpSyncModify(templateHTMLPath, outputDir + `/${dspName}.html`, "FAUST_DSP", dspName);
 
     if (poly) {
         const templateWorkerPath = path.join(__dirname, "../assets/standalone/service-worker-poly.js");

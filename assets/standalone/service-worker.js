@@ -6,13 +6,13 @@ self.addEventListener('install', event => {
         caches.open(CACHE_NAME).then(cache => {
             console.log("Service worker installed");
             return cache.addAll([
-                '/FAUST_DSP/',
-                '/FAUST_DSP/faust-ui/index.js',
-                '/FAUST_DSP/faust-ui/index.css',
-                '/FAUST_DSP/faustwasm/index.js',
-                '/FAUST_DSP/FAUST_DSP.js',
-                '/FAUST_DSP/FAUST_DSP.wasm',
-                '/FAUST_DSP/FAUST_DSP.json',
+                './FAUST_DSP.html',
+                './faust-ui/index.js',
+                './faust-ui/index.css',
+                './faustwasm/index.js',
+                './FAUST_DSP.js',
+                './FAUST_DSP.wasm',
+                './FAUST_DSP.json',
             ]).catch(error => {
                 // Catch and log any errors during the caching process
                 console.error('Failed to cache resources during install:', error);
