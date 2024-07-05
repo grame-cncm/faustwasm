@@ -42,6 +42,8 @@
     "@shren/faust-ui": "^1.1.11",
     "@types/node": "^20.12.7",
     "@types/webmidi": "^2.0.10",
+    "@webaudiomodules/api": "^2.0.0-alpha.6",
+    "@webaudiomodules/sdk-parammgr": "^0.0.13",
     "dts-bundle-generator": "^9.5.1",
     "esbuild": "^0.20.2",
     "typescript": "^5.4.5"

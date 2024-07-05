@@ -2,6 +2,7 @@ import type { FaustMonoDspInstance } from "./FaustDspInstance";
 import type FaustWasmInstantiator from "./FaustWasmInstantiator";
 import type { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, PlotHandler } from "./FaustWebAudioDsp";
 import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem, InterfaceFFT, TWindowFunction, Writeable, TypedArray, FFTUtils } from "./types";
+import type { AudioWorkletGlobalScope as WamAudioWorkletGlobalScope, WamParamMgrSDKBaseModuleScope } from "@webaudiomodules/sdk-parammgr";
 
 export interface FaustFFTOptionsData {
     fftSize: number;
@@ -33,6 +34,9 @@ export interface FaustFFTAudioWorkletProcessorOptions {
     name: string;
     sampleSize: number;
     factory: LooseFaustDspFactory;
+    // for WAMs
+    moduleId?: string;
+    instanceId?: string;
 }
 
 
@@ -122,6 +126,8 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
 
         protected paramValuesCache: Record<string, number> = {};
 
+        protected wamInfo?: { moduleId: string; instanceId: string };
+
         private dspInstance!: FaustMonoDspInstance;
         private sampleSize!: number;
 
@@ -187,6 +193,10 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
 
             // Init the FFT constructor and the Faust FFT Processor
             this.initFFT();
+
+            const { moduleId, instanceId } = options.processorOptions;
+            if (!moduleId || !instanceId) return;
+            this.wamInfo = { moduleId, instanceId };
         }
 
         async initFFT(): Promise<true> {
@@ -230,6 +240,19 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                     name: "noIFFT"
                 }
             ];
+        }
+
+        setupWamEventHandler() {
+            if (!this.wamInfo) return;
+            const { moduleId, instanceId } = this.wamInfo;
+	        const { webAudioModules } = (globalThis as unknown as WamAudioWorkletGlobalScope);
+            const ModuleScope = webAudioModules.getModuleScope(moduleId) as WamParamMgrSDKBaseModuleScope;
+            const paramMgrProcessor = ModuleScope?.paramMgrProcessors?.[instanceId];
+            if (!paramMgrProcessor) return;
+            if (paramMgrProcessor.handleEvent) return;
+            paramMgrProcessor.handleEvent = (event) => {
+                if (event.type === "wam-midi") this.midiMessage(event.data.bytes);
+            };
         }
 
         processFFT() {
@@ -398,6 +421,10 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                         this.fPlotHandler = null;
                     }
                     this.fDSPCode?.setPlotHandler(this.fPlotHandler);
+                    break;
+                }
+                case "setupWamEventHandler": {
+                    this.setupWamEventHandler();
                     break;
                 }
                 case "start": {

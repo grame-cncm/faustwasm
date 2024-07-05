@@ -18,7 +18,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     #hasAccInput = false;
     #hasGyrInput = false;
 
-    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: FaustAudioWorkletNodeOptions<Poly>["processorOptions"], nodeOptions: Partial<FaustAudioWorkletNodeOptions> = {}) {
+    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, options: Partial<FaustAudioWorkletNodeOptions<Poly>> = {}) {
 
         // Create JSON object
         const JSONObj: FaustDspMeta = JSON.parse(factory.json);
@@ -31,8 +31,8 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
             outputChannelCount: [JSONObj.outputs],
             channelCountMode: "explicit",
             channelInterpretation: "speakers",
-            processorOptions: options,
-            ...nodeOptions
+            processorOptions: options.processorOptions,
+            ...options
         });
 
         this.fJSONDsp = JSONObj;
@@ -156,6 +156,9 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     getPlotHandler(): PlotHandler | null {
         return this.fPlotHandler;
     }
+    setupWamEventHandler() {
+        this.port.postMessage({ type: "setupWamEventHandler" });
+    }
 
     getNumInputs() {
         return this.fJSONDsp.inputs;
@@ -252,8 +255,8 @@ export class FaustMonoAudioWorkletNode extends FaustAudioWorkletNode<false> impl
         throw e;
     }
 
-    constructor(context: BaseAudioContext, name: string, factory: LooseFaustDspFactory, sampleSize: number, nodeOptions: Partial<FaustAudioWorkletNodeOptions> = {}) {
-        super(context, name, factory, { name, factory, sampleSize }, nodeOptions);
+    constructor(context: BaseAudioContext, options: Partial<FaustAudioWorkletNodeOptions<false>> & Pick<FaustAudioWorkletNodeOptions<false>, "processorOptions">) {
+        super(context, options.processorOptions.name, options.processorOptions.factory, options);
     }
 }
 
@@ -269,30 +272,16 @@ export class FaustPolyAudioWorkletNode extends FaustAudioWorkletNode<true> imple
         throw e;
     }
 
-    constructor(context: BaseAudioContext,
-        name: string,
-        voiceFactory: LooseFaustDspFactory,
-        mixerModule: WebAssembly.Module,
-        voices: number,
-        sampleSize: number,
-        effectFactory?: LooseFaustDspFactory, nodeOptions: Partial<FaustAudioWorkletNodeOptions> = {}) {
+    constructor(context: BaseAudioContext, options: Partial<FaustAudioWorkletNodeOptions<true>> & Pick<FaustAudioWorkletNodeOptions<true>, "processorOptions">) {
 
         super(
             context,
-            name,
-            voiceFactory,
-            {
-                name,
-                voiceFactory,
-                mixerModule,
-                voices,
-                sampleSize,
-                effectFactory
-            },
-            nodeOptions
+            options.processorOptions.name,
+            options.processorOptions.voiceFactory,
+            options
         );
 
-        this.fJSONEffect = effectFactory ? JSON.parse(effectFactory.json) : null;
+        this.fJSONEffect = options.processorOptions.effectFactory ? JSON.parse(options.processorOptions.effectFactory.json) : null;
 
         if (this.fJSONEffect) {
             FaustBaseWebAudioDsp.parseUI(this.fJSONEffect.ui, this.fUICallback);

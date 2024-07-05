@@ -1,6 +1,7 @@
 import type FaustWasmInstantiator from "./FaustWasmInstantiator";
 import type { FaustBaseWebAudioDsp, FaustWebAudioDspVoice, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
-import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem, AudioWorkletProcessor } from "./types";
+import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem } from "./types";
+import type { AudioWorkletGlobalScope as WamAudioWorkletGlobalScope, WamParamMgrSDKBaseModuleScope } from "@webaudiomodules/sdk-parammgr";
 
 /**
  * Injected in the string to be compiled on AudioWorkletProcessor side
@@ -31,6 +32,9 @@ export interface FaustPolyAudioWorkletNodeOptions extends AudioWorkletNodeOption
 export interface FaustAudioWorkletProcessorOptions {
     name: string;
     sampleSize: number;
+    // for WAMs
+    moduleId?: string;
+    instanceId?: string;
 }
 export interface FaustMonoAudioWorkletProcessorOptions extends FaustAudioWorkletProcessorOptions {
     factory: LooseFaustDspFactory;
@@ -82,6 +86,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
         protected paramValuesCache: Record<string, number> = {};
 
+        protected wamInfo?: { moduleId: string; instanceId: string };
+
         constructor(options: FaustAudioWorkletNodeOptions<Poly>) {
             super(options);
 
@@ -92,6 +98,10 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             parameterDescriptors.forEach((pd) => {
                 this.paramValuesCache[pd.name] = pd.defaultValue || 0;
             })
+            
+            const { moduleId, instanceId } = options.processorOptions;
+            if (!moduleId || !instanceId) return;
+            this.wamInfo = { moduleId, instanceId };
         }
 
         static get parameterDescriptors() {
@@ -105,6 +115,19 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             // Analyse effect JSON to generate AudioParam parameters
             if (effectMeta) FaustBaseWebAudioDsp.parseUI(effectMeta.ui, callback);
             return params;
+        }
+
+        setupWamEventHandler() {
+            if (!this.wamInfo) return;
+            const { moduleId, instanceId } = this.wamInfo;
+	        const { webAudioModules } = (globalThis as unknown as WamAudioWorkletGlobalScope);
+            const ModuleScope = webAudioModules.getModuleScope(moduleId) as WamParamMgrSDKBaseModuleScope;
+            const paramMgrProcessor = ModuleScope?.paramMgrProcessors?.[instanceId];
+            if (!paramMgrProcessor) return;
+            if (paramMgrProcessor.handleEvent) return;
+            paramMgrProcessor.handleEvent = (event) => {
+                if (event.type === "wam-midi") this.midiMessage(event.data.bytes);
+            };
         }
 
         process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: { [key: string]: Float32Array }) {
@@ -160,6 +183,10 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
                     } else {
                         this.fDSPCode.setPlotHandler(null);
                     }
+                    break;
+                }
+                case "setupWamEventHandler": {
+                    this.setupWamEventHandler();
                     break;
                 }
                 case "start": {

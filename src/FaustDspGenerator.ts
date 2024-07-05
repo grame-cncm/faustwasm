@@ -52,6 +52,7 @@ export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
      * @param sp - whether to compile a ScriptProcessorNode or an AudioWorkletNode
      * @param bufferSize - the buffer size in frames to be used in ScriptProcessorNode only, since AudioWorkletNode always uses 128 frames
      * @param processorName - AudioWorklet Processor name
+     * @param processorOptions - Additional AudioWorklet Processor options
      * @returns the compiled WebAudio node or 'null' if failure
      */
     createNode(
@@ -60,7 +61,8 @@ export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
         factory?: LooseFaustDspFactory,
         sp?: boolean,
         bufferSize?: number,
-        processorName?: string
+        processorName?: string,
+        processorOptions?: Record<string, any>
     ): Promise<IFaustMonoWebAudioNode | null>;
 
     /**
@@ -72,6 +74,7 @@ export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
      * @param factory - default is the compiled factory
      * @param fftOptions - initial FFT options
      * @param processorName - AudioWorklet Processor name
+     * @param processorOptions - Additional AudioWorklet Processor options
      * @returns the compiled WebAudio node or 'null' if failure
      */
     createFFTNode(
@@ -80,7 +83,8 @@ export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
         name?: string,
         factory?: LooseFaustDspFactory,
         fftOptions?: Partial<FaustFFTOptionsData>,
-        processorName?: string
+        processorName?: string,
+        processorOptions?: Record<string, any>
     ): Promise<FaustMonoAudioWorkletNode | null>;
 
     /**
@@ -148,6 +152,7 @@ export interface IFaustPolyDspGenerator extends GeneratorSupportingSoundfiles {
      * @param effectFactory - the Faust factory for the effect, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
      * @param sp - whether to compile a ScriptProcessorNode or an AudioWorkletNode
      * @param bufferSize - the buffer size in frames to be used in ScriptProcessorNode only, since AudioWorkletNode always uses 128 frames
+     * @param processorOptions - Additional AudioWorklet Processor options
      * @returns the compiled WebAudio node or 'null' if failure
      */
     createNode(
@@ -159,7 +164,8 @@ export interface IFaustPolyDspGenerator extends GeneratorSupportingSoundfiles {
         effectFactory?: LooseFaustDspFactory | null,
         sp?: boolean,
         bufferSize?: number,
-        processorName?: string
+        processorName?: string,
+        processorOptions?: Record<string, any>
     ): Promise<IFaustPolyWebAudioNode | null>;
 
     /**
@@ -244,7 +250,8 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
         factory = this.factory as LooseFaustDspFactory,
         sp = false as SP,
         bufferSize = 1024,
-        processorName = factory?.shaKey || name
+        processorName = factory?.shaKey || name,
+        processorOptions: Record<string, any> = {}
     ): Promise<SP extends true ? FaustMonoScriptProcessorNode | null : FaustMonoAudioWorkletNode | null> {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -307,7 +314,7 @@ const dependencies = {
                 }
             }
             // Create the AWN
-            const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize);
+            const node = new FaustMonoAudioWorkletNode(context, { processorOptions: { name: processorName, factory, sampleSize, ...processorOptions } });
 
             return node as SP extends true ? FaustMonoScriptProcessorNode : FaustMonoAudioWorkletNode;
         }
@@ -319,7 +326,8 @@ const dependencies = {
         name = this.name,
         factory = this.factory as LooseFaustDspFactory,
         fftOptions: Partial<FaustFFTOptionsData> = {},
-        processorName = factory?.shaKey ? `${factory.shaKey}_fft` : name
+        processorName = factory?.shaKey ? `${factory.shaKey}_fft` : name,
+        processorOptions: Record<string, any> = {}
     ): Promise<FaustMonoAudioWorkletNode | null> {
         if (!factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -375,7 +383,7 @@ const dependencies = {
             }
         }
         // Create the AWN
-        const node = new FaustMonoAudioWorkletNode(context, processorName, factory, sampleSize, { channelCount: Math.max(1, Math.ceil(meta.inputs / 3)), outputChannelCount: [Math.ceil(meta.outputs / 2)] });
+        const node = new FaustMonoAudioWorkletNode(context, { channelCount: Math.max(1, Math.ceil(meta.inputs / 3)), outputChannelCount: [Math.ceil(meta.outputs / 2)], processorOptions: { name: processorName, factory, sampleSize, ...processorOptions } });
         if (fftOptions.fftSize) {
             const param = node.parameters.get("fftSize");
             if (param) param.value = fftOptions.fftSize;
@@ -573,7 +581,8 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
         effectFactory = this.effectFactory as LooseFaustDspFactory | null,
         sp = false as SP,
         bufferSize = 1024,
-        processorName = ((voiceFactory?.shaKey || "") + (effectFactory?.shaKey || "")) || `${name}_poly`
+        processorName = ((voiceFactory?.shaKey || "") + (effectFactory?.shaKey || "")) || `${name}_poly`,
+        processorOptions = {}
     ): Promise<SP extends true ? FaustPolyScriptProcessorNode | null : FaustPolyAudioWorkletNode | null> {
         if (!voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
 
@@ -642,7 +651,7 @@ const dependencies = {
                 }
             }
             // Create the AWN
-            const node = new FaustPolyAudioWorkletNode(context, processorName, voiceFactory, mixerModule, voices, sampleSize, effectFactory || undefined);
+            const node = new FaustPolyAudioWorkletNode(context, { processorOptions: { name: processorName, voiceFactory, mixerModule, voices, sampleSize, effectFactory: effectFactory || undefined, ...processorOptions } });
 
             return node as SP extends true ? FaustPolyScriptProcessorNode : FaustPolyAudioWorkletNode;
         }
