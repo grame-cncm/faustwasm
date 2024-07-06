@@ -49,7 +49,7 @@ For example:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/mono.dsp test/out
 ```
-will create a set of files: `mono.js`, `mono.wasm`, `mono.json`, `mono.html` in the `out` folder.
+will create a set of files: `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html` in the `out` folder.
 
 Polyphonic instrument with:
 
@@ -57,7 +57,7 @@ Polyphonic instrument with:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/poly.dsp test/out -poly
 ```
-will create a set of files: `poly.js`, `poly.wasm`, `poly.json`, `poly.html` (and possibly `poly_effect.wasm`, `poly_effect.json`) in the `out` folder.
+will create a set of files: `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html` (and possibly `effect-module.wasm`, `effect-meta.json`) in the `out` folder.
 
 
 #### Creating a Progressive Web Application of a Faust DSP
@@ -67,7 +67,7 @@ You can create a standalone Progressive Web Application using the same command l
 ```bash
 node scripts/faust2wasm.js test/rev.dsp test/rev -standalone
 ```
-will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `rev.js`, `rev.wasm`, `rev.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
 
 The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. To test, be sure to launch a local web server at the `test` folder level, then go inside `test\rev` folder. 
 
@@ -76,7 +76,7 @@ A standalone polyphonic and MIDI standalone Progressive Web Application can be c
 ```bash
 node scripts/faust2wasm.js test/organ1.dsp test/organ1 -poly -standalone
 ```
-will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `organ1.js`, `organ1.wasm`, `organ1.json`, `organ1_effect.wasm`, `organ1_effect.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `organ1` folder.
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `effect-module.wasm`, `effect-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `organ1` folder.
 
 To test, be sure to launch a local web server at the `test` folder level, then go inside `test\organ1` folder. 
 
