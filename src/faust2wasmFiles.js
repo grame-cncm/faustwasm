@@ -34,11 +34,11 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
 
     if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
     argv.push("-ftz", "2");
-    const dspModulePath = path.join(outputDir, `${dspName}.wasm`);
-    const dspMetaPath = path.join(outputDir, `${dspName}.json`);
-    const effectModulePath = path.join(outputDir, `${dspName}_effect.wasm`);
-    const effectMetaPath = path.join(outputDir, `${dspName}_effect.json`);
-    const mixerModulePath = path.join(outputDir, "mixerModule.wasm");
+    const dspModulePath = path.join(outputDir, `dsp-module.wasm`);
+    const dspMetaPath = path.join(outputDir, `dsp-meta.json`);
+    const effectModulePath = path.join(outputDir, `effect-module.wasm`);
+    const effectMetaPath = path.join(outputDir, `effect-meta.json`);
+    const mixerModulePath = path.join(outputDir, "mixer-module.wasm");
     /** @type {Uint8Array} */
     let dspModule;
     /** @type {import("./types").FaustDspMeta} */
