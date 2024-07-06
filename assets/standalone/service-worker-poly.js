@@ -2,27 +2,27 @@
 const CACHE_NAME = 'FAUST_DSP-static'; // Cache name without versioning
 
 const POLY_EFFECT_RESOURCES = [
-    '/FAUST_DSP/',
-    '/FAUST_DSP/faust-ui/index.js',
-    '/FAUST_DSP/faust-ui/index.css',
-    '/FAUST_DSP/faustwasm/index.js',
-    '/FAUST_DSP/FAUST_DSP.js',
-    '/FAUST_DSP/FAUST_DSP.wasm',
-    '/FAUST_DSP/FAUST_DSP.json',
-    '/FAUST_DSP/mixerModule.wasm',
-    '/FAUST_DSP/FAUST_DSP_effect.wasm',
-    '/FAUST_DSP/FAUST_DSP_effect.json',
+    './',
+    './faust-ui/index.js',
+    './faust-ui/index.css',
+    './faustwasm/index.js',
+    './FAUST_DSP.js',
+    './FAUST_DSP.wasm',
+    './FAUST_DSP.json',
+    './mixerModule.wasm',
+    './FAUST_DSP_effect.wasm',
+    './FAUST_DSP_effect.json',
 ];
 
 const POLY_RESOURCES = [
-    '/FAUST_DSP/',
-    '/FAUST_DSP/faust-ui/index.js',
-    '/FAUST_DSP/faust-ui/index.css',
-    '/FAUST_DSP/faustwasm/index.js',
-    '/FAUST_DSP/FAUST_DSP.js',
-    '/FAUST_DSP/FAUST_DSP.wasm',
-    '/FAUST_DSP/FAUST_DSP.json',
-    '/FAUST_DSP/mixerModule.wasm',
+    './',
+    './faust-ui/index.js',
+    './faust-ui/index.css',
+    './faustwasm/index.js',
+    './FAUST_DSP.js',
+    './FAUST_DSP.wasm',
+    './FAUST_DSP.json',
+    './mixerModule.wasm',
 ];
 
 /**
@@ -33,7 +33,7 @@ self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
             console.log("Service worker installed");
-            const urlToCheck = '/FAUST_DSP/FAUST_DSP_effect.json';
+            const urlToCheck = './FAUST_DSP_effect.json';
             return fetchResourceAndCache(cache, urlToCheck);
         })
     );
