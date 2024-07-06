@@ -34,7 +34,7 @@ const serviceWorkerGlobalScope = self;
 /**
  * Install the service worker and cache the resources
  */
-serviceWorkerGlobalScope.addEventListener("install", async (event) => {
+serviceWorkerGlobalScope.addEventListener("install", (event) => {
     console.log("Service worker installed");
     event.waitUntil((async () => {
         const cache = await caches.open(CACHE_NAME);
