@@ -24,13 +24,14 @@ if (standalone) argv.splice($standalone, 1);
 
 const [inputFile, outputDir, ...argvFaust] = argv;
 const fileName = inputFile.split('/').pop();
+if (!fileName) throw new Error("No input DSP file");
 const dspName = fileName.replace(/\.dsp$/, '');
 
 (async () => {
-    await faust2wasmFiles(inputFile, outputDir, argvFaust, poly);
+    const { dspMeta, effectMeta } = await faust2wasmFiles(inputFile, outputDir, argvFaust, poly);
     if (standalone) {
-        copyWebStandaloneAssets(outputDir, dspName, poly);
+        copyWebStandaloneAssets(outputDir, dspName, poly, !!effectMeta);
     } else {
-        copyWebTemplateAssets(outputDir, dspName, poly);
+        copyWebTemplateAssets(outputDir, dspName, poly, !!effectMeta);
     }
 })();

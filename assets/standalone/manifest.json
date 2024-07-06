@@ -1,8 +1,8 @@
 {
-  "name": "Faust FAUST_DSP",
-  "short_name": "FAUST_DSP",
+  "name": "Faust FAUST_DSP_NAME",
+  "short_name": "FAUST_DSP_NAME",
   "start_url": "./index.html",
-  "description": "Progressive Web App for FAUST_DSP",
+  "description": "Progressive Web App for FAUST_DSP_NAME",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",

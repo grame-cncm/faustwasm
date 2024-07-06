@@ -15,7 +15,10 @@ const __filename = fileURLToPath(import.meta.url);
  * @param {string} dest - The destination path.
  */
 const cpSync = (src, dest) => {
-    if (!fs.existsSync(src)) return;
+    if (!fs.existsSync(src)) {
+        console.error(`${src} does not exist.`)
+        return;
+    }
     if (fs.lstatSync(src).isDirectory()) {
         if (!fs.existsSync(dest)) fs.mkdirSync(dest);
         fs.readdirSync(src).forEach(child => cpSync(path.join(src, child), path.join(dest, child)));
@@ -27,29 +30,24 @@ const cpSync = (src, dest) => {
 /**
  * @param {string} src - The source path of the file to modify and copy.
  * @param {string} dest - The destination path.
- * @param {string} find - The string to find.
- * @param {string} replace - The string to replace.
+ * @param {string[]} findAndReplace - The string to find and to replace pairs.
  */
-const cpSyncModify = (src, dest, find, replace) => {
-    fs.readFile(src, 'utf8', function (err, data) {
-        if (err) {
-            console.error(err);
-            return;
-        }
-
+const cpSyncModify = (src, dest, ...findAndReplace) => {
+    if (!fs.existsSync(src)) {
+        console.error(`${src} does not exist.`)
+        return;
+    }
+    let data = fs.readFileSync(src, "utf-8");
+    for (let i = 0; i < findAndReplace.length; i += 2) {
+        const find = findAndReplace[i];
+        const replace = findAndReplace[i + 1];
         // Create a regular expression from the 'find' string
-        const regex = new RegExp(find, 'g');
-
+        const regex = new RegExp(find, "g");
         // Replace 'find' with 'replace'
-        let modifiedData = data.replace(regex, replace);
-
-        // Write the modified data to a new file
-        fs.writeFile(dest, modifiedData, 'utf8', function (err) {
-            if (err) {
-                console.error(err);
-            }
-        });
-    });
+        data = data.replace(regex, replace);
+    }
+    // Write the modified data to a new file
+    fs.writeFileSync(dest, data, "utf-8");
 }
 /**
  * @param {string} dir - The directory to remove.
