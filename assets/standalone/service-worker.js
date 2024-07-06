@@ -34,17 +34,10 @@ const serviceWorkerGlobalScope = self;
 /**
  * Install the service worker and cache the resources
  */
-serviceWorkerGlobalScope.addEventListener("install", async (event) => {
+serviceWorkerGlobalScope.addEventListener("install", (event) => {
     console.log("Service worker installed");
-    const cache = await caches.open(CACHE_NAME);
     const resources = (FAUST_DSP_VOICES && FAUST_DSP_HAS_EFFECT) ? POLY_EFFECT_RESOURCES : FAUST_DSP_VOICES ? POLY_RESOURCES : MONO_RESOURCES;
-    /** @type {Promise<void>} */
-    let addAll;
-    try {
-        addAll = await cache.addAll(resources);
-    } catch (error) {
-        console.error("Failed to cache resources during install:", error);
-    }
+    const addAll = caches.open(CACHE_NAME).then(cache => cache.addAll(resources)).catch(error => console.error("Failed to cache resources during install:", error));
     event.waitUntil(addAll);
 });
 
