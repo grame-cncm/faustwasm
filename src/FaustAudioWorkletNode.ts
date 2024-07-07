@@ -76,20 +76,11 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     async listenSensors() {
         if (this.hasAccInput) {
             const isAndroid: boolean = /Android/i.test(navigator.userAgent);
-            let handleDeviceMotion = null;
-            if (isAndroid) {
-                handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
-                    if (!accelerationIncludingGravity) return;
-                    const { x, y, z } = accelerationIncludingGravity;
-                    this.propagateAcc({ x, y, z }, true);
-                }
-            } else {
-                handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
-                    if (!accelerationIncludingGravity) return;
-                    const { x, y, z } = accelerationIncludingGravity;
-                    this.propagateAcc({ x, y, z });
-                }
-            }
+            const handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+                if (!accelerationIncludingGravity) return;
+                const { x, y, z } = accelerationIncludingGravity;
+                this.propagateAcc({ x, y, z }, isAndroid);
+            };
             if (window.DeviceMotionEvent) {
                 if (typeof (window.DeviceMotionEvent as any).requestPermission === "function") { // for iOS 13+
                     try {
