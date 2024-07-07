@@ -1,4 +1,4 @@
-// Set to > 0 is the DSP is polyphonic
+// Set to > 0 if the DSP is polyphonic
 const FAUST_DSP_VOICES = 0;
 
 /**
