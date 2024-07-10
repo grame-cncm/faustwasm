@@ -9,10 +9,11 @@ const CACHE_NAME = "FAUST_DSP_NAME-static"; // Cache name without versioning
 
 const MONO_RESOURCES = [
     "./index.html",
+    "./index.js",
+    "./create-node.js",
     "./faust-ui/index.js",
     "./faust-ui/index.css",
     "./faustwasm/index.js",
-    "./index.js",
     "./dsp-module.wasm",
     "./dsp-meta.json"
 ];
