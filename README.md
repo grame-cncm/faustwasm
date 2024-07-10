@@ -49,7 +49,7 @@ For example:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/mono.dsp test/out
 ```
-will create a set of files: `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html` in the `out` folder.
+will create a set of files: `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html` in the `out` folder. `-no-template` option will omit `index.js` and `index.html` files.
 
 Polyphonic instrument with:
 

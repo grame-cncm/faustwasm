@@ -23,6 +23,9 @@ const copyWebStandaloneAssets = (outputDir, dspName, poly = false, effect = fals
     if (poly && effect) findAndReplace.push("FAUST_DSP_HAS_EFFECT = false", "FAUST_DSP_HAS_EFFECT = true");
 
     // Copy some files
+    const createNodeJSPath = path.join(__dirname, "../assets/standalone/create-node.js");
+    cpSyncModify(createNodeJSPath, outputDir + `/create-node.js`, ...findAndReplace);
+
     const templateJSPath = path.join(__dirname, "../assets/standalone/index.js");
     cpSyncModify(templateJSPath, outputDir + `/index.js`, ...findAndReplace);
 
@@ -62,11 +65,14 @@ const copyWebTemplateAssets = (outputDir, dspName, poly = false, effect = false)
     if (poly && effect) findAndReplace.push("FAUST_DSP_HAS_EFFECT = false", "FAUST_DSP_HAS_EFFECT = true");
 
     // Copy some files
-    const templateJSPath = path.join(__dirname, "../assets/standalone/template.js");
+    const createNodeJSPath = path.join(__dirname, "../assets/standalone/create-node.js");
+    cpSyncModify(createNodeJSPath, outputDir + `/create-node.js`, ...findAndReplace);
+
+    const templateJSPath = path.join(__dirname, "../assets/standalone/index-template.js");
     cpSyncModify(templateJSPath, outputDir + `/index.js`, ...findAndReplace);
 
-    const templateHTMLPath = path.join(__dirname, "../assets/standalone/template.html");
-    cpSyncModify(templateHTMLPath, outputDir + `/index.html`, ...findAndReplace);
+    const templateHTMLPath = path.join(__dirname, "../assets/standalone/index-template.html");
+    cpSyncModify(templateHTMLPath, outputDir + `/index.html`, "index-template.js", "index.js", ...findAndReplace);
 
     const faustwasmPath = path.join(__dirname, "../assets/standalone/faustwasm");
     cpSync(faustwasmPath, outputDir + "/faustwasm");
