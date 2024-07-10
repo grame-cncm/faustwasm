@@ -63,7 +63,7 @@ const copyWebTemplateAssets = (outputDir, dspName, poly = false, effect = false)
 
     // Copy some files
     const templateJSPath = path.join(__dirname, "../assets/standalone/template.js");
-    cpSync(templateJSPath, outputDir + `/index.js`);
+    cpSyncModify(templateJSPath, outputDir + `/index.js`, ...findAndReplace);
 
     const templateHTMLPath = path.join(__dirname, "../assets/standalone/template.html");
     cpSyncModify(templateHTMLPath, outputDir + `/index.html`, ...findAndReplace);

@@ -1,6 +1,6 @@
 /// <reference lib="webworker" /> 
 
-// Set to > 0 is the DSP is polyphonic
+// Set to > 0 if the DSP is polyphonic
 const FAUST_DSP_VOICES = 0;
 // Set to true if the DSP has an effect
 const FAUST_DSP_HAS_EFFECT = false;

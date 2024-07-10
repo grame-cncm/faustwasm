@@ -13,9 +13,6 @@
     </main>
     <script src="./index.js"></script>
     <script>
-        // Set to > 0 is the DSP is polyphonic
-        const FAUST_DSP_VOICES = 0;
-        
         (async () => {
 
             // Create audio context
@@ -42,7 +39,7 @@
                 } else if (audioContext.state === "suspended") {
                     $buttonDsp.textContent = "Running";
                     audioContext.resume();
-                    if (FAUST_DSP_VOICES) play(faustNode)
+                    if (FAUST_DSP_VOICES) play(faustNode);
                 }
             }
 
