@@ -59,17 +59,34 @@ node scripts/faust2wasm.js test/poly.dsp test/out -poly
 ```
 will create a set of files: `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html` (and possibly `effect-module.wasm`, `effect-meta.json`) in the `out` folder.
 
-
-#### Creating a Progressive Web Application of a Faust DSP
+#### Creating a Progressive Web Application (PWA) of a Faust DSP
 
 You can create a standalone Progressive Web Application using the same command line:
+
+```bash
+node scripts/faust2wasm.js test/rev.dsp test/rev -pwa
+```
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
+
+The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. 
+
+A standalone polyphonic and MIDI standalone Progressive Web Application can be created with:
+
+```bash
+node scripts/faust2wasm.js test/organ1.dsp test/organ1 -poly -pwa
+```
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `effect-module.wasm`, `effect-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `organ1` folder.
+
+#### Creating a standalone version of a Faust DSP, with audio and MIDI devices selector
+
+You can create a standalone  using the same command line:
 
 ```bash
 node scripts/faust2wasm.js test/rev.dsp test/rev -standalone
 ```
 will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
 
-The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. To test, be sure to launch a local web server at the `test` folder level, then go inside `test\rev` folder. 
+The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. 
 
 A standalone polyphonic and MIDI standalone Progressive Web Application can be created with:
 
@@ -77,8 +94,6 @@ A standalone polyphonic and MIDI standalone Progressive Web Application can be c
 node scripts/faust2wasm.js test/organ1.dsp test/organ1 -poly -standalone
 ```
 will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `effect-module.wasm`, `effect-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `organ1` folder.
-
-To test, be sure to launch a local web server at the `test` folder level, then go inside `test\organ1` folder. 
 
 #### Generate SVG Diagrams of a Faust DSP
 
