@@ -44,8 +44,10 @@ $buttonDsp.disabled = true;
  * @param {FaustAudioWorkletNode} faustNode 
  */
 const buildAudioDeviceMenu = async (faustNode) => {
-    /** @type {MediaStreamAudioSourceNode} */
-    let inputStreamNode;
+
+    const { connectToAudioInput } = await import("./create-node.js");
+
+    let inputStreamNode = null;
     const handleDeviceChange = async () => {
         const devicesInfo = await navigator.mediaDevices.enumerateDevices();
         $selectAudioInput.innerHTML = "";
@@ -61,31 +63,14 @@ const buildAudioDeviceMenu = async (faustNode) => {
     navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange)
     $selectAudioInput.onchange = async () => {
         const id = $selectAudioInput.value;
-        const constraints = {
-            audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-                deviceId: id ? { exact: id } : undefined,
-            },
-        };
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (inputStreamNode) inputStreamNode.disconnect();
-        inputStreamNode = audioContext.createMediaStreamSource(stream);
-        inputStreamNode.connect(faustNode);
-    };
-
-    const defaultConstraints = {
-        audio: {
-            echoCancellation: false,
-            mozNoiseSuppression: false,
-            mozAutoGainControl: false
+        if (faustNode.getNumInputs() > 0) {
+            inputStreamNode = await connectToAudioInput(audioContext, id, faustNode, inputStreamNode);
         }
     };
-    const defaultStream = await navigator.mediaDevices.getUserMedia(defaultConstraints);
-    if (defaultStream) {
-        inputStreamNode = audioContext.createMediaStreamSource(defaultStream);
-        inputStreamNode.connect(faustNode);
+
+    // Connect to the default audio input device
+    if (faustNode.getNumInputs() > 0) {
+        inputStreamNode = await connectToAudioInput(audioContext, null, faustNode, inputStreamNode);
     }
 };
 
@@ -149,7 +134,7 @@ const createFaustUI = async (faustNode) => {
 };
 
 (async () => {
-    const { default: createFaustNode } = await import("./create-node.js");
+    const { createFaustNode } = await import("./create-node.js");
     // To test the ScriptProcessorNode mode
     // const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES, true);
     const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);

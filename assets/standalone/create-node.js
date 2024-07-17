@@ -75,4 +75,31 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0, s
     return { faustNode, dspMeta };
 }
 
-export default createFaustNode;
+/**
+ * Connects an audio input stream to a Faust audio node.
+ * 
+ * @param {AudioContext} audioContext - The Web Audio API AudioContext to which the Faust audio node is connected.
+ * @param {string} id - The ID of the audio input device to connect.
+ * @param {FaustNode} faustNode - The Faust audio node to which the audio input stream will be connected.
+ * @param {MediaStreamAudioSourceNode} inputStreamNode - The audio input stream node to be connected to the Faust audio node.
+ * @returns {Promise<MediaStreamAudioSourceNode>} - The audio input stream node connected to the Faust audio node.
+ */
+async function connectToAudioInput(audioContext, id, faustNode, inputStreamNode) {
+    const constraints = {
+        audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            deviceId: id ? { exact: id } : undefined,
+        },
+    };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    if (stream) {
+        if (inputStreamNode) inputStreamNode.disconnect();
+        inputStreamNode = audioContext.createMediaStreamSource(stream);
+        inputStreamNode.connect(faustNode);
+    }
+    return inputStreamNode;
+};
+
+export { createFaustNode, connectToAudioInput };

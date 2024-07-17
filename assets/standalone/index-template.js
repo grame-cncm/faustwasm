@@ -2,7 +2,7 @@
 const FAUST_DSP_VOICES = 0;
 
 (async () => {
-    const { default: createFaustNode } = await import("./create-node.js");
+    const { createFaustNode } = await import("./create-node.js");
 
     // Create audio context
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -37,12 +37,18 @@ const FAUST_DSP_VOICES = 0;
     const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);
     if (!faustNode) throw new Error("Faust DSP not compiled");
 
-    // Connect Faust node to audio context
+    // Connect the Faust node to the audio output
     faustNode.connect(audioContext.destination);
+
+    // Connect the Faust node to the audio input
+    if (faustNode.getNumInputs() > 0) {
+        const { connectToAudioInput } = await import("./create-node.js");
+        await connectToAudioInput(audioContext, null, faustNode, null);
+    }
 
     // Create Faust node activation button
     $buttonDsp.disabled = false;
-    
+
     // Set page title to the DSP name
     document.title = name;
 })();

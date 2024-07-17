@@ -58,7 +58,7 @@ const createFaustUI = async (faustNode) => {
 
 (async () => {
 
-    const { default: createFaustNode } = await import("./create-node.js");
+    const { createFaustNode } = await import("./create-node.js");
 
     // To test the ScriptProcessorNode mode
     // const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "osc", FAUST_DSP_VOICES, true);
@@ -68,8 +68,14 @@ const createFaustUI = async (faustNode) => {
     // Create the Faust UI
     await createFaustUI(faustNode);
 
-    // Connect the Faust node to the audio context
+    // Connect the Faust node to the audio output
     faustNode.connect(audioContext.destination);
+
+    // Connect the Faust node to the audio input
+    if (faustNode.getNumInputs() > 0) {
+        const { connectToAudioInput } = await import("./create-node.js");
+        await connectToAudioInput(audioContext, null, faustNode, null);
+    }
 
     // Activate sensor listeners
     await faustNode.listenSensors();
