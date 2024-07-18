@@ -31,8 +31,7 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
 
     const fileName = /** @type {string} */(inputFile.split('/').pop());
     const dspName = fileName.replace(/\.dsp$/, '');
-
-    if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
+    // Flush to zero to avoid costly denormalized numbers
     argv.push("-ftz", "2");
     const dspModulePath = path.join(outputDir, `dsp-module.wasm`);
     const dspMetaPath = path.join(outputDir, `dsp-meta.json`);

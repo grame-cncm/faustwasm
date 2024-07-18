@@ -40,5 +40,4 @@ if ($sr !== -1) sampleRate = +argv.splice($sr, 2)[1];
 
 const [inputFile, outputWav, ...argvFaust] = argv;
 
-
 faust2wavFiles(inputFile, inputWav, outputWav, bufferSize, sampleRate, samples, bitDepth, argvFaust);

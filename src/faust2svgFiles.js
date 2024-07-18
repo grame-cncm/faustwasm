@@ -26,7 +26,6 @@ const faust2svgFiles = async (inputFile, outputDir, argv = []) => {
     const code = fs.readFileSync(inputFile, { encoding: "utf8" });
     const { name } = path.parse(inputFile);
     const diagram = new FaustSvgDiagrams(compiler);
-    if (!argv.find(a => a === "-I")) argv.push("-I", "libraries/");
     const svgs = diagram.from(name, code, argv.join(" "));
     console.log(`Generated ${Object.keys(svgs).length} files.`);
     console.log(`Writing files to ${outputDir}`);
