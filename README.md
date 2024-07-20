@@ -61,7 +61,7 @@ will create a set of files: `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `ind
 
 #### Creating a Progressive Web Application (PWA) of a Faust DSP
 
-You can create a standalone Progressive Web Application using the same command line:
+You can create a standalone Progressive Web Application using the command line:
 
 ```bash
 node scripts/faust2wasm.js test/rev.dsp test/rev -pwa
@@ -79,7 +79,7 @@ will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `i
 
 #### Creating a standalone version of a Faust DSP, with audio and MIDI devices selector
 
-You can create a standalone  using the same command line:
+You can create a standalone using the command line:
 
 ```bash
 node scripts/faust2wasm.js test/rev.dsp test/rev -standalone

@@ -38,6 +38,7 @@ const AudioCtx = window.AudioContext || window.webkitAudioContext;
 const audioContext = new AudioCtx({ latencyHint: 0.00001 });
 audioContext.destination.channelInterpretation = "discrete";
 audioContext.suspend();
+
 $buttonDsp.disabled = true;
 
 /**
@@ -106,49 +107,35 @@ const buildMidiDeviceMenu = async (faustNode) => {
     };
 };
 
-/**
- * @param {FaustAudioWorkletNode} faustNode 
- */
-const createFaustUI = async (faustNode) => {
-    const { FaustUI } = await import("./faust-ui/index.js");
-    const $container = document.createElement("div");
-    $container.style.margin = "0";
-    $container.style.position = "absolute";
-    $container.style.overflow = "auto";
-    $container.style.display = "flex";
-    $container.style.flexDirection = "column";
-    $container.style.width = "100%";
-    $container.style.height = "100%";
-    $divFaustUI.appendChild($container);
-    const faustUI = new FaustUI({
-        ui: faustNode.getUI(),
-        root: $container,
-        listenWindowMessage: false,
-        listenWindowResize: true,
-    });
-    faustUI.paramChangeByUI = (path, value) => faustNode.setParamValue(path, value);
-    faustNode.setOutputParamHandler((path, value) => faustUI.paramChangeByDSP(path, value));
-    $container.style.minWidth = `${faustUI.minWidth}px`;
-    $container.style.minHeight = `${faustUI.minHeight}px`;
-    faustUI.resize();
-};
-
 (async () => {
-    const { createFaustNode } = await import("./create-node.js");
+
     // To test the ScriptProcessorNode mode
     // const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES, true);
+    const { createFaustNode } = await import("./create-node.js");
     const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);
     if (!faustNode) throw new Error("Faust DSP not compiled");
-    await createFaustUI(faustNode);
+
+    // Create the Faust UI
+    const { createFaustUI } = await import("./create-node.js");
+    await createFaustUI($divFaustUI, faustNode);
+
+    // Connect the Faust node to the audio output
     faustNode.connect(audioContext.destination);
-    if (faustNode.numberOfInputs) await buildAudioDeviceMenu(faustNode);
+
+    // Build the audio device menu
+    if (faustNode.numberOfInputs > 0) await buildAudioDeviceMenu(faustNode);
     else $spanAudioInput.hidden = true;
+
+    // Build the MIDI device menu
     if (navigator.requestMIDIAccess) await buildMidiDeviceMenu(faustNode);
     else $spanMidiInput.hidden = true;
+
+    // Set the title and enable the DSP button
     $buttonDsp.disabled = false;
     document.title = name;
     let motionHandlersBound = false;
     $buttonDsp.onclick = async () => {
+        // Activate sensor listeners
         if (!motionHandlersBound) {
             await faustNode.listenSensors();
             motionHandlersBound = true;

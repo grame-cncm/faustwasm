@@ -51,6 +51,7 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0, s
             faustDsp.effectModule = await WebAssembly.compileStreaming(await fetch("./effect-module.wasm"));
         }
 
+        // Create a polyphonic Faust audio node
         const generator = new FaustPolyDspGenerator();
         faustNode = await generator.createNode(
             audioContext,
@@ -62,6 +63,7 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0, s
             sp
         );
     } else {
+        // Create a standard Faust audio node
         const generator = new FaustMonoDspGenerator();
         faustNode = await generator.createNode(
             audioContext,
@@ -81,10 +83,11 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0, s
  * @param {AudioContext} audioContext - The Web Audio API AudioContext to which the Faust audio node is connected.
  * @param {string} id - The ID of the audio input device to connect.
  * @param {FaustNode} faustNode - The Faust audio node to which the audio input stream will be connected.
- * @param {MediaStreamAudioSourceNode} inputStreamNode - The audio input stream node to be connected to the Faust audio node.
+ * @param {MediaStreamAudioSourceNode} inputStreamNode - The audio input stream node to be disconnected from the Faust audio node.
  * @returns {Promise<MediaStreamAudioSourceNode>} - The audio input stream node connected to the Faust audio node.
  */
 async function connectToAudioInput(audioContext, id, faustNode, inputStreamNode) {
+    // Create an audio input stream node
     const constraints = {
         audio: {
             echoCancellation: false,
@@ -93,6 +96,7 @@ async function connectToAudioInput(audioContext, id, faustNode, inputStreamNode)
             deviceId: id ? { exact: id } : undefined,
         },
     };
+    // Get the audio input stream
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     if (stream) {
         if (inputStreamNode) inputStreamNode.disconnect();
@@ -102,4 +106,33 @@ async function connectToAudioInput(audioContext, id, faustNode, inputStreamNode)
     return inputStreamNode;
 };
 
-export { createFaustNode, connectToAudioInput };
+/**
+ * @param {FaustAudioWorkletNode} faustNode 
+ */
+async function createFaustUI(divFaustUI, faustNode) {
+    const { FaustUI } = await import("./faust-ui/index.js");
+    const $container = document.createElement("div");
+    $container.style.margin = "0";
+    $container.style.position = "absolute";
+    $container.style.overflow = "auto";
+    $container.style.display = "flex";
+    $container.style.flexDirection = "column";
+    $container.style.width = "100%";
+    $container.style.height = "100%";
+    divFaustUI.appendChild($container);
+    const faustUI = new FaustUI({
+        ui: faustNode.getUI(),
+        root: $container,
+        listenWindowMessage: false,
+        listenWindowResize: true,
+    });
+    faustUI.paramChangeByUI = (path, value) => faustNode.setParamValue(path, value);
+    faustNode.setOutputParamHandler((path, value) => faustUI.paramChangeByDSP(path, value));
+    $container.style.minWidth = `${faustUI.minWidth}px`;
+    $container.style.minHeight = `${faustUI.minHeight}px`;
+    faustUI.resize();
+};
+
+// Export the functions
+export { createFaustNode, createFaustUI, connectToAudioInput };
+
