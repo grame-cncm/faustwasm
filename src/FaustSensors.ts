@@ -75,8 +75,6 @@ export interface UpdatableValueConverter extends ValueConverter {
     getActive(): boolean;
 }
 
-
-
 export default class FaustSensors {
     /**
      * Function to convert a number to an axis type
