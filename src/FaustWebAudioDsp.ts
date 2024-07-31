@@ -591,8 +591,8 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fSampleSize: number;
 
     // MIDI handling
-    protected fPitchwheelLabel: { path: string; min: number; max: number }[] = [];
-    protected fCtrlLabel: { path: string; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
+    protected fPitchwheelLabel: { path: string; chan: number; min: number; max: number }[] = [];
+    protected fCtrlLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
     protected fPathTable: { [address: string]: number } = {};
     protected fUICallback: UIHandler = (item: FaustUIItem) => {
         if (item.type === "hbargraph" || item.type === "vbargraph") {
@@ -611,14 +611,27 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                 if (midi) {
                     const strMidi = midi.trim();
                     if (strMidi === "pitchwheel") {
-                        this.fPitchwheelLabel.push({ path: item.address, min: item.min as number, max: item.max as number });
-                    } else {
-                        const matched = strMidi.match(/^ctrl\s(\d+)/);
+                        const matched = strMidi.match(/^pitchwheel\s(\d+)/);
+                        // "pitchwheel chan"
                         if (matched) {
-                            this.fCtrlLabel[parseInt(matched[1])].push({ path: item.address, min: item.min as number, max: item.max as number });
+                            this.fPitchwheelLabel.push({ path: item.address, chan: parseInt(matched[1]), min: item.min as number, max: item.max as number });
+                            // "pitchwheel"
+                        } else {
+                            this.fPitchwheelLabel.push({ path: item.address, chan: 0, min: item.min as number, max: item.max as number });
+                        }
+                    } else {
+                        // "ctrl num chan"
+                        const matched2 = strMidi.match(/^ctrl\s(\d+)\s(\d+)/);
+                        // "ctrl num"
+                        const matched1 = strMidi.match(/^ctrl\s(\d+)/);
+                        if (matched2) {
+                            this.fCtrlLabel[parseInt(matched2[1])].push({ path: item.address, chan: parseInt(matched2[2]), min: item.min as number, max: item.max as number });
+                        } else if (matched1) {
+                            this.fCtrlLabel[parseInt(matched1[1])].push({ path: item.address, chan: 0, min: item.min as number, max: item.max as number });
                         }
                     }
                 }
+
                 // Parse 'acc' metadata
                 if (acc) {
                     const numAcc: number[] = acc.trim().split(" ").map(Number);
@@ -939,10 +952,12 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         if (this.fPlotHandler) this.fCachedEvents.push({ type: "ctrlChange", data: [channel, ctrl, value] });
         if (this.fCtrlLabel[ctrl].length) {
             this.fCtrlLabel[ctrl].forEach((ctrl) => {
-                const { path } = ctrl;
-                this.setParamValue(path, FaustBaseWebAudioDsp.remap(value, 0, 127, ctrl.min, ctrl.max));
-                // Typically used to reflect parameter change on GUI
-                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+                const { path, chan } = ctrl;
+                if (chan === 0 || channel === chan - 1) {
+                    this.setParamValue(path, FaustBaseWebAudioDsp.remap(value, 0, 127, ctrl.min, ctrl.max));
+                    // Typically used to reflect parameter change on GUI
+                    if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+                }
             });
         }
     }
@@ -950,9 +965,12 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     pitchWheel(channel: number, wheel: number) {
         if (this.fPlotHandler) this.fCachedEvents.push({ type: "pitchWheel", data: [channel, wheel] });
         this.fPitchwheelLabel.forEach((pw) => {
-            this.setParamValue(pw.path, FaustBaseWebAudioDsp.remap(wheel, 0, 16383, pw.min, pw.max));
-            // Typically used to reflect parameter change on GUI
-            if (this.fOutputHandler) this.fOutputHandler(pw.path, this.getParamValue(pw.path));
+            const { path, chan } = pw;
+            if (chan === 0 || channel === chan - 1) {
+                this.setParamValue(path, FaustBaseWebAudioDsp.remap(wheel, 0, 16383, pw.min, pw.max));
+                // Typically used to reflect parameter change on GUI
+                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+            }
         });
     }
 
