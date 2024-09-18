@@ -49,6 +49,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@types/emscripten": "^1.39.10"
+    "@types/emscripten": "^1.39.10",
+    "xmlhttprequest": "^1.8.0"
   }
 }
