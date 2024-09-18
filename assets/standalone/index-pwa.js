@@ -50,11 +50,8 @@ audioContext.suspend();
         await connectToAudioInput(audioContext, null, faustNode, null);
     }
 
-    // Activate sensor listeners
-    await faustNode.listenSensors();
-
     // Function to initialize MIDI
-    function initMIDI(faustNode) {
+    function initMIDI() {
         // Check if the browser supports the Web MIDI API
         if (navigator.requestMIDIAccess) {
             navigator.requestMIDIAccess().then(
@@ -72,28 +69,31 @@ audioContext.suspend();
         }
     }
 
-    // Initialize the MIDI setup
-    if (FAUST_DSP_VOICES > 0) {
-        initMIDI(faustNode);
+    // Function to resume AudioContext, activate MIDI and Sensors on user interaction
+    function activateAudioMIDISensors() {
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+
+        // Activate sensor listeners
+        faustNode.listenSensors();
+
+        // Initialize the MIDI setup
+        if (FAUST_DSP_VOICES > 0) {
+            initMIDI();
+        }
     }
+
+    // Add event listeners for user interactions
+    window.addEventListener('click', activateAudioMIDISensors);
+    window.addEventListener('touchstart', activateAudioMIDISensors);
+
+    // Remove event listeners once the activation is done
+    audioContext.onstatechange = function () {
+        if (audioContext.state === 'running') {
+            window.removeEventListener('click', activateAudioMIDISensors);
+            window.removeEventListener('touchstart', activateAudioMIDISensors);
+        }
+    };
 
 })();
-
-// Function to resume AudioContext on user interaction
-function resumeAudioContext() {
-    if (audioContext.state === 'suspended') {
-        audioContext.resume();
-    }
-}
-
-// Add event listeners for user interactions
-window.addEventListener('click', resumeAudioContext);
-window.addEventListener('touchstart', resumeAudioContext);
-
-// Optional: Remove event listeners once the context is resumed
-audioContext.onstatechange = function () {
-    if (audioContext.state === 'running') {
-        window.removeEventListener('click', resumeAudioContext);
-        window.removeEventListener('touchstart', resumeAudioContext);
-    }
-};
