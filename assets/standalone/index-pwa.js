@@ -69,6 +69,9 @@ audioContext.suspend();
         }
     }
 
+    let sensorHandlersBound = false;
+    let midiHandlersBound = false;
+
     // Function to resume AudioContext, activate MIDI and Sensors on user interaction
     function activateAudioMIDISensors() {
 
@@ -78,11 +81,15 @@ audioContext.suspend();
         }
 
         // Activate sensor listeners
-        faustNode.listenSensors();
+        if (!sensorHandlersBound) {
+            faustNode.listenSensors();
+            sensorHandlersBound = true;
+        }
 
         // Initialize the MIDI setup
-        if (FAUST_DSP_VOICES > 0) {
+        if (!midiHandlersBound && FAUST_DSP_VOICES > 0) {
             initMIDI();
+            midiHandlersBound = true;
         }
     }
 

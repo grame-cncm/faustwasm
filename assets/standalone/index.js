@@ -133,12 +133,12 @@ const buildMidiDeviceMenu = async (faustNode) => {
     // Set the title and enable the DSP button
     $buttonDsp.disabled = false;
     document.title = name;
-    let motionHandlersBound = false;
+    let sensorHandlersBound = false;
     $buttonDsp.onclick = async () => {
         // Activate sensor listeners
-        if (!motionHandlersBound) {
+        if (!sensorHandlersBound) {
             await faustNode.listenSensors();
-            motionHandlersBound = true;
+            sensorHandlersBound = true;
         }
         if (audioContext.state === "running") {
             $buttonDsp.textContent = "Suspended";
