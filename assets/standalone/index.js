@@ -109,9 +109,9 @@ const buildMidiDeviceMenu = async (faustNode) => {
 
 (async () => {
 
+    const { createFaustNode } = await import("./create-node.js");
     // To test the ScriptProcessorNode mode
     // const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES, true);
-    const { createFaustNode } = await import("./create-node.js");
     const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);
     if (!faustNode) throw new Error("Faust DSP not compiled");
 
@@ -137,15 +137,15 @@ const buildMidiDeviceMenu = async (faustNode) => {
     $buttonDsp.onclick = async () => {
         // Activate sensor listeners
         if (!sensorHandlersBound) {
-            await faustNode.listenSensors();
+            await faustNode.startSensors();
             sensorHandlersBound = true;
         }
         if (audioContext.state === "running") {
             $buttonDsp.textContent = "Suspended";
-            audioContext.suspend();
+            await audioContext.suspend();
         } else if (audioContext.state === "suspended") {
             $buttonDsp.textContent = "Running";
-            audioContext.resume();
+            await audioContext.resume();
         }
     }
 })();

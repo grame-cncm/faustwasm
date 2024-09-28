@@ -764,7 +764,6 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         }
     }
 
-
     static extractUrlsFromMeta(dspMeta: FaustDspMeta): string[] {
         // Find the entry with the "soundfiles" key
         const soundfilesEntry = dspMeta.meta.find(entry => entry.soundfiles !== undefined);

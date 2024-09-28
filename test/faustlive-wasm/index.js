@@ -492,7 +492,7 @@ const activateMonoDSP = (dsp) => {
     }
 
     // Setup UI
-    DSP.listenSensors();
+    DSP.startSensors();
     faustUI = new FaustUI({ ui: DSP.getUI(), root: faustUIRoot });
     faustUI.paramChangeByUI = (path, value) => DSP.setParamValue(path, value);
     DSP.setOutputParamHandler(output_handler);

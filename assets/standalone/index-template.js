@@ -22,13 +22,13 @@ const FAUST_DSP_VOICES = 0;
     }
     // Function to activate audio context
     $buttonDsp.disabled = true;
-    $buttonDsp.onclick = () => {
+    $buttonDsp.onclick = async () => {
         if (audioContext.state === "running") {
             $buttonDsp.textContent = "Suspended";
-            audioContext.suspend();
+            await audioContext.suspend();
         } else if (audioContext.state === "suspended") {
             $buttonDsp.textContent = "Running";
-            audioContext.resume();
+            await audioContext.resume();
             if (FAUST_DSP_VOICES) play(faustNode);
         }
     }
