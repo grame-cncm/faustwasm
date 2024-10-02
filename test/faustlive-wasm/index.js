@@ -471,6 +471,7 @@ const deleteDSP = () => {
             audio_input.disconnect(DSP);
         }
         DSP.disconnect(audio_context.destination);
+        DSP.stopSensors();
         DSP.destroy();
         faustUIRoot.innerHTML = "";
         DSP = null;
@@ -520,7 +521,7 @@ const activatePolyDSP = (dsp) => {
     }
 
     // Setup UI
-    DSP.listenSensors();
+    DSP.startSensors();
     faustUI = new FaustUI({ ui: DSP.getUI(), root: faustUIRoot });
     faustUI.paramChangeByUI = (path, value) => DSP.setParamValue(path, value);
     DSP.setOutputParamHandler(output_handler);

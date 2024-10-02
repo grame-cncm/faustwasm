@@ -497,12 +497,12 @@ export interface IFaustBaseWebAudioDsp {
     getJSON(): string;
 
     /**
-     * Start the DSP.
+     * Start the DSP audio processing. 
      */
     start(): void;
 
     /**
-     * Stop the DSP.
+     * Stop the DSP audio processing.
      */
     stop(): void;
 
