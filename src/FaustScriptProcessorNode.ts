@@ -9,12 +9,26 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
     // Needed for ScriptProcessorNode
     protected fInputs!: Float32Array[];
     protected fOutputs!: Float32Array[];
+    protected handleDeviceMotion = undefined as any;
+    protected handleDeviceOrientation = undefined as any;
 
     init(instance: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp) {
         this.fDSPCode = instance;
 
         this.fInputs = new Array(this.fDSPCode.getNumInputs());
         this.fOutputs = new Array(this.fDSPCode.getNumOutputs());
+
+        // Accelerometer and gyroscope handlers
+        this.handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
+            const isAndroid: boolean = /Android/i.test(navigator.userAgent);
+            if (!accelerationIncludingGravity) return;
+            const { x, y, z } = accelerationIncludingGravity;
+            this.propagateAcc({ x, y, z }, isAndroid);
+        };
+
+        this.handleDeviceOrientation = ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
+            this.propagateGyr({ alpha, beta, gamma });
+        };
 
         this.onaudioprocess = (e) => {
 
@@ -36,18 +50,6 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
 
     // Public API
 
-    // Accelerometer and gyroscope handlers
-    private handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
-        const isAndroid: boolean = /Android/i.test(navigator.userAgent);
-        if (!accelerationIncludingGravity) return;
-        const { x, y, z } = accelerationIncludingGravity;
-        this.propagateAcc({ x, y, z }, isAndroid);
-    };
-
-    private handleDeviceOrientation = ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
-        this.propagateGyr({ alpha, beta, gamma });
-    };
-
     /** Setup accelerometer and gyroscope handlers */
     async startSensors() {
         if (this.hasAccInput) {
@@ -55,8 +57,12 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
                 if (typeof (window.DeviceMotionEvent as any).requestPermission === "function") { // for iOS 13+
                     try {
                         const response = await (window.DeviceMotionEvent as any).requestPermission();
-                        if (response !== "granted") throw new Error("Unable to access the accelerometer.");
-                        window.addEventListener("devicemotion", this.handleDeviceMotion, true);
+                        if (response === "granted") {
+                            window.addEventListener("devicemotion", this.handleDeviceMotion, true);
+                        } else if (response === "denied") {
+                            alert('You have denied access to motion and orientation data. To enable it, go to Settings > Safari > Motion & Orientation Access.');
+                            throw new Error("Unable to access the accelerometer.");
+                        }
                     } catch (error) {
                         console.error(error);
                     }
@@ -73,8 +79,12 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
                 if (typeof (window.DeviceOrientationEvent as any).requestPermission === "function") { // for iOS 13+
                     try {
                         const response = await (window.DeviceOrientationEvent as any).requestPermission();
-                        if (response !== "granted") throw new Error("Unable to access the gyroscope.");
-                        window.addEventListener("deviceorientation", this.handleDeviceOrientation, true);
+                        if (response === "granted") {
+                            window.addEventListener("deviceorientation", this.handleDeviceOrientation, true);
+                        } else if (response === "denied") {
+                            alert('You have denied access to motion and orientation data. To enable it, go to Settings > Safari > Motion & Orientation Access.');
+                            throw new Error("Unable to access the gyroscope.");
+                        }
                     } catch (error) {
                         console.error(error);
                     }
