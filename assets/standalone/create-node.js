@@ -19,7 +19,7 @@
  * @param {boolean} [sp] - Whether to create a ScriptProcessorNode instead of an AudioWorkletNode.
  * @returns {Promise<{ faustNode: FaustNode | null; dspMeta: FaustDspMeta }>} - An object containing the Faust audio node and the DSP metadata.
  */
-const createFaustNode = async (audioContext, dspName = "template", voices = 0, sp = false) => {
+const createFaustNode = async (audioContext, dspName = "template", voices = 0, sp = false, bufferSize = 512) => {
     // Set to true if the DSP has an effect
     const FAUST_DSP_HAS_EFFECT = false;
 
@@ -60,7 +60,8 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0, s
             { module: faustDsp.dspModule, json: JSON.stringify(faustDsp.dspMeta), soundfiles: {} },
             faustDsp.mixerModule,
             faustDsp.effectModule ? { module: faustDsp.effectModule, json: JSON.stringify(faustDsp.effectMeta), soundfiles: {} } : undefined,
-            sp
+            sp,
+            bufferSize
         );
     } else {
         // Create a standard Faust audio node
@@ -69,7 +70,8 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0, s
             audioContext,
             dspName,
             { module: faustDsp.dspModule, json: JSON.stringify(faustDsp.dspMeta), soundfiles: {} },
-            sp
+            sp,
+            bufferSize
         );
     }
 
