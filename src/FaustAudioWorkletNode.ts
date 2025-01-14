@@ -1,6 +1,7 @@
 import { OutputParamHandler, ComputeHandler, PlotHandler, UIHandler, MetadataHandler, FaustBaseWebAudioDsp, IFaustMonoWebAudioDsp, IFaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
 import type { FaustAudioWorkletNodeOptions } from "./FaustAudioWorkletProcessor";
 import type { LooseFaustDspFactory, FaustDspMeta, FaustUIInputItem, FaustUIItem } from "./types";
+import { FaustAudioWorkletNodeCommunicator } from "./FaustAudioWorkletCommunicator";
 
 /**
  * Base class for Monophonic and Polyphonic AudioWorkletNode
@@ -15,6 +16,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     protected fPlotHandler: PlotHandler | null;
     protected fUICallback: UIHandler;
     protected fDescriptor: FaustUIInputItem[];
+    protected communicator: FaustAudioWorkletNodeCommunicator;
     #hasAccInput = false;
     #hasGyrInput = false;
 
@@ -60,15 +62,20 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
 
         FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
 
+        this.communicator = new FaustAudioWorkletNodeCommunicator(this.port);
+
         // Patch it with additional functions
-        this.port.onmessage = (e: MessageEvent) => {
-            if (e.data.type === "param" && this.fOutputHandler) {
-                this.fOutputHandler(e.data.path, e.data.value);
-            } else if (e.data.type === "plot" && this.fPlotHandler) {
-                this.fPlotHandler(e.data.value, e.data.index, e.data.events);
-            }
-        };
+        this.port.addEventListener("message", this.handleMessageAux);
+        this.port.start();
     }
+
+    protected handleMessageAux = (e: MessageEvent) => {
+        if (e.data.type === "param" && this.fOutputHandler) {
+            this.fOutputHandler(e.data.path, e.data.value);
+        } else if (e.data.type === "plot" && this.fPlotHandler) {
+            this.fPlotHandler(e.data.value, e.data.index, e.data.events);
+        }
+    };
 
     // Public API
 
@@ -210,15 +217,15 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     get hasAccInput() { return this.#hasAccInput; }
     propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
         if (!accelerationIncludingGravity) return;
-        const e = { type: "acc", data: accelerationIncludingGravity, invert: invert };
-        this.port.postMessage(e);
+        const { x, y, z } = accelerationIncludingGravity;
+        this.communicator.setAcc({ x: x!, y: y!, z: z! }, invert);
     }
 
     get hasGyrInput() { return this.#hasGyrInput; }
     propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
         if (!event) return;
-        const e = { type: "gyr", data: event };
-        this.port.postMessage(e);
+        const { alpha, beta, gamma } = event;
+        this.communicator.setGyr({ alpha: alpha!, beta: beta!, gamma: gamma! });
     }
 
     setParamValue(path: string, value: number) {

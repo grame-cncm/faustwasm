@@ -1,3 +1,4 @@
+import type { FaustAudioWorkletProcessorCommunicator } from "./FaustAudioWorkletCommunicator";
 import type FaustWasmInstantiator from "./FaustWasmInstantiator";
 import type { FaustBaseWebAudioDsp, FaustWebAudioDspVoice, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
 import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem } from "./types";
@@ -19,6 +20,7 @@ export interface FaustAudioWorkletProcessorDependencies<Poly extends boolean = f
     FaustPolyWebAudioDsp: Poly extends true ? typeof FaustPolyWebAudioDsp : undefined;
     FaustWebAudioDspVoice: Poly extends true ? typeof FaustWebAudioDspVoice : undefined;
     FaustWasmInstantiator: typeof FaustWasmInstantiator;
+    FaustAudioWorkletProcessorCommunicator: typeof FaustAudioWorkletProcessorCommunicator;
 }
 export interface FaustAudioWorkletNodeOptions<Poly extends boolean = false> extends AudioWorkletNodeOptions {
     processorOptions: Poly extends true ? FaustPolyAudioWorkletProcessorOptions : FaustMonoAudioWorkletProcessorOptions;
@@ -52,7 +54,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
     const {
         FaustBaseWebAudioDsp,
-        FaustWasmInstantiator
+        FaustWasmInstantiator,
+        FaustAudioWorkletProcessorCommunicator
     } = dependencies;
 
     const {
@@ -79,7 +82,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
     /**
      * Base class for Monophonic and Polyphonic AudioWorkletProcessor
      */
-    class FaustAudioWorkletProcessor<Poly extends boolean = false> extends AudioWorkletProcessor {
+    abstract class FaustAudioWorkletProcessor<Poly extends boolean = false> extends AudioWorkletProcessor {
 
         // Use ! syntax when the field is not defined in the constructor
         protected fDSPCode!: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp;
@@ -87,12 +90,15 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         protected paramValuesCache: Record<string, number> = {};
 
         protected wamInfo?: { moduleId: string; instanceId: string };
+        protected communicator: FaustAudioWorkletProcessorCommunicator;
 
         constructor(options: FaustAudioWorkletNodeOptions<Poly>) {
             super(options);
 
             // Setup port message handling
-            this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);
+            // this.port.addEventListener("message", this.handleMessageAux);
+            // this.port.start();
+            this.communicator = new FaustAudioWorkletProcessorCommunicator(this.port);
 
             const { parameterDescriptors } = (this.constructor as typeof AudioWorkletProcessor);
             parameterDescriptors.forEach((pd) => {
@@ -140,6 +146,21 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
                     this.paramValuesCache[path] = paramValue;
                 }
             }
+            if (this.communicator.getNewAccDataAvailable()) {
+                const acc = this.communicator.getAcc();
+                if (acc) {
+                    this.communicator.setNewAccDataAvailable(false);
+                    const { invert, ...data } = acc;
+                    this.propagateAcc(data, invert);
+                }
+            }
+            if (this.communicator.getNewGyrDataAvailable()) {
+                const gyr = this.communicator.getGyr();
+                if (gyr) {
+                    this.communicator.setNewGyrDataAvailable(false);
+                    this.propagateGyr(gyr);
+                }
+            }
 
             return this.fDSPCode.compute(inputs[0], outputs[0]);
         }
@@ -149,6 +170,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
             switch (msg.type) {
                 // Sensors messages
+                /*
                 case "acc": {
                     this.propagateAcc(msg.data, msg.invert);
                     break;
@@ -157,6 +179,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
                     this.propagateGyr(msg.data);
                     break;
                 }
+                */
                 // Generic MIDI message
                 case "midi": {
                     this.midiMessage(msg.data);
@@ -248,10 +271,18 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             // Create Monophonic DSP
             this.fDSPCode = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, 128, factory.soundfiles);
 
+            // Setup port message handling
+            this.port.addEventListener("message", this.handleMessageAux);
+            this.port.start();
+
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
 
             this.fDSPCode.start();
+        }
+
+        protected handleMessageAux = (e: MessageEvent) => { // use arrow function for binding
+            super.handleMessageAux(e);
         }
     }
 
@@ -273,7 +304,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             this.fDSPCode = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, 128, soundfiles);
 
             // Setup port message handling
-            this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);
+            this.port.addEventListener("message", this.handleMessageAux);
+            this.port.start();
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
