@@ -1,3 +1,4 @@
+import type { FaustAudioWorkletProcessorCommunicator } from "./FaustAudioWorkletCommunicator";
 import type { FaustMonoDspInstance } from "./FaustDspInstance";
 import type FaustWasmInstantiator from "./FaustWasmInstantiator";
 import type { FaustBaseWebAudioDsp, FaustMonoWebAudioDsp, PlotHandler } from "./FaustWebAudioDsp";
@@ -25,6 +26,7 @@ export interface FaustFFTAudioWorkletProcessorDependencies {
     FaustBaseWebAudioDsp: typeof FaustBaseWebAudioDsp;
     FaustMonoWebAudioDsp: typeof FaustMonoWebAudioDsp;
     FaustWasmInstantiator: typeof FaustWasmInstantiator;
+    FaustAudioWorkletProcessorCommunicator: typeof FaustAudioWorkletProcessorCommunicator;
     FFTUtils: typeof FFTUtils;
 }
 export interface FaustFFTAudioWorkletNodeOptions extends AudioWorkletNodeOptions {
@@ -48,6 +50,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         FaustBaseWebAudioDsp,
         FaustWasmInstantiator,
         FaustMonoWebAudioDsp,
+        FaustAudioWorkletProcessorCommunicator,
         FFTUtils
     } = dependencies;
     
@@ -127,6 +130,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         protected paramValuesCache: Record<string, number> = {};
 
         protected wamInfo?: { moduleId: string; instanceId: string };
+        protected communicator: FaustAudioWorkletProcessorCommunicator;
 
         private dspInstance!: FaustMonoDspInstance;
         private sampleSize!: number;
@@ -178,7 +182,9 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             super(options);
 
             // Setup port message handling
-            this.port.onmessage = (e: MessageEvent) => this.handleMessageAux(e);
+            this.port.addEventListener("message", this.handleMessageAux);
+            this.port.start();
+            this.communicator = new FaustAudioWorkletProcessorCommunicator(this.port);
             
             const { parameterDescriptors } = (this.constructor as typeof AudioWorkletProcessor);
             parameterDescriptors.forEach((pd) => {
@@ -360,6 +366,21 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                     this.paramValuesCache[path] = paramValue;
                 }
             }
+            if (this.communicator.getNewAccDataAvailable()) {
+                const acc = this.communicator.getAcc();
+                if (acc) {
+                    this.communicator.setNewAccDataAvailable(false);
+                    const { invert, ...data } = acc;
+                    this.propagateAcc(data, invert);
+                }
+            }
+            if (this.communicator.getNewGyrDataAvailable()) {
+                const gyr = this.communicator.getGyr();
+                if (gyr) {
+                    this.communicator.setNewGyrDataAvailable(false);
+                    this.propagateGyr(gyr);
+                }
+            }
 
             // Write audio input into fftInput buffer, advance pointers
             if (input?.length) {
@@ -400,7 +421,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             return true;
         }
 
-        protected handleMessageAux(e: MessageEvent) { // use arrow function for binding
+        protected handleMessageAux = (e: MessageEvent) => { // use arrow function for binding
             const msg = e.data;
 
             switch (msg.type) {
@@ -460,6 +481,14 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
 
         protected pitchWheel(channel: number, wheel: number) {
             this.fDSPCode?.pitchWheel(channel, wheel);
+        }
+
+        protected propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
+            this.fDSPCode.propagateAcc(accelerationIncludingGravity, invert);
+        }
+
+        protected propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
+            this.fDSPCode.propagateGyr(event);
         }
 
         resetFFT(sizeIn: number, overlapIn: number, windowFunctionIn: number, inputChannels: number, outputChannels: number, bufferSize: number) {

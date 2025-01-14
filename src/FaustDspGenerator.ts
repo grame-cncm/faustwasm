@@ -10,6 +10,7 @@ import SoundfileReader from "./SoundfileReader";
 import FaustSensors from "./FaustSensors";
 import type { IFaustCompiler } from "./FaustCompiler";
 import type { FaustDspFactory, FaustUIDescriptor, FaustDspMeta, FFTUtils, LooseFaustDspFactory, AudioData } from "./types";
+import { FaustAudioWorkletCommunicator, FaustAudioWorkletProcessorCommunicator } from "./FaustAudioWorkletCommunicator";
 
 
 export interface GeneratorSupportingSoundfiles {
@@ -294,11 +295,16 @@ var ${WasmAllocator.name} = ${WasmAllocator.toString()}
 var WasmAllocator = ${WasmAllocator.name};
 var ${FaustSensors.name} = ${FaustSensors.toString()}
 var FaustSensors = ${FaustSensors.name};
+var ${FaustAudioWorkletCommunicator.name} = ${FaustAudioWorkletCommunicator.toString()}
+var FaustAudioWorkletCommunicator = ${FaustAudioWorkletCommunicator.name};
+var ${FaustAudioWorkletProcessorCommunicator.name} = ${FaustAudioWorkletProcessorCommunicator.toString()}
+var FaustAudioWorkletProcessorCommunicator = ${FaustAudioWorkletProcessorCommunicator.name};
 // Put them in dependencies
 const dependencies = {
     FaustBaseWebAudioDsp,
     FaustMonoWebAudioDsp,
-    FaustWasmInstantiator
+    FaustWasmInstantiator,
+    FaustAudioWorkletProcessorCommunicator
 };
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
@@ -361,12 +367,17 @@ var ${WasmAllocator.name} = ${WasmAllocator.toString()}
 var WasmAllocator = ${WasmAllocator.name};
 var ${FaustSensors.name} = ${FaustSensors.toString()}
 var FaustSensors = ${FaustSensors.name};
+var ${FaustAudioWorkletCommunicator.name} = ${FaustAudioWorkletCommunicator.toString()}
+var FaustAudioWorkletCommunicator = ${FaustAudioWorkletCommunicator.name};
+var ${FaustAudioWorkletProcessorCommunicator.name} = ${FaustAudioWorkletProcessorCommunicator.toString()}
+var FaustAudioWorkletProcessorCommunicator = ${FaustAudioWorkletProcessorCommunicator.name};
 var FFTUtils = ${fftUtils.toString()}
 // Put them in dependencies
 const dependencies = {
     FaustBaseWebAudioDsp,
     FaustMonoWebAudioDsp,
     FaustWasmInstantiator,
+    FaustAudioWorkletProcessorCommunicator,
     FFTUtils
 };
 // Generate the actual AudioWorkletProcessor code
@@ -415,6 +426,7 @@ const dependencies = {
             FaustBaseWebAudioDsp,
             FaustMonoWebAudioDsp,
             FaustWasmInstantiator,
+            FaustAudioWorkletProcessorCommunicator,
             FaustPolyWebAudioDsp: undefined,
             FaustWebAudioDspVoice: undefined,
         }
@@ -631,11 +643,16 @@ var ${WasmAllocator.name} = ${WasmAllocator.toString()}
 var WasmAllocator = ${WasmAllocator.name};
 var ${FaustSensors.name} = ${FaustSensors.toString()}
 var FaustSensors = ${FaustSensors.name};
+var ${FaustAudioWorkletCommunicator.name} = ${FaustAudioWorkletCommunicator.toString()}
+var FaustAudioWorkletCommunicator = ${FaustAudioWorkletCommunicator.name};
+var ${FaustAudioWorkletProcessorCommunicator.name} = ${FaustAudioWorkletProcessorCommunicator.toString()}
+var FaustAudioWorkletProcessorCommunicator = ${FaustAudioWorkletProcessorCommunicator.name};
 // Put them in dependencies
 const dependencies = {
     FaustBaseWebAudioDsp,
     FaustPolyWebAudioDsp,
-    FaustWasmInstantiator
+    FaustWasmInstantiator,
+    FaustAudioWorkletProcessorCommunicator
 };
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
@@ -676,6 +693,7 @@ const dependencies = {
                 FaustWasmInstantiator,
                 FaustPolyWebAudioDsp,
                 FaustWebAudioDspVoice,
+                FaustAudioWorkletProcessorCommunicator
             };
             // DSP name and JSON string for DSP are generated
             const faustData = {
