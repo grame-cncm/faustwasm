@@ -90,21 +90,19 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         protected paramValuesCache: Record<string, number> = {};
 
         protected wamInfo?: { moduleId: string; instanceId: string };
-        protected communicator: FaustAudioWorkletProcessorCommunicator;
+        protected fCommunicator: FaustAudioWorkletProcessorCommunicator;
 
         constructor(options: FaustAudioWorkletNodeOptions<Poly>) {
             super(options);
 
             // Setup port message handling
-            // this.port.addEventListener("message", this.handleMessageAux);
-            // this.port.start();
-            this.communicator = new FaustAudioWorkletProcessorCommunicator(this.port);
+            this.fCommunicator = new FaustAudioWorkletProcessorCommunicator(this.port);
 
             const { parameterDescriptors } = (this.constructor as typeof AudioWorkletProcessor);
             parameterDescriptors.forEach((pd) => {
                 this.paramValuesCache[pd.name] = pd.defaultValue || 0;
             })
-            
+
             const { moduleId, instanceId } = options.processorOptions;
             if (!moduleId || !instanceId) return;
             this.wamInfo = { moduleId, instanceId };
@@ -126,7 +124,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         setupWamEventHandler() {
             if (!this.wamInfo) return;
             const { moduleId, instanceId } = this.wamInfo;
-	        const { webAudioModules } = (globalThis as unknown as WamAudioWorkletGlobalScope);
+            const { webAudioModules } = (globalThis as unknown as WamAudioWorkletGlobalScope);
             const ModuleScope = webAudioModules.getModuleScope(moduleId) as WamParamMgrSDKBaseModuleScope;
             const paramMgrProcessor = ModuleScope?.paramMgrProcessors?.[instanceId];
             if (!paramMgrProcessor) return;
@@ -146,18 +144,18 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
                     this.paramValuesCache[path] = paramValue;
                 }
             }
-            if (this.communicator.getNewAccDataAvailable()) {
-                const acc = this.communicator.getAcc();
+            if (this.fCommunicator.getNewAccDataAvailable()) {
+                const acc = this.fCommunicator.getAcc();
                 if (acc) {
-                    this.communicator.setNewAccDataAvailable(false);
+                    this.fCommunicator.setNewAccDataAvailable(false);
                     const { invert, ...data } = acc;
                     this.propagateAcc(data, invert);
                 }
             }
-            if (this.communicator.getNewGyrDataAvailable()) {
-                const gyr = this.communicator.getGyr();
+            if (this.fCommunicator.getNewGyrDataAvailable()) {
+                const gyr = this.fCommunicator.getGyr();
                 if (gyr) {
-                    this.communicator.setNewGyrDataAvailable(false);
+                    this.fCommunicator.setNewGyrDataAvailable(false);
                     this.propagateGyr(gyr);
                 }
             }
@@ -169,17 +167,6 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             const msg = e.data;
 
             switch (msg.type) {
-                // Sensors messages
-                /*
-                case "acc": {
-                    this.propagateAcc(msg.data, msg.invert);
-                    break;
-                }
-                case "gyr": {
-                    this.propagateGyr(msg.data);
-                    break;
-                }
-                */
                 // Generic MIDI message
                 case "midi": {
                     this.midiMessage(msg.data);

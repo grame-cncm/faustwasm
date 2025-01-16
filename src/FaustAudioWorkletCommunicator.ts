@@ -110,7 +110,7 @@ export class FaustAudioWorkletNodeCommunicator extends FaustAudioWorkletCommunic
 export class FaustAudioWorkletProcessorCommunicator extends FaustAudioWorkletCommunicator {
     constructor(port: MessagePort) {
         super(port);
-        
+
         if (this.supportSharedArrayBuffer) {
             this.port.addEventListener("message", (event) => {
                 const { data } = event;
@@ -123,7 +123,7 @@ export class FaustAudioWorkletProcessorCommunicator extends FaustAudioWorkletCom
             this.initializeBuffer(ab);
             this.port.addEventListener("message", (event) => {
                 const msg = event.data;
-    
+
                 switch (msg.type) {
                     // Sensors messages
                     case "acc": {

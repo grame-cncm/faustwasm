@@ -16,7 +16,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     protected fPlotHandler: PlotHandler | null;
     protected fUICallback: UIHandler;
     protected fDescriptor: FaustUIInputItem[];
-    protected communicator: FaustAudioWorkletNodeCommunicator;
+    protected fCommunicator: FaustAudioWorkletNodeCommunicator;
     #hasAccInput = false;
     #hasGyrInput = false;
 
@@ -62,7 +62,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
 
         FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
 
-        this.communicator = new FaustAudioWorkletNodeCommunicator(this.port);
+        this.fCommunicator = new FaustAudioWorkletNodeCommunicator(this.port);
 
         // Patch it with additional functions
         this.port.addEventListener("message", this.handleMessageAux);
@@ -218,14 +218,14 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
         if (!accelerationIncludingGravity) return;
         const { x, y, z } = accelerationIncludingGravity;
-        this.communicator.setAcc({ x: x!, y: y!, z: z! }, invert);
+        this.fCommunicator.setAcc({ x: x!, y: y!, z: z! }, invert);
     }
 
     get hasGyrInput() { return this.#hasGyrInput; }
     propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
         if (!event) return;
         const { alpha, beta, gamma } = event;
-        this.communicator.setGyr({ alpha: alpha!, beta: beta!, gamma: gamma! });
+        this.fCommunicator.setGyr({ alpha: alpha!, beta: beta!, gamma: gamma! });
     }
 
     setParamValue(path: string, value: number) {
