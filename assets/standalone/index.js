@@ -41,82 +41,80 @@ audioContext.suspend();
 
 $buttonDsp.disabled = true;
 
-/**
- * @param {FaustAudioWorkletNode} faustNode 
- */
-const buildAudioDeviceMenu = async (faustNode) => {
+(async () => {
 
-    const { connectToAudioInput } = await import("./create-node.js");
+    const { createFaustNode, connectToAudioInput, createFaustUI } = await import("./create-node.js");
 
-    let inputStreamNode = null;
-    const handleDeviceChange = async () => {
-        const devicesInfo = await navigator.mediaDevices.enumerateDevices();
-        $selectAudioInput.innerHTML = "";
-        devicesInfo.forEach((deviceInfo, i) => {
-            const { kind, deviceId, label } = deviceInfo;
-            if (kind === "audioinput") {
-                const option = new Option(label || `microphone ${i + 1}`, deviceId);
-                $selectAudioInput.add(option);
+    /**
+    * @param {FaustAudioWorkletNode} faustNode 
+    */
+    const buildAudioDeviceMenu = async (faustNode) => {
+
+        let inputStreamNode = null;
+        const handleDeviceChange = async () => {
+            const devicesInfo = await navigator.mediaDevices.enumerateDevices();
+            $selectAudioInput.innerHTML = "";
+            devicesInfo.forEach((deviceInfo, i) => {
+                const { kind, deviceId, label } = deviceInfo;
+                if (kind === "audioinput") {
+                    const option = new Option(label || `microphone ${i + 1}`, deviceId);
+                    $selectAudioInput.add(option);
+                }
+            });
+        }
+        await handleDeviceChange();
+        navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange)
+        $selectAudioInput.onchange = async () => {
+            const id = $selectAudioInput.value;
+            if (faustNode.getNumInputs() > 0) {
+                inputStreamNode = await connectToAudioInput(audioContext, id, faustNode, inputStreamNode);
             }
-        });
-    }
-    await handleDeviceChange();
-    navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange)
-    $selectAudioInput.onchange = async () => {
-        const id = $selectAudioInput.value;
+        };
+
+        // Connect to the default audio input device
         if (faustNode.getNumInputs() > 0) {
-            inputStreamNode = await connectToAudioInput(audioContext, id, faustNode, inputStreamNode);
+            inputStreamNode = await connectToAudioInput(audioContext, null, faustNode, inputStreamNode);
         }
     };
 
-    // Connect to the default audio input device
-    if (faustNode.getNumInputs() > 0) {
-        inputStreamNode = await connectToAudioInput(audioContext, null, faustNode, inputStreamNode);
-    }
-};
-
-/**
- * @param {FaustAudioWorkletNode} faustNode 
- */
-const buildMidiDeviceMenu = async (faustNode) => {
-    const midiAccess = await navigator.requestMIDIAccess();
-    /** @type {WebMidi.MIDIInput} */
-    let currentInput;
     /**
-     * @param {WebMidi.MIDIMessageEvent} e
+     * @param {FaustAudioWorkletNode} faustNode 
      */
-    const handleMidiMessage = e => faustNode.midiMessage(e.data);
-    const handleStateChange = () => {
-        const { inputs } = midiAccess;
-        if ($selectMidiInput.options.length === inputs.size + 1) return;
-        if (currentInput) currentInput.removeEventListener("midimessage", handleMidiMessage);
-        $selectMidiInput.innerHTML = '<option value="-1" disabled selected>Select...</option>';
-        inputs.forEach((midiInput) => {
-            const { name, id } = midiInput;
-            const option = new Option(name, id);
-            $selectMidiInput.add(option);
-        });
+    const buildMidiDeviceMenu = async (faustNode) => {
+        const midiAccess = await navigator.requestMIDIAccess();
+        /** @type {WebMidi.MIDIInput} */
+        let currentInput;
+        /**
+         * @param {WebMidi.MIDIMessageEvent} e
+         */
+        const handleMidiMessage = e => faustNode.midiMessage(e.data);
+        const handleStateChange = () => {
+            const { inputs } = midiAccess;
+            if ($selectMidiInput.options.length === inputs.size + 1) return;
+            if (currentInput) currentInput.removeEventListener("midimessage", handleMidiMessage);
+            $selectMidiInput.innerHTML = '<option value="-1" disabled selected>Select...</option>';
+            inputs.forEach((midiInput) => {
+                const { name, id } = midiInput;
+                const option = new Option(name, id);
+                $selectMidiInput.add(option);
+            });
+        };
+        handleStateChange();
+        midiAccess.addEventListener("statechange", handleStateChange);
+        $selectMidiInput.onchange = () => {
+            if (currentInput) currentInput.removeEventListener("midimessage", handleMidiMessage);
+            const id = $selectMidiInput.value;
+            currentInput = midiAccess.inputs.get(id);
+            currentInput.addEventListener("midimessage", handleMidiMessage);
+        };
     };
-    handleStateChange();
-    midiAccess.addEventListener("statechange", handleStateChange);
-    $selectMidiInput.onchange = () => {
-        if (currentInput) currentInput.removeEventListener("midimessage", handleMidiMessage);
-        const id = $selectMidiInput.value;
-        currentInput = midiAccess.inputs.get(id);
-        currentInput.addEventListener("midimessage", handleMidiMessage);
-    };
-};
 
-(async () => {
-
-    const { createFaustNode } = await import("./create-node.js");
     // To test the ScriptProcessorNode mode
     // const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES, true);
     const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);
     if (!faustNode) throw new Error("Faust DSP not compiled");
 
     // Create the Faust UI
-    const { createFaustUI } = await import("./create-node.js");
     await createFaustUI($divFaustUI, faustNode);
 
     // Connect the Faust node to the audio output

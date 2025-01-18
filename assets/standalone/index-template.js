@@ -2,7 +2,8 @@
 const FAUST_DSP_VOICES = 0;
 
 (async () => {
-    const { createFaustNode } = await import("./create-node.js");
+
+    const { createFaustNode, connectToAudioInput } = await import("./create-node.js");
 
     // Create audio context
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -42,7 +43,6 @@ const FAUST_DSP_VOICES = 0;
 
     // Connect the Faust node to the audio input
     if (faustNode.getNumInputs() > 0) {
-        const { connectToAudioInput } = await import("./create-node.js");
         await connectToAudioInput(audioContext, null, faustNode, null);
     }
 
