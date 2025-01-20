@@ -497,6 +497,35 @@ export interface IFaustBaseWebAudioDsp {
     getJSON(): string;
 
     /**
+    * Start accelerometer and gyroscope handlers.
+    */
+    startSensors(): void;
+
+    /**
+     * Stop accelerometer and gyroscope handlers.
+     */
+    stopSensors(): void;
+
+    /** Indicating if the DSP handles the accelerometer */
+    readonly hasAccInput: boolean;
+
+    /** 
+     * Accelerometer handling.
+     * accelerationIncludingGravity: DeviceMotionEvent["accelerationIncludingGravity"]
+     * invert: boolean
+     */
+    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean): void;
+
+    /** Indicating if the DSP handles the gyroscope */
+    readonly hasGyrInput: boolean;
+
+    /** 
+     * Gyroscope handling.
+     * event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">
+     */
+    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">): void;
+
+    /**
      * Start the DSP audio processing. 
      */
     start(): void;
@@ -510,16 +539,6 @@ export interface IFaustBaseWebAudioDsp {
      * Destroy the DSP.
      */
     destroy(): void;
-
-    /** Indicating if the DSP handles the accelerometer */
-    readonly hasAccInput: boolean;
-    /** Accelerometer handling */
-    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean): void;
-
-    /** Indicating if the DSP handles the gyroscope */
-    readonly hasGyrInput: boolean;
-    /** Gyroscope handling */
-    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">): void;
 }
 
 export interface IFaustMonoWebAudioDsp extends IFaustBaseWebAudioDsp { }
@@ -984,6 +1003,14 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 
     hasSoundfiles() { return this.fSoundfiles.length > 0; }
 
+    startSensors(): void {
+        this.startSensors();
+    }
+
+    stopSensors(): void {
+        this.stopSensors();
+    }
+
     start() {
         this.fProcessing = true;
     }
@@ -998,6 +1025,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         this.fComputeHandler = null;
         this.fPlotHandler = null;
     }
+
 }
 
 export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaustMonoWebAudioDsp {

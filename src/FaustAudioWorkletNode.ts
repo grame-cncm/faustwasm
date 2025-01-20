@@ -77,8 +77,6 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         }
     };
 
-    // Public API
-
     // Accelerometer and gyroscope handlers
     private handleDeviceMotion = ({ accelerationIncludingGravity }: DeviceMotionEvent) => {
         const isAndroid: boolean = /Android/i.test(navigator.userAgent);
@@ -90,6 +88,8 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     private handleDeviceOrientation = ({ alpha, beta, gamma }: DeviceOrientationEvent) => {
         this.propagateGyr({ alpha, beta, gamma });
     };
+
+    // Public API
 
     /** Setup accelerometer and gyroscope handlers */
     async startSensors() {
@@ -147,6 +147,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
             window.removeEventListener("deviceorientation", this.handleDeviceOrientation, true);
         }
     }
+
     setOutputParamHandler(handler: OutputParamHandler | null) {
         this.fOutputHandler = handler;
     }
@@ -173,6 +174,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     getPlotHandler(): PlotHandler | null {
         return this.fPlotHandler;
     }
+
     setupWamEventHandler() {
         this.port.postMessage({ type: "setupWamEventHandler" });
     }
@@ -215,6 +217,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     }
 
     get hasAccInput() { return this.#hasAccInput; }
+
     propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
         if (!accelerationIncludingGravity) return;
         const { x, y, z } = accelerationIncludingGravity;
@@ -222,6 +225,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     }
 
     get hasGyrInput() { return this.#hasGyrInput; }
+
     propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
         if (!event) return;
         const { alpha, beta, gamma } = event;

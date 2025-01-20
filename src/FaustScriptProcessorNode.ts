@@ -50,7 +50,7 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
 
     // Public API
 
-    /** Setup accelerometer and gyroscope handlers */
+    /** Start accelerometer and gyroscope handlers */
     async startSensors() {
         if (this.hasAccInput) {
             if (window.DeviceMotionEvent) {
@@ -98,6 +98,7 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
         }
     }
 
+    /** Stop accelerometer and gyroscope handlers */
     stopSensors() {
         if (this.hasAccInput) {
             window.removeEventListener("devicemotion", this.handleDeviceMotion, true);
@@ -143,11 +144,13 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
     destroy() { this.fDSPCode.destroy(); }
 
     get hasAccInput() { return this.fDSPCode.hasAccInput; }
+
     propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
         this.fDSPCode.propagateAcc(accelerationIncludingGravity, invert);
     }
 
     get hasGyrInput() { return this.fDSPCode.hasGyrInput; }
+
     propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
         this.fDSPCode.propagateGyr(event);
     }
