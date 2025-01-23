@@ -41,6 +41,10 @@ audioContext.suspend();
 
 $buttonDsp.disabled = true;
 
+// Declare faustNode as a global variable
+let faustNode;
+
+// Called at load time
 (async () => {
 
     const { createFaustNode, connectToAudioInput, createFaustUI } = await import("./create-node.js");
@@ -111,7 +115,8 @@ $buttonDsp.disabled = true;
 
     // To test the ScriptProcessorNode mode
     // const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES, true);
-    const { faustNode, dspMeta: { name } } = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);
+    const result = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);
+    faustNode = result.faustNode;  // Assign to the global variable
     if (!faustNode) throw new Error("Faust DSP not compiled");
 
     // Create the Faust UI
@@ -128,22 +133,25 @@ $buttonDsp.disabled = true;
     if (navigator.requestMIDIAccess) await buildMidiDeviceMenu(faustNode);
     else $spanMidiInput.hidden = true;
 
-    // Set the title and enable the DSP button
-    $buttonDsp.disabled = false;
-    document.title = name;
-    let sensorHandlersBound = false;
-    $buttonDsp.onclick = async () => {
-        // Activate sensor listeners
-        if (!sensorHandlersBound) {
-            await faustNode.startSensors();
-            sensorHandlersBound = true;
-        }
-        if (audioContext.state === "running") {
-            $buttonDsp.textContent = "Suspended";
-            await audioContext.suspend();
-        } else if (audioContext.state === "suspended") {
-            $buttonDsp.textContent = "Running";
-            await audioContext.resume();
-        }
-    }
 })();
+
+// Set the title and enable the DSP button
+$buttonDsp.disabled = false;
+document.title = name;
+let sensorHandlersBound = false;
+
+// Activate AudioContext and Sensors on user interaction
+$buttonDsp.onclick = async () => {
+    // Activate sensor listeners
+    if (!sensorHandlersBound) {
+        await faustNode.startSensors();
+        sensorHandlersBound = true;
+    }
+    if (audioContext.state === "running") {
+        $buttonDsp.textContent = "Suspended";
+        await audioContext.suspend();
+    } else if (audioContext.state === "suspended") {
+        $buttonDsp.textContent = "Running";
+        await audioContext.resume();
+    }
+}
