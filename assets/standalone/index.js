@@ -142,11 +142,20 @@ let sensorHandlersBound = false;
 
 // Activate AudioContext and Sensors on user interaction
 $buttonDsp.onclick = async () => {
+
+    // Import the requestPermissions function
+    const { requestPermissions } = await import("./create-node.js");
+
+    // Request permission for sensors
+    await requestPermissions();
+
     // Activate sensor listeners
     if (!sensorHandlersBound) {
         await faustNode.startSensors();
         sensorHandlersBound = true;
     }
+
+    // Activate or suspend the AudioContext
     if (audioContext.state === "running") {
         $buttonDsp.textContent = "Suspended";
         await audioContext.suspend();

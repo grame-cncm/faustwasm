@@ -135,6 +135,36 @@ async function createFaustUI(divFaustUI, faustNode) {
     faustUI.resize();
 };
 
+async function requestPermissions() {
+
+    // Explicitly request permission on iOS before calling startSensors()
+    if (typeof window.DeviceMotionEvent !== "undefined" && typeof window.DeviceMotionEvent.requestPermission === "function") {
+        try {
+            const permissionState = await window.DeviceMotionEvent.requestPermission();
+            if (permissionState !== "granted") {
+                console.warn("Motion sensor permission denied.");
+            } else {
+                console.log("Motion sensor permission granted.");
+            }
+        } catch (error) {
+            console.error("Error requesting motion sensor permission:", error);
+        }
+    }
+
+    if (typeof window.DeviceOrientationEvent !== "undefined" && typeof window.DeviceOrientationEvent.requestPermission === "function") {
+        try {
+            const permissionState = await window.DeviceOrientationEvent.requestPermission();
+            if (permissionState !== "granted") {
+                console.warn("Orientation sensor permission denied.");
+            } else {
+                console.log("Orientation sensor permission granted.");
+            }
+        } catch (error) {
+            console.error("Error requesting orientation sensor permission:", error);
+        }
+    }
+}
+
 // Export the functions
-export { createFaustNode, createFaustUI, connectToAudioInput };
+export { createFaustNode, createFaustUI, connectToAudioInput, requestPermissions };
 

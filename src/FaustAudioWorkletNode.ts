@@ -95,21 +95,8 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     async startSensors() {
         if (this.hasAccInput) {
             if (window.DeviceMotionEvent) {
-                if (typeof (window.DeviceMotionEvent as any).requestPermission === "function") { // for iOS 13+
-                    try {
-                        const response = await (window.DeviceMotionEvent as any).requestPermission();
-                        if (response === "granted") {
-                            window.addEventListener("devicemotion", this.handleDeviceMotion, true);
-                        } else if (response === "denied") {
-                            alert('You have denied access to motion and orientation data. To enable it, go to Settings > Safari > Motion & Orientation Access.');
-                            throw new Error("Unable to access the accelerometer.");
-                        }
-                    } catch (error) {
-                        console.error(error);
-                    }
-                } else {
-                    window.addEventListener("devicemotion", this.handleDeviceMotion, true);
-                }
+                // iOS 13+ requires a user gesture to enable DeviceMotionEvent, to be done in the main thread
+                window.addEventListener("devicemotion", this.handleDeviceMotion, true);
             } else {
                 // Browser doesn't support DeviceMotionEvent
                 console.log("Cannot set the accelerometer handler.");
@@ -117,21 +104,8 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         }
         if (this.hasGyrInput) {
             if (window.DeviceMotionEvent) {
-                if (typeof (window.DeviceOrientationEvent as any).requestPermission === "function") { // for iOS 13+
-                    try {
-                        const response = await (window.DeviceOrientationEvent as any).requestPermission();
-                        if (response === "granted") {
-                            window.addEventListener("deviceorientation", this.handleDeviceOrientation, true);
-                        } else if (response === "denied") {
-                            alert('You have denied access to motion and orientation data. To enable it, go to Settings > Safari > Motion & Orientation Access.');
-                            throw new Error("Unable to access the gyroscope.");
-                        }
-                    } catch (error) {
-                        console.error(error);
-                    }
-                } else {
-                    window.addEventListener("deviceorientation", this.handleDeviceOrientation, true);
-                }
+                // iOS 13+ requires a user gesture to enable DeviceMotionEvent, to be done in the main thread
+                window.addEventListener("deviceorientation", this.handleDeviceOrientation, true);
             } else {
                 // Browser doesn't support DeviceMotionEvent
                 console.log("Cannot set the gyroscope handler.");
