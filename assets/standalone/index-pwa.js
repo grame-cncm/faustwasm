@@ -49,6 +49,17 @@ let faustNode;
 
 })();
 
+// Synchronous function to resume AudioContext, to be called first in the synchronous event listener
+function resumeAudioContext() {
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            console.log('AudioContext resumed successfully');
+        }).catch(error => {
+            console.error('Error when resuming AudioContext:', error);
+        });
+    }
+}
+
 // Function to start MIDI
 function startMIDI() {
     // Check if the browser supports the Web MIDI API
@@ -90,8 +101,8 @@ function stopMIDI() {
 let sensorHandlersBound = false;
 let midiHandlersBound = false;
 
-// Function to resume AudioContext, activate MIDI and Sensors on user interaction
-async function activateAudioMIDISensors() {
+// Function to activate MIDI and Sensors on user interaction
+async function activateMIDISensors() {
 
     // Import the create-node module
     const { connectToAudioInput, requestPermissions } = await import("./create-node.js");
@@ -146,9 +157,21 @@ async function deactivateAudioMIDISensors() {
     }
 }
 
+// Event listener to handle user interaction
+function handleUserInteraction() {
+
+    // Resume AudioContext synchronously
+    resumeAudioContext();
+
+    // Launch the activation of MIDI and Sensors
+    activateMIDISensors().catch(error => {
+        console.error('Error when activating audio, MIDI and sensors:', error);
+    });
+}
+
 // Activate AudioContext, MIDI and Sensors on user interaction
-window.addEventListener('click', activateAudioMIDISensors);
-window.addEventListener('touchstart', activateAudioMIDISensors);
+window.addEventListener('click', handleUserInteraction);
+window.addEventListener('touchstart', handleUserInteraction);
 
 // Deactivate AudioContext, MIDI and Sensors on user interaction
 window.addEventListener('visibilitychange', function () {
