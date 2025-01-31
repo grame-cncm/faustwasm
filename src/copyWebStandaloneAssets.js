@@ -17,6 +17,7 @@ const copyWebStandaloneAssets = (outputDir, dspName, poly = false, effect = fals
     console.log(`Writing assets files.`)
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
+    // Define find and replace patterns
     const findAndReplace = ["FAUST_DSP_NAME", dspName];
     if (poly) findAndReplace.push("FAUST_DSP_VOICES = 0", "FAUST_DSP_VOICES = 16");
     if (poly && effect) findAndReplace.push("FAUST_DSP_HAS_EFFECT = false", "FAUST_DSP_HAS_EFFECT = true");
@@ -57,7 +58,18 @@ const copyWebPWAAssets = (outputDir, dspName, poly = false, effect = false) => {
     console.log(`Writing assets files.`)
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
+    // Generate VERSION_DATE
+    const now = new Date();
+    const VERSION_DATE = now.getFullYear().toString() +
+        ("0" + (now.getMonth() + 1)).slice(-2) +
+        ("0" + now.getDate()).slice(-2) + "-" +
+        ("0" + now.getHours()).slice(-2) +
+        ("0" + now.getMinutes()).slice(-2);
+
+    // Define find and replace patterns
     const findAndReplace = ["FAUST_DSP_NAME", dspName];
+    findAndReplace.push("VERSION_DATE", VERSION_DATE);
+
     if (poly) findAndReplace.push("FAUST_DSP_VOICES = 0", "FAUST_DSP_VOICES = 16");
     if (poly && effect) findAndReplace.push("FAUST_DSP_HAS_EFFECT = false", "FAUST_DSP_HAS_EFFECT = true");
 
@@ -97,7 +109,9 @@ const copyWebTemplateAssets = (outputDir, dspName, poly = false, effect = false)
     // Create output directory if it doesn't exist
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
+    // Define find and replace patterns
     const findAndReplace = ["FAUST_DSP_NAME", dspName];
+
     if (poly) findAndReplace.push("FAUST_DSP_VOICES = 0", "FAUST_DSP_VOICES = 16");
     if (poly && effect) findAndReplace.push("FAUST_DSP_HAS_EFFECT = false", "FAUST_DSP_HAS_EFFECT = true");
 
