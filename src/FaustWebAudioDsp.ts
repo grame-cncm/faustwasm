@@ -612,6 +612,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     // MIDI handling
     protected fPitchwheelLabel: { path: string; chan: number; min: number; max: number }[] = [];
     protected fCtrlLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
+    // array of MIDI key handlers; array index is the MIDI note number
+    protected fMidiKeyLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
+    protected fMidiKeyOnLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
+    protected fMidiKeyOffLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
+
     protected fPathTable: { [address: string]: number } = {};
     protected fUICallback: UIHandler = (item: FaustUIItem) => {
         if (item.type === "hbargraph" || item.type === "vbargraph") {
@@ -643,10 +648,28 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                         const matched2 = strMidi.match(/^ctrl\s(\d+)\s(\d+)/);
                         // "ctrl num"
                         const matched1 = strMidi.match(/^ctrl\s(\d+)/);
+                        // match `key <note>[ <channel>]`
+                        const matchedKey = strMidi.match(/^key\s+(\d+)(?:\s+(\d+))?$/);
+                        //match `keyon <note>[ <channel>]`
+                        const matchedKeyOn = strMidi.match(/^keyon\s+(\d+)(?:\s+(\d+))?$/);
+                        //match `keyoff <note>[ <channel>]`
+                        const matchedKeyOff = strMidi.match(/^keyoff\s+(\d+)(?:\s+(\d+))?$/);
                         if (matched2) {
                             this.fCtrlLabel[parseInt(matched2[1])].push({ path: item.address, chan: parseInt(matched2[2]), min: item.min as number, max: item.max as number });
                         } else if (matched1) {
                             this.fCtrlLabel[parseInt(matched1[1])].push({ path: item.address, chan: 0, min: item.min as number, max: item.max as number });
+                        } else if (matchedKey) {
+                            const note = parseInt(matchedKey[1]);
+                            const channel = matchedKey[2] ? parseInt(matchedKey[2]) : 0;
+                            this.fMidiKeyLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1});
+                        } else if (matchedKeyOn) {
+                            const note = parseInt(matchedKeyOn[1]);
+                            const channel = matchedKeyOn[2] ? parseInt(matchedKeyOn[2]) : 0;
+                            this.fMidiKeyOnLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1});
+                        } else if (matchedKeyOff) {
+                            const note = parseInt(matchedKeyOff[1]);
+                            const channel = matchedKeyOff[2] ? parseInt(matchedKeyOff[2]) : 0;
+                            this.fMidiKeyOffLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1});
                         }
                     }
                 }
@@ -964,6 +987,13 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         const data2 = data[2];
         if (cmd === 11) return this.ctrlChange(channel, data1, data2);
         if (cmd === 14) return this.pitchWheel(channel, (data2 * 128.0 + data1));
+        if (cmd === 9) {
+            if (data2 > 0) return this.keyOn(channel, data1, data2);
+            return this.keyOff(channel, data1, data2);
+        }
+        if (cmd === 8){
+            return this.keyOff(channel, data1, data2);
+        }
     }
 
     ctrlChange(channel: number, ctrl: number, value: number) {
@@ -978,6 +1008,46 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                 }
             });
         }
+    }
+
+    keyOn(channel: number, pitch: number, velocity: number) {
+        if (this.fPlotHandler) this.fCachedEvents.push({ type: "keyOn", data: [channel, pitch, velocity] });
+        this.fMidiKeyOnLabel[pitch].forEach((key) => {
+            const { path, chan } = key;
+            if (chan === 0 || channel === chan - 1) {
+                this.setParamValue(path, FaustBaseWebAudioDsp.remap(velocity, 0, 127, key.min, key.max));
+                // Typically used to reflect parameter change on GUI
+                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+            }
+        });
+        this.fMidiKeyLabel[pitch].forEach((key) => {
+            const { path, chan } = key;
+            if (chan === 0 || channel === chan - 1) {
+                this.setParamValue(path, FaustBaseWebAudioDsp.remap(velocity, 0, 127, key.min, key.max));
+                // Typically used to reflect parameter change on GUI
+                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+            }
+        });
+    }
+
+    keyOff(channel: number, pitch: number, velocity: number) {
+        if (this.fPlotHandler) this.fCachedEvents.push({ type: "keyOff", data: [channel, pitch, velocity] });
+        this.fMidiKeyOffLabel[pitch].forEach((key) => {
+            const { path, chan } = key;
+            if (chan === 0 || channel === chan - 1) {
+                this.setParamValue(path, FaustBaseWebAudioDsp.remap(velocity, 0, 127, key.min, key.max));
+                // Typically used to reflect parameter change on GUI
+                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+            }
+        });
+        this.fMidiKeyLabel[pitch].forEach((key) => {
+            const { path, chan } = key;
+            if (chan === 0 || channel === chan - 1) {
+                this.setParamValue(path, 0);
+                // Typically used to reflect parameter change on GUI
+                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+            }
+        });
     }
 
     pitchWheel(channel: number, wheel: number) {
