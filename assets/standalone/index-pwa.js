@@ -117,7 +117,7 @@ async function activateMIDISensors() {
     }
 
     // Initialize the MIDI setup
-    if (!midiHandlersBound && FAUST_DSP_VOICES > 0) {
+    if (!midiHandlersBound) {
         startMIDI();
         midiHandlersBound = true;
     }

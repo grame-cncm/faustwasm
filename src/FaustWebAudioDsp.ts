@@ -445,6 +445,22 @@ export interface IFaustBaseWebAudioDsp {
     pitchWheel(chan: number, value: number): void;
 
     /**
+     * Handle MIDI keyOn messages.
+     * @param channel 
+     * @param pitch 
+     * @param velocity 
+     */
+    keyOn(channel: number, pitch: number, velocity: number): void;
+
+    /**
+     * Handle MIDI keyOn messages.
+     * @param channel 
+     * @param pitch 
+     * @param velocity 
+     */
+    keyOff(channel: number, pitch: number, velocity: number): void;
+
+    /**
      * Set parameter value.
      *
      * @param path - the path to the wanted parameter (retrieved using 'getParams' method)
@@ -661,15 +677,15 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                         } else if (matchedKey) {
                             const note = parseInt(matchedKey[1]);
                             const channel = matchedKey[2] ? parseInt(matchedKey[2]) : 0;
-                            this.fMidiKeyLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1});
+                            this.fMidiKeyLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1 });
                         } else if (matchedKeyOn) {
                             const note = parseInt(matchedKeyOn[1]);
                             const channel = matchedKeyOn[2] ? parseInt(matchedKeyOn[2]) : 0;
-                            this.fMidiKeyOnLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1});
+                            this.fMidiKeyOnLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1 });
                         } else if (matchedKeyOff) {
                             const note = parseInt(matchedKeyOff[1]);
                             const channel = matchedKeyOff[2] ? parseInt(matchedKeyOff[2]) : 0;
-                            this.fMidiKeyOffLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1});
+                            this.fMidiKeyOffLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1 });
                         }
                     }
                 }
@@ -988,10 +1004,12 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         if (cmd === 11) return this.ctrlChange(channel, data1, data2);
         if (cmd === 14) return this.pitchWheel(channel, (data2 * 128.0 + data1));
         if (cmd === 9) {
-            if (data2 > 0) return this.keyOn(channel, data1, data2);
-            return this.keyOff(channel, data1, data2);
+            if (data2 > 0)
+                return this.keyOn(channel, data1, data2);
+            else
+                return this.keyOff(channel, data1, data2);
         }
-        if (cmd === 8){
+        if (cmd === 8) {
             return this.keyOff(channel, data1, data2);
         }
     }

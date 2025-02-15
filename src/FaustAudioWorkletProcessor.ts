@@ -181,6 +181,14 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
                     this.pitchWheel(msg.data[0], msg.data[1]);
                     break;
                 }
+                case "keyOn": {
+                    this.keyOn(msg.data[0], msg.data[1], msg.data[2]);
+                    break;
+                }
+                case "keyOff": {
+                    this.keyOff(msg.data[0], msg.data[1], msg.data[2]);
+                    break;
+                }
                 // Generic data message
                 case "param": {
                     this.setParamValue(msg.data.path, msg.data.value);
@@ -232,6 +240,14 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
 
         protected pitchWheel(channel: number, wheel: number) {
             this.fDSPCode.pitchWheel(channel, wheel);
+        }
+
+        protected keyOn(channel: number, pitch: number, velocity: number) {
+            this.fDSPCode.keyOn(channel, pitch, velocity);
+        }
+
+        protected keyOff(channel: number, pitch: number, velocity: number) {
+            this.fDSPCode.keyOff(channel, pitch, velocity);
         }
 
         protected propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {

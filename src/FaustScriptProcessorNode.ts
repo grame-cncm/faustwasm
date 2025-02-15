@@ -102,6 +102,8 @@ export class FaustScriptProcessorNode<Poly extends boolean = false> extends (glo
 
     ctrlChange(chan: number, ctrl: number, value: number) { this.fDSPCode.ctrlChange(chan, ctrl, value); }
     pitchWheel(chan: number, value: number) { this.fDSPCode.pitchWheel(chan, value); }
+    keyOn(channel: number, pitch: number, velocity: number) { this.fDSPCode.keyOn(channel, pitch, velocity); }
+    keyOff(channel: number, pitch: number, velocity: number) { this.fDSPCode.keyOff(channel, pitch, velocity); }
 
     setParamValue(path: string, value: number) { this.fDSPCode.setParamValue(path, value); }
     getParamValue(path: string) { return this.fDSPCode.getParamValue(path); }

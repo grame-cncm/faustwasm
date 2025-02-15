@@ -178,6 +178,8 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         const data2 = data[2];
         if (cmd === 11) this.ctrlChange(channel, data1, data2);
         else if (cmd === 14) this.pitchWheel(channel, data2 * 128.0 + data1);
+        if (cmd === 8 || (cmd === 9 && data2 === 0)) this.keyOff(channel, data1, data2);
+        else if (cmd === 9) this.keyOn(channel, data1, data2);
         else this.port.postMessage({ type: "midi", data: data });
     }
 
@@ -187,6 +189,14 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     }
     pitchWheel(channel: number, wheel: number) {
         const e = { type: "pitchWheel", data: [channel, wheel] };
+        this.port.postMessage(e);
+    }
+    keyOn(channel: number, pitch: number, velocity: number) {
+        const e = { type: "keyOn", data: [channel, pitch, velocity] };
+        this.port.postMessage(e);
+    }
+    keyOff(channel: number, pitch: number, velocity: number) {
+        const e = { type: "keyOff", data: [channel, pitch, velocity] };
         this.port.postMessage(e);
     }
 
