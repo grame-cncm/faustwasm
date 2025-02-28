@@ -140,8 +140,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             for (const path in parameters) {
                 const [paramValue] = parameters[path];
                 if (paramValue !== this.paramValuesCache[path]) {
-                    this.fDSPCode.setParamValue(path, paramValue);
-                    this.paramValuesCache[path] = paramValue;
+                    // Set value and update the cache
+                    this.setParamValue(path, paramValue);
                 }
             }
             if (this.fCommunicator.getNewAccDataAvailable()) {

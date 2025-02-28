@@ -53,7 +53,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         FaustAudioWorkletProcessorCommunicator,
         FFTUtils
     } = dependencies;
-    
+
     const {
         processorName,
         dspName,
@@ -154,7 +154,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         private window: Float32Array;
         /** Generated from the current window's rolling sum square */
         private windowSumSquare: Float32Array;
-        
+
         /** FFT constructor */
         private FFT: typeof InterfaceFFT;
         /** Real FFT interface */
@@ -185,7 +185,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             this.port.addEventListener("message", this.handleMessageAux);
             this.port.start();
             this.communicator = new FaustAudioWorkletProcessorCommunicator(this.port);
-            
+
             const { parameterDescriptors } = (this.constructor as typeof AudioWorkletProcessor);
             parameterDescriptors.forEach((pd) => {
                 this.paramValuesCache[pd.name] = pd.defaultValue || 0;
@@ -251,7 +251,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
         setupWamEventHandler() {
             if (!this.wamInfo) return;
             const { moduleId, instanceId } = this.wamInfo;
-	        const { webAudioModules } = (globalThis as unknown as WamAudioWorkletGlobalScope);
+            const { webAudioModules } = (globalThis as unknown as WamAudioWorkletGlobalScope);
             const ModuleScope = webAudioModules.getModuleScope(moduleId) as WamParamMgrSDKBaseModuleScope;
             const paramMgrProcessor = ModuleScope?.paramMgrProcessors?.[instanceId];
             if (!paramMgrProcessor) return;
@@ -349,21 +349,21 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             const inputChannels = input?.length || 0;
             const outputChannels = output?.length || 0;
             // if (input.length === 0) return true;
-    
+
             const bufferSize = input?.length ? Math.max(...input.map(c => c.length)) || 128 : 128;
-    
+
             // Reset FFT and related buffers if necessary (checks in the resetFFT method)
             this.noIFFT = !!parameters.noIFFT[0];
             this.resetFFT(~~parameters.fftSize[0], ~~parameters.fftOverlap[0], ~~parameters.windowFunction[0], inputChannels, outputChannels, bufferSize);
-    
+
             if (!this.fDSPCode) return true;
-    
+
             for (const path in parameters) {
                 if (!!fftParamKeywords.find(k => `/${path}`.endsWith(k))) continue;
                 const [paramValue] = parameters[path];
                 if (paramValue !== this.paramValuesCache[path]) {
-                    this.fDSPCode.setParamValue(path, paramValue);
-                    this.paramValuesCache[path] = paramValue;
+                    // Set value and update the cache
+                    this.setParamValue(path, paramValue);
                 }
             }
             if (this.communicator.getNewAccDataAvailable()) {
@@ -395,10 +395,10 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 this.$inputWrite += bufferSize;
                 this.$inputWrite %= this.fftBufferSize;
             }
-    
+
             // Do FFT if necessary
             this.processFFT();
-    
+
             // Read from fftOutput buffer for audio output, applying windowSumSquare to reverse the doubled windowing effect
             for (let i = 0; i < output.length; i++) {
                 setTypedArray(output[i], this.fftOutput[i], 0, this.$outputRead);
@@ -497,7 +497,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             const fftHopSize = ~~Math.max(1, fftSize / fftOverlap);
             const latency = fftSize - Math.min(fftHopSize, bufferSize);
             let windowFunction: TWindowFunction | null = null;
-            
+
             // set the window function from the injected list
             if (windowFunctionIn !== 0) {
                 windowFunction = typeof windowFunctions === "object" ? windowFunctions[~~windowFunctionIn - 1] || null : null;
@@ -525,7 +525,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
                 this.noIFFTBuffer = new Float32Array(this.fftSize);
                 this.createFFTProcessor();
             }
-            
+
             // Calculate a window from the window function, prepare the windowSumSquare buffer 
             if (fftSizeChanged || fftOverlapChanged || windowFunction !== this.windowFunction) {
                 this.windowFunction = windowFunction;
