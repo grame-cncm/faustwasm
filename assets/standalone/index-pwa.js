@@ -39,8 +39,8 @@ let faustNode;
     const { createFaustNode, createFaustUI } = await import("./create-node.js");
 
     // To test the ScriptProcessorNode mode
-    // const result = await createFaustNode(audioContext, "osc", FAUST_DSP_VOICES, true, 512);
-    const result = await createFaustNode(audioContext, "osc", FAUST_DSP_VOICES);
+    // const result = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES, true, 512);
+    const result = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);
     faustNode = result.faustNode;  // Assign to the global variable
     if (!faustNode) throw new Error("Faust DSP not compiled");
 
