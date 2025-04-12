@@ -1309,7 +1309,7 @@ export class FaustWebAudioDspVoice {
     static get kReleaseVoice() { return -2; }
     static get kLegatoVoice() { return -3; }
     static get kNoVoice() { return -4; }
-    static get VOICE_STOP_LEVEL() { return 0.0005; }
+    static get VOICE_STOP_LEVEL() { return 0.00003162; } // -90 db
 
     private fFreqLabel: number[] = [];
     private fGateLabel: number[] = [];
@@ -1324,7 +1324,6 @@ export class FaustWebAudioDspVoice {
     fNextVel = -1;
     fDate = 0;
     fLevel = 0;
-    fRelease = 0;
 
     constructor($dsp: number, api: IFaustDspInstance, inputItems: string[], pathTable: { [address: string]: number }, sampleRate: number) {
         this.fDSP = $dsp;
@@ -1374,7 +1373,6 @@ export class FaustWebAudioDspVoice {
         if (hard) {
             this.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
         } else {
-            this.fRelease = this.fAPI.getSampleRate(this.fDSP) / 2;
             this.fCurNote = FaustWebAudioDspVoice.kReleaseVoice;
         }
     }
@@ -1535,12 +1533,15 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         let voicePlaying = FaustWebAudioDspVoice.kNoVoice;
         let oldestDatePlaying = Number.MAX_VALUE;
 
-        for (let voice = 0; voice < this.fInstance.voices; voice++) {
-            if (this.fVoiceTable[voice].fCurNote === pitch) {
+        for (let i = 0; i < this.fInstance.voices; i++) {
+            let curNote = this.fVoiceTable[i].fCurNote;
+            let nextNote = this.fVoiceTable[i].fNextNote;
+
+            if ((curNote === pitch) || ((curNote === FaustWebAudioDspVoice.kLegatoVoice) && (nextNote === pitch))) {
                 // Keeps oldest playing voice
-                if (this.fVoiceTable[voice].fDate < oldestDatePlaying) {
-                    oldestDatePlaying = this.fVoiceTable[voice].fDate;
-                    voicePlaying = voice;
+                if (this.fVoiceTable[i].fDate < oldestDatePlaying) {
+                    oldestDatePlaying = this.fVoiceTable[i].fDate;
+                    voicePlaying = i;
                 }
             }
         }
@@ -1638,8 +1639,7 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
                 // Mix it in result
                 voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(this.fBufferSize, this.getNumOutputs(), this.fAudioMixing, this.fAudioOutputs);
                 // Check the level to possibly set the voice in kFreeVoice again
-                voice.fRelease -= this.fBufferSize;
-                if ((voice.fCurNote == FaustWebAudioDspVoice.kReleaseVoice) && ((voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL) && (voice.fRelease < 0))) {
+                if ((voice.fCurNote == FaustWebAudioDspVoice.kReleaseVoice) && ((voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL))) {
                     voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
                 }
             }
