@@ -101,6 +101,22 @@ function stopMIDI() {
 let sensorHandlersBound = false;
 let midiHandlersBound = false;
 
+// Keyboard to MIDI handing
+let keyboard2MIDI = null;
+
+async function startKeyboard2MIDI() {
+    // Import the create-node module
+    const { createKey2MIDI } = await import("./create-node.js");
+
+    keyboard2MIDI = createKey2MIDI((event) => faustNode.midiMessage(event));
+    keyboard2MIDI.start();
+}
+
+function stopKeyboard2MIDI() {
+    keyboard2MIDI.stop();
+    keyboard2MIDI = null;
+}
+
 // Function to activate MIDI and Sensors on user interaction
 async function activateMIDISensors() {
 
@@ -119,6 +135,7 @@ async function activateMIDISensors() {
     // Initialize the MIDI setup
     if (!midiHandlersBound) {
         startMIDI();
+        await startKeyboard2MIDI();
         midiHandlersBound = true;
     }
 
@@ -153,6 +170,7 @@ async function deactivateAudioMIDISensors() {
     // Deactivate the MIDI setup
     if (midiHandlersBound && FAUST_DSP_VOICES > 0) {
         stopMIDI();
+        stopKeyboard2MIDI();
         midiHandlersBound = false;
     }
 }

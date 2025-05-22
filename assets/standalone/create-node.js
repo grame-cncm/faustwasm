@@ -172,6 +172,81 @@ async function requestPermissions() {
     }
 }
 
+/**
+ * Key2Midi: maps keyboard input to MIDI messages.
+ */
+class Key2Midi {
+    static KEY_MAP = {
+        a: 0, w: 1, s: 2, e: 3, d: 4, f: 5, t: 6, g: 7,
+        y: 8, h: 9, u: 10, j: 11, k: 12, o: 13, l: 14, p: 15, ";": 16,
+        z: "PREV", x: "NEXT", c: "VELDOWN", v: "VELUP"
+    };
+
+    constructor({ keyMap = Key2Midi.KEY_MAP, offset = 60, velocity = 100, handler = console.log } = {}) {
+        this.keyMap = keyMap;
+        this.offset = offset;
+        this.velocity = velocity;
+        this.velMap = [20, 40, 60, 80, 100, 127];
+        this.handler = handler;
+        this.pressed = {};
+
+        this.onKeyDown = this.onKeyDown.bind(this);
+        this.onKeyUp = this.onKeyUp.bind(this);
+    }
+
+    start() {
+        window.addEventListener("keydown", this.onKeyDown);
+        window.addEventListener("keyup", this.onKeyUp);
+    }
+
+    stop() {
+        window.removeEventListener("keydown", this.onKeyDown);
+        window.removeEventListener("keyup", this.onKeyUp);
+    }
+
+    onKeyDown(e) {
+        const key = e.key.toLowerCase();
+        if (this.pressed[key]) return;
+        this.pressed[key] = true;
+
+        const val = this.keyMap[key];
+        if (typeof val === "number") {
+            const note = val + this.offset;
+            this.handler([0x90, note, this.velocity]);
+        } else if (val === "PREV") {
+            this.offset -= 1;
+        } else if (val === "NEXT") {
+            this.offset += 1;
+        } else if (val === "VELDOWN") {
+            const idx = Math.max(0, this.velMap.indexOf(this.velocity) - 1);
+            this.velocity = this.velMap[idx];
+        } else if (val === "VELUP") {
+            const idx = Math.min(this.velMap.length - 1, this.velMap.indexOf(this.velocity) + 1);
+            this.velocity = this.velMap[idx];
+        }
+    }
+
+    onKeyUp(e) {
+        const key = e.key.toLowerCase();
+        const val = this.keyMap[key];
+        if (typeof val === "number") {
+            const note = val + this.offset;
+            this.handler([0x80, note, this.velocity]);
+        }
+        delete this.pressed[key];
+    }
+}
+
+/**
+ * Creates a Key2Midi instance.
+ * 
+ * @param {function} handler - The function to handle MIDI messages.
+ * @returns {Key2Midi} - The Key2Midi instance.
+ */
+function createKey2MIDI(handler) {
+    return new Key2Midi({ handler: handler });
+}
+
 // Export the functions
-export { createFaustNode, createFaustUI, connectToAudioInput, requestPermissions };
+export { createFaustNode, createFaustUI, createKey2MIDI, connectToAudioInput, requestPermissions };
 

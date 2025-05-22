@@ -47,7 +47,7 @@ let faustNode;
 // Called at load time
 (async () => {
 
-    const { createFaustNode, connectToAudioInput, createFaustUI } = await import("./create-node.js");
+    const { createFaustNode, createKey2MIDI, connectToAudioInput, createFaustUI } = await import("./create-node.js");
 
     /**
     * @param {FaustAudioWorkletNode} faustNode 
@@ -85,6 +85,11 @@ let faustNode;
      * @param {FaustAudioWorkletNode} faustNode 
      */
     const buildMidiDeviceMenu = async (faustNode) => {
+
+        // Keyboard to MIDI handling - create but don't start yet
+        let keyboard2MIDI = createKey2MIDI((event) => faustNode.midiMessage(event));
+        let isKeyboardActive = false;
+
         const midiAccess = await navigator.requestMIDIAccess();
         /** @type {WebMidi.MIDIInput} */
         let currentInput;
@@ -94,9 +99,18 @@ let faustNode;
         const handleMidiMessage = e => faustNode.midiMessage(e.data);
         const handleStateChange = () => {
             const { inputs } = midiAccess;
-            if ($selectMidiInput.options.length === inputs.size + 1) return;
+            // Check if we need to rebuild the menu
+            const expectedOptions = inputs.size + 2; // +1 for "Select..." and +1 for "Keyboard"
+            if ($selectMidiInput.options.length === expectedOptions) return;
+
             if (currentInput) currentInput.removeEventListener("midimessage", handleMidiMessage);
             $selectMidiInput.innerHTML = '<option value="-1" disabled selected>Select...</option>';
+
+            // Add computer keyboard option
+            const keyboardOption = new Option("Computer Keyboard", "Computer Keyboard");
+            $selectMidiInput.add(keyboardOption);
+
+            // Add MIDI device options
             inputs.forEach((midiInput) => {
                 const { name, id } = midiInput;
                 const option = new Option(name, id);
@@ -106,10 +120,29 @@ let faustNode;
         handleStateChange();
         midiAccess.addEventListener("statechange", handleStateChange);
         $selectMidiInput.onchange = () => {
+            // Disconnect previous MIDI input
             if (currentInput) currentInput.removeEventListener("midimessage", handleMidiMessage);
-            const id = $selectMidiInput.value;
-            currentInput = midiAccess.inputs.get(id);
-            currentInput.addEventListener("midimessage", handleMidiMessage);
+            currentInput = null;
+
+            // Stop Computer Keyboard if it was active
+            if (isKeyboardActive) {
+                keyboard2MIDI.stop();
+                isKeyboardActive = false;
+            }
+
+            const selectedValue = $selectMidiInput.value;
+
+            if (selectedValue === "Computer Keyboard") {
+                // Activate keyboard MIDI
+                keyboard2MIDI.start();
+                isKeyboardActive = true;
+            } else {
+                // Activate selected MIDI device
+                currentInput = midiAccess.inputs.get(selectedValue);
+                if (currentInput) {
+                    currentInput.addEventListener("midimessage", handleMidiMessage);
+                }
+            }
         };
     };
 
