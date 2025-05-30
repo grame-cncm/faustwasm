@@ -43,7 +43,6 @@ export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
         meta?: FaustDspMeta;
     } | null>;
 
-
     /**
      * Create a monophonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
      *

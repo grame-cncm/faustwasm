@@ -939,7 +939,6 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
      * Init soundfiles memory.
      * 
      * @param allocator : the wasm memory allocator
-     * @param sfReader : the soundfile reader
      * @param baseDSP : the DSP struct (either a monophonic DSP of polyphonic voice) base DSP in the wasm memory
     */
     protected initSoundfileMemory(allocator: WasmAllocator, baseDSP: number) {
@@ -1149,7 +1148,6 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
             // Init soundfiles memory
             this.initSoundfileMemory(allocator, this.fDSP);
         }
-
     }
 
     private initMemory(): number {
