@@ -40,18 +40,19 @@ $buttonDsp.onclick = async () => {
     }
 }
 
+// Play some notes using the Faust node
+const play = (node) => {
+    node.keyOn(0, 60, 100);
+    setTimeout(() => node.keyOn(0, 64, 100), 1000);
+    setTimeout(() => node.keyOn(0, 67, 100), 2000);
+    setTimeout(() => node.allNotesOff(), 5000);
+    setTimeout(() => play(node), 7000);
+}
+
 // Called at load time
 (async () => {
 
     const { createFaustNode, connectToAudioInput } = await import("./create-node.js");
-
-    const play = (node) => {
-        node.keyOn(0, 60, 100);
-        setTimeout(() => node.keyOn(0, 64, 100), 1000);
-        setTimeout(() => node.keyOn(0, 67, 100), 2000);
-        setTimeout(() => node.allNotesOff(), 5000);
-        setTimeout(() => play(node), 7000);
-    }
 
     // Create Faust node
     const result = await createFaustNode(audioContext, "FAUST_DSP_NAME", FAUST_DSP_VOICES);
