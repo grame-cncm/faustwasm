@@ -132,7 +132,7 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
         if (this.fOutputHandler) {
             this.fOutputHandler(path, value);
         } else {
-            console.warn("No OutputParamHandler set for this FaustAudioWorkletNode.");
+            console.warn("No OutputParamHandler set for this Faust node.");
         }
     }
 
