@@ -364,6 +364,15 @@ export interface IFaustBaseWebAudioDsp {
     getOutputParamHandler(): OutputParamHandler | null;
 
     /**
+     * Call the output parameter handler with a path and value.
+     * 
+     * @param path - the path to the wanted parameter (retrieved using 'getParams' method)
+     * @param value - the float value for the wanted control
+     */
+
+    callOutputParamHandler(path: string, value: number): void;
+
+    /**
      * Set the compute handler, to  be called in the 'compute' method with buffer size.
      *
      * @param handler - the compute handler
@@ -971,6 +980,13 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
     getOutputParamHandler() {
         return this.fOutputHandler;
+    }
+    callOutputParamHandler(path: string, value: number) {
+        if (this.fOutputHandler) {
+            this.fOutputHandler(path, value);
+        } else {
+            console.warn("No OutputParamHandler set for this FaustAudioWorkletNode.");
+        }
     }
 
     setComputeHandler(handler: ComputeHandler | null) {

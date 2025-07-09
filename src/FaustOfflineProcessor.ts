@@ -50,6 +50,9 @@ export class FaustOfflineProcessor<Poly extends boolean = false> {
 
     setOutputParamHandler(handler: OutputParamHandler) { this.fDSPCode.setOutputParamHandler(handler); }
     getOutputParamHandler() { return this.fDSPCode.getOutputParamHandler(); }
+    callOutputParamHandler(path: string, value: number) {
+        this.fDSPCode.callOutputParamHandler(path, value);
+    }
 
     setComputeHandler(handler: ComputeHandler) { this.fDSPCode.setComputeHandler(handler); }
     getComputeHandler() { return this.fDSPCode.getComputeHandler(); }

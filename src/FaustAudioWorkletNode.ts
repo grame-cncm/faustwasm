@@ -128,6 +128,13 @@ export class FaustAudioWorkletNode<Poly extends boolean = false> extends (global
     getOutputParamHandler() {
         return this.fOutputHandler;
     }
+    callOutputParamHandler(path: string, value: number) {
+        if (this.fOutputHandler) {
+            this.fOutputHandler(path, value);
+        } else {
+            console.warn("No OutputParamHandler set for this FaustAudioWorkletNode.");
+        }
+    }
 
     setComputeHandler(handler: ComputeHandler | null) {
         this.fComputeHandler = handler;
