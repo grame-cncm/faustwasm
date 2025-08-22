@@ -9,7 +9,7 @@ import type { FaustModuleFactory } from "./types";
 const instantiateFaustModuleFromFile = async (jsFile: string, dataFile = jsFile.replace(/c?js$/, "data"), wasmFile = jsFile.replace(/c?js$/, "wasm")) => {
     let FaustModule: FaustModuleFactory;
     let dataBinary: ArrayBuffer;
-    let wasmBinary: Uint8Array | ArrayBuffer;
+    let wasmBinary: ArrayBuffer;
     const jsCodeHead = /var (.+) = \(/;
     if (typeof window === "object") {
         let jsCode = await (await fetch(jsFile)).text();
@@ -19,7 +19,7 @@ export default ${jsCode.match(jsCodeHead)?.[1]};
         const jsFileMod = URL.createObjectURL(new Blob([jsCode], { type: "text/javascript" }));
         FaustModule = (await import(/* webpackIgnore: true */jsFileMod)).default;
         dataBinary = await (await fetch(dataFile)).arrayBuffer();
-        wasmBinary = new Uint8Array(await (await fetch(wasmFile)).arrayBuffer());
+        wasmBinary = await (await fetch(wasmFile)).arrayBuffer();
     } else {
         const { promises: fs } = await import("fs");
         const { pathToFileURL } = await import("url");
@@ -42,15 +42,17 @@ export default ${jsCode.match(jsCodeHead)?.[1]};
         await fs.writeFile(jsFileMod, jsCode);
         FaustModule = (await import(/* webpackIgnore: true */pathToFileURL(jsFileMod).href)).default;
         await fs.unlink(jsFileMod);
-        dataBinary = (await fs.readFile(dataFile)).buffer;
-        wasmBinary = (await fs.readFile(wasmFile)).buffer;
+        // Using a type assertion `as ArrayBuffer` to satisfy the strict type checking.
+        dataBinary = (new Uint8Array(await fs.readFile(dataFile))).buffer as ArrayBuffer;
+        wasmBinary = (new Uint8Array(await fs.readFile(wasmFile))).buffer as ArrayBuffer;
     }
     const faustModule = await FaustModule({
         wasmBinary,
         getPreloadedPackage: (remotePackageName: string, remotePackageSize: number) => {
             if (remotePackageName === "libfaust-wasm.data") return dataBinary;
             return new ArrayBuffer(0);
-        }});
+        }
+    });
     return faustModule;
 };
 

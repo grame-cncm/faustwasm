@@ -12,19 +12,23 @@ export const FaustModuleFactoryData = dataBinary;
 const instantiateFaustModule = async (FaustModuleFactoryIn = factoryFn, dataBinaryIn = dataBinary, wasmBinaryIn = wasmBinary) => {
     const g = globalThis as any;
     if (g.AudioWorkletGlobalScope) {
-        g.importScripts = () => {};
+        g.importScripts = () => { };
         g.self = { location: { href: "" } };
     }
     const faustModule = await FaustModuleFactoryIn({
-        wasmBinary: wasmBinaryIn,
+        // Create a copy to guarantee a standard ArrayBuffer
+        wasmBinary: (new Uint8Array(wasmBinaryIn)).buffer,
         getPreloadedPackage: (remotePackageName: string, remotePackageSize: number) => {
-            if (remotePackageName === "libfaust-wasm.data") return dataBinaryIn.buffer;
+            if (remotePackageName === "libfaust-wasm.data") {
+                // Create a copy to guarantee a standard ArrayBuffer
+                return (new Uint8Array(dataBinaryIn)).buffer;
+            }
             return new ArrayBuffer(0);
         }
     });
     if (g.AudioWorkletGlobalScope) {
-		delete g.importScripts;
-		delete g.self;
+        delete g.importScripts;
+        delete g.self;
     }
     return faustModule;
 };

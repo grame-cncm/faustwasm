@@ -2,7 +2,7 @@ import { Sha256 } from "@aws-crypto/sha256-js";
 import type { ILibFaust } from "./LibFaust";
 import type { FaustDspFactory, IntVector } from "./types";
 
-export const ab2str = (buf: Uint8Array) => String.fromCharCode.apply(null, buf);
+export const ab2str = (buf: Uint8Array) => String.fromCharCode.apply(null, Array.from(buf));
 
 export const str2ab = (str: string) => {
     const buf = new ArrayBuffer(str.length);
@@ -231,7 +231,7 @@ class FaustCompiler implements IFaustCompiler {
         const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
         this[bufferKey] = mixerBuffer;
         // Compile mixer
-        const mixerModule = await WebAssembly.compile(mixerBuffer);
+        const mixerModule = await WebAssembly.compile(new Uint8Array(mixerBuffer));
         this[moduleKey] = mixerModule;
         return { mixerBuffer, mixerModule };
     }
@@ -243,7 +243,7 @@ class FaustCompiler implements IFaustCompiler {
         const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
         this[bufferKey] = mixerBuffer;
         // Compile mixer
-        const mixerModule = new WebAssembly.Module(mixerBuffer);
+        const mixerModule = new WebAssembly.Module(new Uint8Array(mixerBuffer));
         this[moduleKey] = mixerModule;
         return { mixerBuffer, mixerModule };
     }

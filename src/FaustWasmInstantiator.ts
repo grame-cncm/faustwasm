@@ -123,9 +123,9 @@ class FaustWasmInstantiator {
 
     static async loadDSPMixer(mixerPath: string, fs?: typeof FS) {
         try {
-            let mixerBuffer = null;
+            let mixerBuffer: BufferSource | null = null;
             if (fs) {
-                mixerBuffer = fs.readFile(mixerPath, { encoding: "binary" });
+                mixerBuffer = new Uint8Array(fs.readFile(mixerPath, { encoding: "binary" }));
             } else {
                 const mixerFile = await fetch(mixerPath);
                 mixerBuffer = await mixerFile.arrayBuffer();
