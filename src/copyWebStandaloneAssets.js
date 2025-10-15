@@ -80,6 +80,9 @@ const copyWebPWAAssets = (outputDir, dspName, poly = false, effect = false) => {
     const templateJSPath = path.join(__dirname, "../assets/standalone/index-pwa.js");
     cpSyncModify(templateJSPath, outputDir + `/index.js`, ...findAndReplace);
 
+    const templatePWAJSPath = path.join(__dirname, "../assets/standalone/faust-pwa.js");
+    cpSyncModify(templatePWAJSPath, outputDir + `/faust-pwa.js`, ...findAndReplace);
+
     const templateHTMLPath = path.join(__dirname, "../assets/standalone/index-pwa.html");
     cpSyncModify(templateHTMLPath, outputDir + `/index.html`, ...findAndReplace);
 
