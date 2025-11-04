@@ -41,7 +41,6 @@
     "@aws-crypto/sha256-js": "^5.2.0",
     "@shren/faust-ui": "^1.1.16",
     "@types/node": "^20.12.7",
-    "@types/webmidi": "^2.0.10",
     "@webaudiomodules/api": "^2.0.0-alpha.6",
     "@webaudiomodules/sdk-parammgr": "^0.0.13",
     "dts-bundle-generator": "^9.5.1",
