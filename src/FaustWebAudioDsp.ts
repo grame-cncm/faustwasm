@@ -891,7 +891,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         for (const soundfileId of soundfileIdList) {
             let chan = 0;
             let len = 0;
-            const audioData = soundfiles[soundfileId];
+            const audioData = soundfiles?.[soundfileId];
             if (audioData) {
                 chan = audioData.audioBuffer.length;
                 len = audioData.audioBuffer[0].length;
@@ -916,7 +916,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         // Read all files
         for (let part = 0; part < soundfileIdList.length; part++) {
             const soundfileId = soundfileIdList[part];
-            const audioData = soundfiles[soundfileId];
+            const audioData = soundfiles?.[soundfileId];
             if (audioData) {
                 //soundfile.displayMemory("BEFORE copyToOut");
                 soundfile.copyToOut(part, maxChan, offset, audioData);

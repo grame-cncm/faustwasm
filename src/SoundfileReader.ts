@@ -94,12 +94,12 @@ class SoundfileReader {
      * @param audioCtx : the audio context
      */
     private static async loadSoundfile(filename: string, metaUrls: string[], soundfiles: LooseFaustDspFactory["soundfiles"], audioCtx: BaseAudioContext): Promise<void> {
-        if (soundfiles[filename]) return;
+        if (soundfiles?.[filename]) return;
         const urlsToCheck = [filename, ...[...metaUrls, ...this.fallbackPaths].map(path => new URL(filename, path.endsWith("/") ? path : `${path}/`).href)];
         const checkResults = await Promise.all(urlsToCheck.map(url => this.checkFileExists(url)));
         const successIndex = checkResults.findIndex(r => !!r);
         if (successIndex === -1) throw new Error(`Failed to load sound file ${filename}, all check failed.`);
-        soundfiles[filename] = await this.fetchSoundfile(urlsToCheck[successIndex], audioCtx);
+        soundfiles![filename] = await this.fetchSoundfile(urlsToCheck[successIndex], audioCtx);
     }
 
     /**
@@ -114,7 +114,7 @@ class SoundfileReader {
         const metaUrls = FaustBaseWebAudioDsp.extractUrlsFromMeta(dspMeta);
         const soundfiles = this.findSoundfilesFromMeta(dspMeta);
         for (const id in soundfiles) {
-            if (soundfilesIn[id]) {
+            if (soundfilesIn?.[id]) {
                 soundfiles[id] = soundfilesIn[id];
                 continue;
             }

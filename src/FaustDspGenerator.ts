@@ -241,6 +241,7 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
         if (!this.factory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
         const meta = JSON.parse(this.factory.json);
         const map = SoundfileReader.findSoundfilesFromMeta(meta);
+        if(!map) return [];
         return Object.keys(map);
     }
 
@@ -577,6 +578,7 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
         if (!this.voiceFactory) throw new Error("Code is not compiled, please define the factory or call `await this.compile()` first.");
         const meta = JSON.parse(this.voiceFactory.json);
         const map = SoundfileReader.findSoundfilesFromMeta(meta);
+        if(!map) return [];
         if (!this.effectFactory) return Object.keys(map);
         const effectMeta = JSON.parse(this.effectFactory.json);
         const effectMap = SoundfileReader.findSoundfilesFromMeta(effectMeta);
