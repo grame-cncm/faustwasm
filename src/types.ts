@@ -212,6 +212,13 @@ export type FaustUIType =
     | FaustUIOutputType
     | FaustUIInputType;
 
+export interface FaustFeatureFlags {
+    hasMidi: boolean;
+    hasAcc: boolean;
+    hasGyr: boolean;
+    hasSoundfiles: boolean;
+}
+
 export interface AudioParamDescriptor {
     automationRate?: AutomationRate;
     defaultValue?: number;
