@@ -14,6 +14,7 @@
     "build-esm-bundle": "node prebuild-bundled.js && esbuild src/index-bundle.ts --target=es2019 --bundle --sourcemap --loader:.wasm=binary --loader:.data=binary --outfile=dist/esm-bundle/index.js --format=esm --external:fs --external:url --external:path --external:ws && node postbuild-bundled.js",
     "build-types": "dts-bundle-generator -o dist/cjs/index.d.ts src/index.ts --external-imports",
     "build-types-bundle": "dts-bundle-generator -o dist/cjs-bundle/index.d.ts src/index-bundle.ts --external-imports",
+    "lint": "pnpm eslint .",
     "postbuild": "node postbuild.js"
   },
   "repository": {
@@ -39,13 +40,16 @@
   "homepage": "https://github.com/grame-cncm/faustwasm#readme",
   "devDependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
+    "@eslint/js": "^9.39.1",
     "@shren/faust-ui": "^1.1.16",
     "@types/node": "^20.12.7",
     "@webaudiomodules/api": "^2.0.0-alpha.6",
     "@webaudiomodules/sdk-parammgr": "^0.0.13",
     "dts-bundle-generator": "^9.5.1",
     "esbuild": "^0.25.12",
-    "typescript": "^5.4.5"
+    "eslint": "^9.39.1",
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8.46.3"
   },
   "dependencies": {
     "@types/emscripten": "^1.39.10"
