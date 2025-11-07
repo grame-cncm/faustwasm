@@ -14,15 +14,6 @@ export enum Axis { x, y, z }
 /** Enum describing the curve of the accelerometer */
 export enum Curve { Up, Down, UpDown, DownUp }
 
-/** Object describing value off accelerometer metadata values */
-class AccMeta {
-    axis: Axis;
-    curve: Curve;
-    amin: number;
-    amid: number;
-    amax: number;
-}
-
 interface Range {
     fLo: number;
     fHi: number;
@@ -164,7 +155,7 @@ export default class FaustSensors {
                     }
                 }
                 returnMappedValue(v: number): number {
-                    var x = this.fRange.clip(v);
+                    const x = this.fRange.clip(v);
                     return this.fOffset + x * this.fCoef;
                 }
                 getLowHigh(amin: number, amax: number): InterpolateObject {
@@ -197,8 +188,8 @@ export default class FaustSensors {
                 }
 
                 getMappingValues(amin: number, amid: number, amax: number): InterpolateObject3pt {
-                    var lowHighSegment1 = this.fSegment1.getLowHigh(amin, amid);
-                    var lowHighSegment2 = this.fSegment2.getLowHigh(amid, amax);
+                    const lowHighSegment1 = this.fSegment1.getLowHigh(amin, amid);
+                    const lowHighSegment2 = this.fSegment2.getLowHigh(amid, amax);
                     return { amin: lowHighSegment1.amin, amid: lowHighSegment2.amin, amax: lowHighSegment2.amax };
                 }
             }

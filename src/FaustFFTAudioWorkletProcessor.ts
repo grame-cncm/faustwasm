@@ -359,7 +359,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             if (!this.fDSPCode) return true;
 
             for (const path in parameters) {
-                if (!!fftParamKeywords.find(k => `/${path}`.endsWith(k))) continue;
+                if (fftParamKeywords.find(k => `/${path}`.endsWith(k))) continue;
                 const [paramValue] = parameters[path];
                 if (paramValue !== this.paramValuesCache[path]) {
                     // Set value and update the cache
@@ -576,7 +576,7 @@ const getFaustFFTAudioWorkletProcessor = (dependencies: FaustFFTAudioWorkletProc
             this.fDSPCode.start();
             // Write the cached parameters
             for (const path in this.paramValuesCache) {
-                if (!!fftParamKeywords.find(k => `/${path}`.endsWith(k))) continue;
+                if (fftParamKeywords.find(k => `/${path}`.endsWith(k))) continue;
                 this.fDSPCode.setParamValue(path, this.paramValuesCache[path])
             }
             // Write the FFT reverved parameters

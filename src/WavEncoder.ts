@@ -27,7 +27,6 @@ class WavEncoder {
         const bitDepth = float ? 32 : ((options.bitDepth | 0) || 16);
         const byteDepth = bitDepth >> 3;
         const byteLength = length * numberOfChannels * byteDepth;
-        // eslint-disable-next-line no-undef
         const AB = shared ? (globalThis.SharedArrayBuffer || globalThis.ArrayBuffer) : globalThis.ArrayBuffer;
         const ab = new AB((44 + byteLength) * Uint8Array.BYTES_PER_ELEMENT);
         const dataView = new DataView(ab);

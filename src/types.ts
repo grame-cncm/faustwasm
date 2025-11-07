@@ -104,7 +104,7 @@ export interface LibFaustWasm {
     getInfos(what: FaustInfoType): string;
 }
 
-export interface FaustDspFactory extends Required<LooseFaustDspFactory> { }
+export type FaustDspFactory = Required<LooseFaustDspFactory>
 
 /**
  * The Factory structure.

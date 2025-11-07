@@ -157,7 +157,7 @@ class FaustCompiler implements IFaustCompiler {
         }
 
         // If code is already compiled, return the cached factory
-        let shaKey = await sha256(name + code + args + (poly ? "poly" : "mono"));
+        const shaKey = await sha256(name + code + args + (poly ? "poly" : "mono"));
         if (FaustCompiler.gFactories.has(shaKey)) {
             return FaustCompiler.gFactories.get(shaKey) || null;
         } else {

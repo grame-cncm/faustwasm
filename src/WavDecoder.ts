@@ -52,7 +52,7 @@ class WavDecoder {
             0x0003: "lpcm"
         };
         const formatId = reader.uint16();
-        if (!formats.hasOwnProperty(formatId)) {
+        if (!Object.prototype.hasOwnProperty.call(formats, formatId)) {
             throw new TypeError("Unsupported format in WAV file: 0x" + formatId.toString(16));
         }
         const format: Format = {

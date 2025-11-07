@@ -566,7 +566,7 @@ export interface IFaustBaseWebAudioDsp {
     destroy(): void;
 }
 
-export interface IFaustMonoWebAudioDsp extends IFaustBaseWebAudioDsp { }
+export type IFaustMonoWebAudioDsp = IFaustBaseWebAudioDsp
 export interface IFaustMonoWebAudioNode extends IFaustMonoWebAudioDsp, AudioNode { }
 
 export interface IFaustPolyWebAudioDsp extends IFaustBaseWebAudioDsp {
@@ -761,7 +761,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     /** Split the soundfile names and return an array of names */
     static splitSoundfileNames(input: string): string[] {
         // Trim off the curly braces at the start and end, if present
-        let trimmed = input.replace(/^\{|\}$/g, '');
+        const trimmed = input.replace(/^\{|\}$/g, '');
         // Split the string into an array of strings and remove first and last characters
         return trimmed.split(";").map(str => str.length <= 2 ? '' : str.substring(1, str.length - 1));
     }
@@ -1393,7 +1393,7 @@ export class FaustWebAudioDspVoice {
 
     computeLegato(bufferSize: number, $inputs: number, $outputZero: number, $outputsHalf: number) {
 
-        let size = bufferSize / 2;
+        const size = bufferSize / 2;
 
         // Reset envelops
         this.fGateLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, 0));
@@ -1548,8 +1548,8 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         let oldestDatePlaying = Number.MAX_VALUE;
 
         for (let i = 0; i < this.fInstance.voices; i++) {
-            let curNote = this.fVoiceTable[i].fCurNote;
-            let nextNote = this.fVoiceTable[i].fNextNote;
+            const curNote = this.fVoiceTable[i].fCurNote;
+            const nextNote = this.fVoiceTable[i].fNextNote;
 
             if ((curNote === pitch) || ((curNote === FaustWebAudioDspVoice.kLegatoVoice) && (nextNote === pitch))) {
                 // Keeps oldest playing voice
