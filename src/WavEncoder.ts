@@ -24,10 +24,12 @@ class WavEncoder {
         const numberOfChannels = audioBuffer.length;
         const length = audioBuffer[0].length;
         const { shared, float } = options;
-        const bitDepth = float ? 32 : ((options.bitDepth | 0) || 16);
+        const bitDepth = float ? 32 : options.bitDepth | 0 || 16;
         const byteDepth = bitDepth >> 3;
         const byteLength = length * numberOfChannels * byteDepth;
-        const AB = shared ? (globalThis.SharedArrayBuffer || globalThis.ArrayBuffer) : globalThis.ArrayBuffer;
+        const AB = shared
+            ? globalThis.SharedArrayBuffer || globalThis.ArrayBuffer
+            : globalThis.ArrayBuffer;
         const ab = new AB((44 + byteLength) * Uint8Array.BYTES_PER_ELEMENT);
         const dataView = new DataView(ab);
         const writer = new Writer(dataView);
@@ -46,11 +48,18 @@ class WavEncoder {
         return ab;
     }
     private static writeHeader(writer: Writer, format: Format) {
-        const { formatId, sampleRate, bitDepth, numberOfChannels, length, byteDepth } = format;
-        writer.string("RIFF");
+        const {
+            formatId,
+            sampleRate,
+            bitDepth,
+            numberOfChannels,
+            length,
+            byteDepth
+        } = format;
+        writer.string('RIFF');
         writer.uint32(writer.dataView.byteLength - 8);
-        writer.string("WAVE");
-        writer.string("fmt ");
+        writer.string('WAVE');
+        writer.string('fmt ');
         writer.uint32(16);
         writer.uint16(formatId);
         writer.uint16(numberOfChannels);
@@ -58,11 +67,15 @@ class WavEncoder {
         writer.uint32(sampleRate * numberOfChannels * byteDepth);
         writer.uint16(numberOfChannels * byteDepth);
         writer.uint16(bitDepth);
-        writer.string("data");
+        writer.string('data');
         writer.uint32(length * numberOfChannels * byteDepth);
         return writer.pos;
     }
-    private static writeData(writer: Writer, audioBuffer: Float32Array[], format: Format) {
+    private static writeData(
+        writer: Writer,
+        audioBuffer: Float32Array[],
+        format: Format
+    ) {
         const { bitDepth, float, length, numberOfChannels, symmetric } = format;
         if (bitDepth === 32 && float) {
             const { dataView, pos } = writer;
@@ -80,14 +93,16 @@ class WavEncoder {
             }
             return;
         }
-        const encoderOption = float ? "f" : symmetric ? "s" : "";
-        const methodName = "pcm" + bitDepth + encoderOption;
+        const encoderOption = float ? 'f' : symmetric ? 's' : '';
+        const methodName = 'pcm' + bitDepth + encoderOption;
 
         if (!(writer as any)[methodName]) {
-            throw new TypeError("Not supported bit depth: " + bitDepth);
+            throw new TypeError('Not supported bit depth: ' + bitDepth);
         }
 
-        const write: (value: number) => void = (writer as any)[methodName].bind(writer);
+        const write: (value: number) => void = (writer as any)[methodName].bind(
+            writer
+        );
 
         for (let i = 0; i < length; i++) {
             for (let j = 0; j < numberOfChannels; j++) {
@@ -125,14 +140,14 @@ class Writer {
         value = Math.max(-1, Math.min(value, +1));
         value = (value * 0.5 + 0.5) * 255;
         value = Math.round(value) | 0;
-        this.dataView.setUint8(this.pos, value/* , true*/);
+        this.dataView.setUint8(this.pos, value /* , true*/);
         this.pos += 1;
     }
     pcm8s(valueIn: number) {
         let value = valueIn;
         value = Math.round(value * 128) + 128;
         value = Math.max(0, Math.min(value, 255));
-        this.dataView.setUint8(this.pos, value/* , true*/);
+        this.dataView.setUint8(this.pos, value /* , true*/);
         this.pos += 1;
     }
     pcm16(valueIn: number) {
@@ -156,9 +171,9 @@ class Writer {
         value = value < 0 ? 0x1000000 + value * 8388608 : value * 8388607;
         value = Math.round(value) | 0;
 
-        const x0 = (value >> 0) & 0xFF;
-        const x1 = (value >> 8) & 0xFF;
-        const x2 = (value >> 16) & 0xFF;
+        const x0 = (value >> 0) & 0xff;
+        const x1 = (value >> 8) & 0xff;
+        const x2 = (value >> 16) & 0xff;
 
         this.dataView.setUint8(this.pos + 0, x0);
         this.dataView.setUint8(this.pos + 1, x1);
@@ -170,9 +185,9 @@ class Writer {
         value = Math.round(value * 8388608);
         value = Math.max(-8388608, Math.min(value, 8388607));
 
-        const x0 = (value >> 0) & 0xFF;
-        const x1 = (value >> 8) & 0xFF;
-        const x2 = (value >> 16) & 0xFF;
+        const x0 = (value >> 0) & 0xff;
+        const x1 = (value >> 8) & 0xff;
+        const x2 = (value >> 16) & 0xff;
 
         this.dataView.setUint8(this.pos + 0, x0);
         this.dataView.setUint8(this.pos + 1, x1);

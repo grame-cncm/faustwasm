@@ -1,8 +1,22 @@
-import type { FaustAudioWorkletProcessorCommunicator } from "./FaustAudioWorkletCommunicator";
-import type FaustWasmInstantiator from "./FaustWasmInstantiator";
-import type { FaustBaseWebAudioDsp, FaustWebAudioDspVoice, FaustMonoWebAudioDsp, FaustPolyWebAudioDsp } from "./FaustWebAudioDsp";
-import type { AudioParamDescriptor, AudioWorkletGlobalScope, LooseFaustDspFactory, FaustDspMeta, FaustUIItem } from "./types";
-import type { AudioWorkletGlobalScope as WamAudioWorkletGlobalScope, WamParamMgrSDKBaseModuleScope } from "@webaudiomodules/sdk-parammgr";
+import type { FaustAudioWorkletProcessorCommunicator } from './FaustAudioWorkletCommunicator';
+import type FaustWasmInstantiator from './FaustWasmInstantiator';
+import type {
+    FaustBaseWebAudioDsp,
+    FaustWebAudioDspVoice,
+    FaustMonoWebAudioDsp,
+    FaustPolyWebAudioDsp
+} from './FaustWebAudioDsp';
+import type {
+    AudioParamDescriptor,
+    AudioWorkletGlobalScope,
+    LooseFaustDspFactory,
+    FaustDspMeta,
+    FaustUIItem
+} from './types';
+import type {
+    AudioWorkletGlobalScope as WamAudioWorkletGlobalScope,
+    WamParamMgrSDKBaseModuleScope
+} from '@webaudiomodules/sdk-parammgr';
 
 /**
  * Injected in the string to be compiled on AudioWorkletProcessor side
@@ -13,22 +27,35 @@ export interface FaustData {
     dspMeta: FaustDspMeta;
     poly: boolean;
     effectMeta?: FaustDspMeta;
-};
-export interface FaustAudioWorkletProcessorDependencies<Poly extends boolean = false> {
+}
+export interface FaustAudioWorkletProcessorDependencies<
+    Poly extends boolean = false
+> {
     FaustBaseWebAudioDsp: typeof FaustBaseWebAudioDsp;
-    FaustMonoWebAudioDsp: Poly extends true ? undefined : typeof FaustMonoWebAudioDsp;
-    FaustPolyWebAudioDsp: Poly extends true ? typeof FaustPolyWebAudioDsp : undefined;
-    FaustWebAudioDspVoice: Poly extends true ? typeof FaustWebAudioDspVoice : undefined;
+    FaustMonoWebAudioDsp: Poly extends true
+        ? undefined
+        : typeof FaustMonoWebAudioDsp;
+    FaustPolyWebAudioDsp: Poly extends true
+        ? typeof FaustPolyWebAudioDsp
+        : undefined;
+    FaustWebAudioDspVoice: Poly extends true
+        ? typeof FaustWebAudioDspVoice
+        : undefined;
     FaustWasmInstantiator: typeof FaustWasmInstantiator;
     FaustAudioWorkletProcessorCommunicator: typeof FaustAudioWorkletProcessorCommunicator;
 }
-export interface FaustAudioWorkletNodeOptions<Poly extends boolean = false> extends AudioWorkletNodeOptions {
-    processorOptions: Poly extends true ? FaustPolyAudioWorkletProcessorOptions : FaustMonoAudioWorkletProcessorOptions;
+export interface FaustAudioWorkletNodeOptions<Poly extends boolean = false>
+    extends AudioWorkletNodeOptions {
+    processorOptions: Poly extends true
+        ? FaustPolyAudioWorkletProcessorOptions
+        : FaustMonoAudioWorkletProcessorOptions;
 }
-export interface FaustMonoAudioWorkletNodeOptions extends AudioWorkletNodeOptions {
+export interface FaustMonoAudioWorkletNodeOptions
+    extends AudioWorkletNodeOptions {
     processorOptions: FaustMonoAudioWorkletProcessorOptions;
 }
-export interface FaustPolyAudioWorkletNodeOptions extends AudioWorkletNodeOptions {
+export interface FaustPolyAudioWorkletNodeOptions
+    extends AudioWorkletNodeOptions {
     processorOptions: FaustPolyAudioWorkletProcessorOptions;
 }
 export interface FaustAudioWorkletProcessorOptions {
@@ -38,10 +65,12 @@ export interface FaustAudioWorkletProcessorOptions {
     moduleId?: string;
     instanceId?: string;
 }
-export interface FaustMonoAudioWorkletProcessorOptions extends FaustAudioWorkletProcessorOptions {
+export interface FaustMonoAudioWorkletProcessorOptions
+    extends FaustAudioWorkletProcessorOptions {
     factory: LooseFaustDspFactory;
 }
-export interface FaustPolyAudioWorkletProcessorOptions extends FaustAudioWorkletProcessorOptions {
+export interface FaustPolyAudioWorkletProcessorOptions
+    extends FaustAudioWorkletProcessorOptions {
     voiceFactory: LooseFaustDspFactory;
     mixerModule: WebAssembly.Module;
     voices: number;
@@ -49,8 +78,13 @@ export interface FaustPolyAudioWorkletProcessorOptions extends FaustAudioWorklet
 }
 
 // Dynamic AudioWorkletProcessor code generator
-const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencies: FaustAudioWorkletProcessorDependencies<Poly>, faustData: FaustData, register = true): typeof AudioWorkletProcessor => {
-    const { registerProcessor, AudioWorkletProcessor, sampleRate } = globalThis as unknown as AudioWorkletGlobalScope;
+const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
+    dependencies: FaustAudioWorkletProcessorDependencies<Poly>,
+    faustData: FaustData,
+    register = true
+): typeof AudioWorkletProcessor => {
+    const { registerProcessor, AudioWorkletProcessor, sampleRate } =
+        globalThis as unknown as AudioWorkletGlobalScope;
 
     const {
         FaustBaseWebAudioDsp,
@@ -58,34 +92,56 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         FaustAudioWorkletProcessorCommunicator
     } = dependencies;
 
-    const {
-        processorName,
-        dspName,
-        dspMeta,
-        effectMeta,
-        poly
-    } = faustData;
+    const { processorName, dspName, dspMeta, effectMeta, poly } = faustData;
 
     // Analyse voice JSON to generate AudioParam parameters
-    const analysePolyParameters = (item: FaustUIItem): AudioParamDescriptor | null => {
-        const polyKeywords = ["/gate", "/freq", "/gain", "/key", "/vel", "/velocity"];
-        const isPolyReserved = "address" in item && !!polyKeywords.find(k => item.address.endsWith(k));
+    const analysePolyParameters = (
+        item: FaustUIItem
+    ): AudioParamDescriptor | null => {
+        const polyKeywords = [
+            '/gate',
+            '/freq',
+            '/gain',
+            '/key',
+            '/vel',
+            '/velocity'
+        ];
+        const isPolyReserved =
+            'address' in item &&
+            !!polyKeywords.find((k) => item.address.endsWith(k));
         if (poly && isPolyReserved) return null;
-        if (item.type === "vslider" || item.type === "hslider" || item.type === "nentry") {
-            return { name: item.address, defaultValue: item.init || 0, minValue: item.min || 0, maxValue: item.max || 0 };
-        } else if (item.type === "button" || item.type === "checkbox") {
-            return { name: item.address, defaultValue: item.init || 0, minValue: 0, maxValue: 1 };
+        if (
+            item.type === 'vslider' ||
+            item.type === 'hslider' ||
+            item.type === 'nentry'
+        ) {
+            return {
+                name: item.address,
+                defaultValue: item.init || 0,
+                minValue: item.min || 0,
+                maxValue: item.max || 0
+            };
+        } else if (item.type === 'button' || item.type === 'checkbox') {
+            return {
+                name: item.address,
+                defaultValue: item.init || 0,
+                minValue: 0,
+                maxValue: 1
+            };
         }
         return null;
-    }
+    };
 
     /**
      * Base class for Monophonic and Polyphonic AudioWorkletProcessor
      */
-    abstract class FaustAudioWorkletProcessor<Poly extends boolean = false> extends AudioWorkletProcessor {
-
+    abstract class FaustAudioWorkletProcessor<
+        Poly extends boolean = false
+    > extends AudioWorkletProcessor {
         // Use ! syntax when the field is not defined in the constructor
-        protected fDSPCode!: Poly extends true ? FaustPolyWebAudioDsp : FaustMonoWebAudioDsp;
+        protected fDSPCode!: Poly extends true
+            ? FaustPolyWebAudioDsp
+            : FaustMonoWebAudioDsp;
 
         protected paramValuesCache: Record<string, number> = {};
 
@@ -96,12 +152,15 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             super(options);
 
             // Setup port message handling
-            this.fCommunicator = new FaustAudioWorkletProcessorCommunicator(this.port);
+            this.fCommunicator = new FaustAudioWorkletProcessorCommunicator(
+                this.port
+            );
 
-            const { parameterDescriptors } = (this.constructor as typeof AudioWorkletProcessor);
+            const { parameterDescriptors } = this
+                .constructor as typeof AudioWorkletProcessor;
             parameterDescriptors.forEach((pd) => {
                 this.paramValuesCache[pd.name] = pd.defaultValue || 0;
-            })
+            });
 
             const { moduleId, instanceId } = options.processorOptions;
             if (!moduleId || !instanceId) return;
@@ -114,28 +173,37 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             const callback = (item: FaustUIItem) => {
                 const param = analysePolyParameters(item);
                 if (param) params.push(param);
-            }
+            };
             FaustBaseWebAudioDsp.parseUI(dspMeta.ui, callback);
             // Analyse effect JSON to generate AudioParam parameters
-            if (effectMeta) FaustBaseWebAudioDsp.parseUI(effectMeta.ui, callback);
+            if (effectMeta)
+                FaustBaseWebAudioDsp.parseUI(effectMeta.ui, callback);
             return params;
         }
 
         setupWamEventHandler() {
             if (!this.wamInfo) return;
             const { moduleId, instanceId } = this.wamInfo;
-            const { webAudioModules } = (globalThis as unknown as WamAudioWorkletGlobalScope);
-            const ModuleScope = webAudioModules.getModuleScope(moduleId) as WamParamMgrSDKBaseModuleScope;
-            const paramMgrProcessor = ModuleScope?.paramMgrProcessors?.[instanceId];
+            const { webAudioModules } =
+                globalThis as unknown as WamAudioWorkletGlobalScope;
+            const ModuleScope = webAudioModules.getModuleScope(
+                moduleId
+            ) as WamParamMgrSDKBaseModuleScope;
+            const paramMgrProcessor =
+                ModuleScope?.paramMgrProcessors?.[instanceId];
             if (!paramMgrProcessor) return;
             if (paramMgrProcessor.handleEvent) return;
             paramMgrProcessor.handleEvent = (event) => {
-                if (event.type === "wam-midi") this.midiMessage(event.data.bytes);
+                if (event.type === 'wam-midi')
+                    this.midiMessage(event.data.bytes);
             };
         }
 
-        process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: { [key: string]: Float32Array }) {
-
+        process(
+            inputs: Float32Array[][],
+            outputs: Float32Array[][],
+            parameters: { [key: string]: Float32Array }
+        ) {
             // Update controls (possibly needed for sample accurate control)
             for (const path in parameters) {
                 const [paramValue] = parameters[path];
@@ -163,59 +231,67 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             return this.fDSPCode.compute(inputs[0], outputs[0]);
         }
 
-        protected handleMessageAux(e: MessageEvent) { // use arrow function for binding
+        protected handleMessageAux(e: MessageEvent) {
+            // use arrow function for binding
             const msg = e.data;
 
             switch (msg.type) {
                 // Generic MIDI message
-                case "midi": {
+                case 'midi': {
                     this.midiMessage(msg.data);
                     break;
                 }
                 // Typed MIDI message
-                case "ctrlChange": {
+                case 'ctrlChange': {
                     this.ctrlChange(msg.data[0], msg.data[1], msg.data[2]);
                     break;
                 }
-                case "pitchWheel": {
+                case 'pitchWheel': {
                     this.pitchWheel(msg.data[0], msg.data[1]);
                     break;
                 }
-                case "keyOn": {
+                case 'keyOn': {
                     this.keyOn(msg.data[0], msg.data[1], msg.data[2]);
                     break;
                 }
-                case "keyOff": {
+                case 'keyOff': {
                     this.keyOff(msg.data[0], msg.data[1], msg.data[2]);
                     break;
                 }
                 // Generic data message
-                case "param": {
+                case 'param': {
                     this.setParamValue(msg.data.path, msg.data.value);
                     break;
                 }
                 // Plot handler set on demand
-                case "setPlotHandler": {
+                case 'setPlotHandler': {
                     if (msg.data) {
-                        this.fDSPCode.setPlotHandler((output, index, events) => this.port.postMessage({ type: "plot", value: output, index, events }));
+                        this.fDSPCode.setPlotHandler((output, index, events) =>
+                            this.port.postMessage({
+                                type: 'plot',
+                                value: output,
+                                index,
+                                events
+                            })
+                        );
                     } else {
                         this.fDSPCode.setPlotHandler(null);
                     }
                     break;
                 }
-                case "setupWamEventHandler": {
+                case 'setupWamEventHandler': {
                     this.setupWamEventHandler();
                     break;
                 }
-                case "start": {
+                case 'start': {
                     this.fDSPCode.start();
                     break;
                 }
-                case "stop": {
+                case 'stop': {
                     this.fDSPCode.stop();
                     break;
                 }
-                case "destroy": {
+                case 'destroy': {
                     this.port.close();
                     this.fDSPCode.destroy();
                     break;
@@ -250,11 +326,18 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             this.fDSPCode.keyOff(channel, pitch, velocity);
         }
 
-        protected propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
+        protected propagateAcc(
+            accelerationIncludingGravity: NonNullable<
+                DeviceMotionEvent['accelerationIncludingGravity']
+            >,
+            invert: boolean = false
+        ) {
             this.fDSPCode.propagateAcc(accelerationIncludingGravity, invert);
         }
 
-        protected propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
+        protected propagateGyr(
+            event: Pick<DeviceOrientationEvent, 'alpha' | 'beta' | 'gamma'>
+        ) {
             this.fDSPCode.propagateGyr(event);
         }
     }
@@ -263,55 +346,87 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
      * Monophonic AudioWorkletProcessor
      */
     class FaustMonoAudioWorkletProcessor extends FaustAudioWorkletProcessor<false> {
-
         constructor(options: FaustAudioWorkletNodeOptions) {
             super(options);
-            const { FaustMonoWebAudioDsp } = dependencies as FaustAudioWorkletProcessorDependencies<false>;
+            const { FaustMonoWebAudioDsp } =
+                dependencies as FaustAudioWorkletProcessorDependencies<false>;
             const { factory, sampleSize } = options.processorOptions;
 
-            const instance = FaustWasmInstantiator.createSyncMonoDSPInstance(factory);
+            const instance =
+                FaustWasmInstantiator.createSyncMonoDSPInstance(factory);
 
             // Create Monophonic DSP
-            this.fDSPCode = new FaustMonoWebAudioDsp(instance, sampleRate, sampleSize, 128, factory.soundfiles);
+            this.fDSPCode = new FaustMonoWebAudioDsp(
+                instance,
+                sampleRate,
+                sampleSize,
+                128,
+                factory.soundfiles
+            );
 
             // Setup port message handling
-            this.port.addEventListener("message", this.handleMessageAux);
+            this.port.addEventListener('message', this.handleMessageAux);
             this.port.start();
 
             // Setup output handler
-            this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+            this.fDSPCode.setOutputParamHandler((path, value) =>
+                this.port.postMessage({ path, value, type: 'param' })
+            );
 
             this.fDSPCode.start();
         }
 
-        protected handleMessageAux = (e: MessageEvent) => { // use arrow function for binding
+        protected handleMessageAux = (e: MessageEvent) => {
+            // use arrow function for binding
             super.handleMessageAux(e);
-        }
+        };
     }
 
     /**
      * Polyphonic AudioWorkletProcessor
      */
     class FaustPolyAudioWorkletProcessor extends FaustAudioWorkletProcessor<true> {
-
         constructor(options: FaustPolyAudioWorkletNodeOptions) {
             super(options);
-            const { FaustPolyWebAudioDsp } = dependencies as FaustAudioWorkletProcessorDependencies<true>;
+            const { FaustPolyWebAudioDsp } =
+                dependencies as FaustAudioWorkletProcessorDependencies<true>;
 
-            const { voiceFactory, mixerModule, voices, effectFactory, sampleSize } = options.processorOptions;
+            const {
+                voiceFactory,
+                mixerModule,
+                voices,
+                effectFactory,
+                sampleSize
+            } = options.processorOptions;
 
-            const instance = FaustWasmInstantiator.createSyncPolyDSPInstance(voiceFactory, mixerModule, voices, effectFactory);
+            const instance = FaustWasmInstantiator.createSyncPolyDSPInstance(
+                voiceFactory,
+                mixerModule,
+                voices,
+                effectFactory
+            );
 
-            const soundfiles = { ...effectFactory?.soundfiles, ...voiceFactory.soundfiles };
+            const soundfiles = {
+                ...effectFactory?.soundfiles,
+                ...voiceFactory.soundfiles
+            };
             // Create Polyphonic DSP
-            this.fDSPCode = new FaustPolyWebAudioDsp(instance, sampleRate, sampleSize, 128, soundfiles);
+            this.fDSPCode = new FaustPolyWebAudioDsp(
+                instance,
+                sampleRate,
+                sampleSize,
+                128,
+                soundfiles
+            );
 
             // Setup port message handling
-            this.port.addEventListener("message", this.handleMessageAux);
+            this.port.addEventListener('message', this.handleMessageAux);
             this.port.start();
 
             // Setup output handler
-            this.fDSPCode.setOutputParamHandler((path, value) => this.port.postMessage({ path, value, type: "param" }));
+            this.fDSPCode.setOutputParamHandler((path, value) =>
+                this.port.postMessage({ path, value, type: 'param' })
+            );
 
             this.fDSPCode.start();
         }
@@ -321,21 +436,27 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
             const channel = data[0] & 0xf;
             const data1 = data[1];
             const data2 = data[2];
-            if (cmd === 8 || (cmd === 9 && data2 === 0)) this.keyOff(channel, data1, data2);
+            if (cmd === 8 || (cmd === 9 && data2 === 0))
+                this.keyOff(channel, data1, data2);
             else if (cmd === 9) this.keyOn(channel, data1, data2);
             else super.midiMessage(data);
         }
 
-        protected handleMessageAux = (e: MessageEvent) => { // use arrow function for binding
+        protected handleMessageAux = (e: MessageEvent) => {
+            // use arrow function for binding
             const msg = e.data;
             switch (msg.type) {
-                case "keyOn": this.keyOn(msg.data[0], msg.data[1], msg.data[2]); break;
-                case "keyOff": this.keyOff(msg.data[0], msg.data[1], msg.data[2]); break;
+                case 'keyOn':
+                    this.keyOn(msg.data[0], msg.data[1], msg.data[2]);
+                    break;
+                case 'keyOff':
+                    this.keyOff(msg.data[0], msg.data[1], msg.data[2]);
+                    break;
                 default:
                     super.handleMessageAux(e);
                     break;
             }
-        }
+        };
 
         // Public API
         keyOn(channel: number, pitch: number, velocity: number) {
@@ -351,16 +472,23 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(dependencie
         }
     }
 
-    const Processor = poly ? FaustPolyAudioWorkletProcessor : FaustMonoAudioWorkletProcessor;
+    const Processor = poly
+        ? FaustPolyAudioWorkletProcessor
+        : FaustMonoAudioWorkletProcessor;
     if (register) {
         try {
-            registerProcessor(processorName || dspName || (poly ? "mydsp_poly" : "mydsp"), Processor);
+            registerProcessor(
+                processorName || dspName || (poly ? 'mydsp_poly' : 'mydsp'),
+                Processor
+            );
         } catch (error) {
             console.warn(error);
         }
     }
 
-    return poly ? FaustPolyAudioWorkletProcessor : FaustMonoAudioWorkletProcessor;
-}
+    return poly
+        ? FaustPolyAudioWorkletProcessor
+        : FaustMonoAudioWorkletProcessor;
+};
 
 export default getFaustAudioWorkletProcessor;

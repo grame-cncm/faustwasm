@@ -3,8 +3,17 @@ export type FaustModuleFactory = EmscriptenModuleFactory<FaustModule>;
 export interface FaustModule extends EmscriptenModule {
     ccall: typeof ccall;
     cwrap: typeof cwrap;
-    UTF8ArrayToString(u8Array: number[], ptr: number, maxBytesToRead?: number): string;
-    stringToUTF8Array(str: string, outU8Array: number[], outIdx: number, maxBytesToWrite: number): number;
+    UTF8ArrayToString(
+        u8Array: number[],
+        ptr: number,
+        maxBytesToRead?: number
+    ): string;
+    stringToUTF8Array(
+        str: string,
+        outU8Array: number[],
+        outIdx: number,
+        maxBytesToWrite: number
+    ): number;
     UTF8ToString: typeof UTF8ToString;
     UTF16ToString: typeof UTF16ToString;
     UTF32ToString: typeof UTF32ToString;
@@ -19,7 +28,14 @@ export interface FaustModule extends EmscriptenModule {
     libFaustWasm: new () => LibFaustWasm;
 }
 
-export type FaustInfoType = "help" | "version" | "libdir" | "includedir" | "archdir" | "dspdir" | "pathslist";
+export type FaustInfoType =
+    | 'help'
+    | 'version'
+    | 'libdir'
+    | 'includedir'
+    | 'archdir'
+    | 'dspdir'
+    | 'pathslist';
 
 export interface IntVector {
     size(): number;
@@ -39,7 +55,7 @@ export interface FaustDspWasm {
 export interface LibFaustWasm {
     /**
      * Return the Faust compiler version.
-     * 
+     *
      * @returns the version
      */
     version(): string;
@@ -53,7 +69,12 @@ export interface LibFaustWasm {
      * @param useInternalMemory - tell the compiler to generate static embedded memory or not
      * @returns an opaque reference to the factory
      */
-    createDSPFactory(name: string, code: string, args: string, useInternalMemory: boolean): FaustDspWasm;
+    createDSPFactory(
+        name: string,
+        code: string,
+        args: string,
+        useInternalMemory: boolean
+    ): FaustDspWasm;
 
     /**
      * Delete a dsp factory.
@@ -104,7 +125,7 @@ export interface LibFaustWasm {
     getInfos(what: FaustInfoType): string;
 }
 
-export type FaustDspFactory = Required<LooseFaustDspFactory>
+export type FaustDspFactory = Required<LooseFaustDspFactory>;
 
 /**
  * The Factory structure.
@@ -167,20 +188,29 @@ export interface FaustUIMeta {
     [order: number]: string;
     style?: string; // "knob" | "menu{'Name0':value0;'Name1':value1}" | "radio{'Name0':value0;'Name1':value1}" | "led";
     unit?: string;
-    scale?: "linear" | "exp" | "log";
+    scale?: 'linear' | 'exp' | 'log';
     tooltip?: string;
     hidden?: string;
     [key: string]: string | undefined;
 }
-export type FaustUIGroupType = "vgroup" | "hgroup" | "tgroup";
-export type FaustUIOutputType = "hbargraph" | "vbargraph";
-export type FaustUIInputType = "vslider" | "hslider" | "button" | "checkbox" | "nentry" | "soundfile";
+export type FaustUIGroupType = 'vgroup' | 'hgroup' | 'tgroup';
+export type FaustUIOutputType = 'hbargraph' | 'vbargraph';
+export type FaustUIInputType =
+    | 'vslider'
+    | 'hslider'
+    | 'button'
+    | 'checkbox'
+    | 'nentry'
+    | 'soundfile';
 export interface FaustUIGroup {
     type: FaustUIGroupType;
     label: string;
     items: FaustUIItem[];
 }
-export type FaustUIType = FaustUIGroupType | FaustUIOutputType | FaustUIInputType;
+export type FaustUIType =
+    | FaustUIGroupType
+    | FaustUIOutputType
+    | FaustUIInputType;
 
 export interface AudioParamDescriptor {
     automationRate?: AutomationRate;
@@ -192,18 +222,25 @@ export interface AudioParamDescriptor {
 
 export interface AudioWorkletProcessor {
     port: MessagePort;
-    process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, Float32Array>): boolean;
+    process(
+        inputs: Float32Array[][],
+        outputs: Float32Array[][],
+        parameters: Record<string, Float32Array>
+    ): boolean;
 }
 export declare const AudioWorkletProcessor: {
     prototype: AudioWorkletProcessor;
     parameterDescriptors: AudioParamDescriptor[];
-    new(options: AudioWorkletNodeOptions): AudioWorkletProcessor;
+    new (options: AudioWorkletNodeOptions): AudioWorkletProcessor;
 };
 
 export interface AudioWorkletGlobalScope {
     AudioWorkletGlobalScope: any;
     globalThis: AudioWorkletGlobalScope;
-    registerProcessor: (name: string, constructor: new (options: any) => AudioWorkletProcessor) => void;
+    registerProcessor: (
+        name: string,
+        constructor: new (options: any) => AudioWorkletProcessor
+    ) => void;
     currentFrame: number;
     currentTime: number;
     sampleRate: number;
@@ -211,18 +248,44 @@ export interface AudioWorkletGlobalScope {
 }
 
 export interface InterfaceFFT {
-    forward(arr: ArrayLike<number> | ((arr: Float32Array) => any)): Float32Array;
-    inverse(arr: ArrayLike<number> | ((arr: Float32Array) => any)): Float32Array;
+    forward(
+        arr: ArrayLike<number> | ((arr: Float32Array) => any)
+    ): Float32Array;
+    inverse(
+        arr: ArrayLike<number> | ((arr: Float32Array) => any)
+    ): Float32Array;
     dispose(): void;
 }
 export declare const InterfaceFFT: {
-    new(size: number): InterfaceFFT;
-}
+    new (size: number): InterfaceFFT;
+};
 
-export type TWindowFunction = (index: number, length: number, ...args: any[]) => number;
+export type TWindowFunction = (
+    index: number,
+    length: number,
+    ...args: any[]
+) => number;
 export type Writeable<T> = { -readonly [P in keyof T]: T[P] };
-export type TypedArray = Int8Array | Uint8Array | Int16Array | Uint16Array | Int32Array | Uint32Array | Uint8ClampedArray | Float32Array | Float64Array;
-export type TypedArrayConstructor = typeof Int8Array | typeof Uint8Array | typeof Int16Array | typeof Uint16Array | typeof Int32Array | typeof Uint32Array | typeof Uint8ClampedArray | typeof Float32Array | typeof Float64Array;
+export type TypedArray =
+    | Int8Array
+    | Uint8Array
+    | Int16Array
+    | Uint16Array
+    | Int32Array
+    | Uint32Array
+    | Uint8ClampedArray
+    | Float32Array
+    | Float64Array;
+export type TypedArrayConstructor =
+    | typeof Int8Array
+    | typeof Uint8Array
+    | typeof Int16Array
+    | typeof Uint16Array
+    | typeof Int32Array
+    | typeof Uint32Array
+    | typeof Uint8ClampedArray
+    | typeof Float32Array
+    | typeof Float64Array;
 
 export declare const FFTUtils: {
     /** Inject window functions as array, no need to add rectangular (no windowing) */
@@ -230,12 +293,25 @@ export declare const FFTUtils: {
     /** Get a FFT interface constructor */
     getFFT: () => Promise<typeof InterfaceFFT>;
     /** Convert from FFTed (spectral) signal to three arrays for Faust processor's input, fft is readonly, real/imag/index length = *fftSize* / 2 + 1; fft length depends on the FFT implementation */
-    fftToSignal: (fft: Float32Array | Float64Array, real: Float32Array | Float64Array, imag?: Float32Array | Float64Array, index?: Float32Array | Float64Array) => any;
+    fftToSignal: (
+        fft: Float32Array | Float64Array,
+        real: Float32Array | Float64Array,
+        imag?: Float32Array | Float64Array,
+        index?: Float32Array | Float64Array
+    ) => any;
     /** Convert from Faust processor's output to spectral data for Inversed FFT, real/imag are readonly, real/imag length = *fftSize* / 2 + 1; fft length depends on the FFT implementation */
-    signalToFFT: (real: Float32Array | Float64Array, imag: Float32Array | Float64Array, fft: Float32Array | Float64Array) => any;
+    signalToFFT: (
+        real: Float32Array | Float64Array,
+        imag: Float32Array | Float64Array,
+        fft: Float32Array | Float64Array
+    ) => any;
     /** Convert from Faust processor's output to direct audio output, real/imag are readonly, fft length = fftSize = (real/imag length - 1) * 2 */
-    signalToNoFFT: (real: Float32Array | Float64Array, imag: Float32Array | Float64Array, fft: Float32Array | Float64Array) => any;
-}
+    signalToNoFFT: (
+        real: Float32Array | Float64Array,
+        imag: Float32Array | Float64Array,
+        fft: Float32Array | Float64Array
+    ) => any;
+};
 
 export interface AudioData {
     sampleRate: number;

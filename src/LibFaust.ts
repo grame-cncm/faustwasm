@@ -1,4 +1,4 @@
-import type { FaustModule, LibFaustWasm, FaustInfoType } from "./types";
+import type { FaustModule, LibFaustWasm, FaustInfoType } from './types';
 
 export interface ILibFaust extends LibFaustWasm {
     module(): FaustModule;
@@ -24,8 +24,18 @@ class LibFaust implements ILibFaust {
     version() {
         return this.fCompiler.version();
     }
-    createDSPFactory(name: string, code: string, args: string, useInternalMemory: boolean) {
-        return this.fCompiler.createDSPFactory(name, code, args, useInternalMemory);
+    createDSPFactory(
+        name: string,
+        code: string,
+        args: string,
+        useInternalMemory: boolean
+    ) {
+        return this.fCompiler.createDSPFactory(
+            name,
+            code,
+            args,
+            useInternalMemory
+        );
     }
     deleteDSPFactory(cFactory: number) {
         return this.fCompiler.deleteDSPFactory(cFactory);
@@ -51,7 +61,6 @@ class LibFaust implements ILibFaust {
     toString() {
         return `LibFaust module: ${this.fModule}, compiler: ${this.fCompiler}`;
     }
-
 }
 
 export default LibFaust;

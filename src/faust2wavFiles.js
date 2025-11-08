@@ -1,7 +1,7 @@
 //@ts-check
-import * as fs from "fs";
-import * as path from "path";
-import * as process from "process";
+import * as fs from 'fs';
+import * as path from 'path';
+import * as process from 'process';
 import {
     instantiateFaustModuleFromFile,
     LibFaust,
@@ -9,8 +9,8 @@ import {
     FaustMonoDspGenerator,
     WavDecoder,
     WavEncoder
-} from "../dist/esm/index.js";
-import { fileURLToPath } from "url";
+} from '../dist/esm/index.js';
+import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const __filename = fileURLToPath(import.meta.url);
@@ -25,18 +25,29 @@ const __filename = fileURLToPath(import.meta.url);
  * @param {number} bitDepth
  * @param {string[]} [argv]
  */
-const faust2wavFiles = async (inputFile, inputWav, outputWav, bufferSize = 64, sampleRate = 44100, samples = 5 * sampleRate, bitDepth = 16, argv = []) => {
-    const faustModule = await instantiateFaustModuleFromFile(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
+const faust2wavFiles = async (
+    inputFile,
+    inputWav,
+    outputWav,
+    bufferSize = 64,
+    sampleRate = 44100,
+    samples = 5 * sampleRate,
+    bitDepth = 16,
+    argv = []
+) => {
+    const faustModule = await instantiateFaustModuleFromFile(
+        path.join(__dirname, '../libfaust-wasm/libfaust-wasm.js')
+    );
     const libFaust = new LibFaust(faustModule);
     const compiler = new FaustCompiler(libFaust);
     console.log(`Faust Compiler version: ${compiler.version()}`);
     console.log(`Reading file ${inputFile}`);
-    const code = fs.readFileSync(inputFile, { encoding: "utf8" });
+    const code = fs.readFileSync(inputFile, { encoding: 'utf8' });
     const { name } = path.parse(inputFile);
     const gen = new FaustMonoDspGenerator();
-    await gen.compile(compiler, name, code, argv.join(" "));
+    await gen.compile(compiler, name, code, argv.join(' '));
     const processor = await gen.createOfflineProcessor(sampleRate, bufferSize);
-    if (!processor) throw Error("Processor not generated");
+    if (!processor) throw Error('Processor not generated');
     /** @type {Float32Array[] | undefined} */
     let input = undefined;
     if (inputWav) {
@@ -46,8 +57,10 @@ const faust2wavFiles = async (inputFile, inputWav, outputWav, bufferSize = 64, s
         input = WavDecoder.decode(inputBuffer).channelData;
     }
     console.log(`Processing...`);
-    const output = processor.render(input, samples, sample => process.stdout.write(`\r${sample} / ${samples}`));
-    console.log("");
+    const output = processor.render(input, samples, (sample) =>
+        process.stdout.write(`\r${sample} / ${samples}`)
+    );
+    console.log('');
     console.log(`Encoding...`);
     const outputBuffer = WavEncoder.encode(output, { bitDepth, sampleRate });
     console.log(`Writing output wav file ${outputWav}.`);

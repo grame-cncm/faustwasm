@@ -1,11 +1,31 @@
-import type { FaustMonoDspInstance, FaustPolyDspInstance, IFaustDspInstance } from "./FaustDspInstance";
-import type { AudioData, FaustDspMeta, FaustUIDescriptor, FaustUIGroup, FaustUIInputItem, FaustUIItem, LooseFaustDspFactory } from "./types";
-import FaustSensors, { Axis, Curve, UpdatableValueConverter } from "./FaustSensors";
+import type {
+    FaustMonoDspInstance,
+    FaustPolyDspInstance,
+    IFaustDspInstance
+} from './FaustDspInstance';
+import type {
+    AudioData,
+    FaustDspMeta,
+    FaustUIDescriptor,
+    FaustUIGroup,
+    FaustUIInputItem,
+    FaustUIItem,
+    LooseFaustDspFactory
+} from './types';
+import FaustSensors, {
+    Axis,
+    Curve,
+    UpdatableValueConverter
+} from './FaustSensors';
 
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;
 export type ComputeHandler = (buffer_size: number) => void;
-export type PlotHandler = (plotted: Float32Array[] | Float64Array[], index: number, events?: { type: string; data: any }[]) => void;
+export type PlotHandler = (
+    plotted: Float32Array[] | Float64Array[],
+    index: number,
+    events?: { type: string; data: any }[]
+) => void;
 export type MetadataHandler = (key: string, value: string) => void;
 
 // Implementation API
@@ -25,7 +45,7 @@ export type SensorEventHandlers = {
 export interface AudioBufferItem {
     pathName: string;
     audioBuffer: AudioBuffer;
-};
+}
 
 /** Definition of the SoundfileItem type */
 export interface SoundfileItem {
@@ -37,13 +57,13 @@ export interface SoundfileItem {
     index: number;
     /** Base pointer in wasm memory */
     basePtr: number;
-};
+}
 
 /**
  * WasmAllocator is a basic memory management class designed to allocate
  * blocks of memory within a WebAssembly.Memory object. It provides a simple
  * alloc method to allocate a contiguous block of memory of a specified size.
- * 
+ *
  * The allocator operates by keeping a linear progression through the memory,
  * always allocating the next block at the end of the last. This approach does not
  * handle freeing of memory or reuse of memory spaces.
@@ -65,7 +85,7 @@ export class WasmAllocator {
      * Allocates a block of memory of the specified size, returning the pointer to the
      * beginning of the block. The block is allocated at the current offset and the
      * offset is incremented by the size of the block.
-     * 
+     *
      * @param sizeInBytes The size of the block to allocate in bytes.
      * @returns The offset (pointer) to the beginning of the allocated block.
      */
@@ -81,7 +101,9 @@ export class WasmAllocator {
         if (newOffset > totalMemoryBytes) {
             // Calculate the number of WebAssembly pages needed to fit the new allocation.
             // WebAssembly memory pages are 64KiB each.
-            const neededPages = Math.ceil((newOffset - totalMemoryBytes) / 65536);
+            const neededPages = Math.ceil(
+                (newOffset - totalMemoryBytes) / 65536
+            );
             // Grow the memory by the required number of pages.
             console.log(`GROW: ${neededPages} pages`);
             this.memory.grow(neededPages);
@@ -95,7 +117,7 @@ export class WasmAllocator {
 
     /**
      * Returns the underlying buffer object.
-     * 
+     *
      * @returns The buffer object.
      */
     getBuffer(): ArrayBuffer {
@@ -104,7 +126,7 @@ export class WasmAllocator {
 
     /**
      * Returns the Int32 view of the underlying buffer object.
-     * 
+     *
      * @returns The view of the memory buffer as Int32Array.
      */
     getInt32Array(): Int32Array {
@@ -113,7 +135,7 @@ export class WasmAllocator {
 
     /**
      * Returns the Int64 view of the underlying buffer object.
-     * 
+     *
      * @returns The view of the memory buffer as BigInt64Array.
      */
     getInt64Array(): BigInt64Array {
@@ -122,7 +144,7 @@ export class WasmAllocator {
 
     /**
      * Returns the Float32 view of the underlying buffer object.
-     * 
+     *
      * @returns The view of the memory buffer as Float32Array.
      */
     getFloat32Array(): Float32Array {
@@ -131,7 +153,7 @@ export class WasmAllocator {
 
     /**
      * Returns the Float64 view of the underlying buffer object..
-     * 
+     *
      * @returns The view of the memory buffer as Float64Array.
      */
     getFloat64Array(): Float64Array {
@@ -144,16 +166,24 @@ export class WasmAllocator {
  */
 export class Soundfile {
     /** Maximum number of soundfile parts. */
-    static get MAX_SOUNDFILE_PARTS() { return 256; }
+    static get MAX_SOUNDFILE_PARTS() {
+        return 256;
+    }
 
     /** Maximum number of channels. */
-    static get MAX_CHAN() { return 64; }
+    static get MAX_CHAN() {
+        return 64;
+    }
 
     /** Maximum buffer size in frames. */
-    static get BUFFER_SIZE() { return 1024; }
+    static get BUFFER_SIZE() {
+        return 1024;
+    }
 
     /** Default sample rate. */
-    static get SAMPLE_RATE() { return 44100; }
+    static get SAMPLE_RATE() {
+        return 44100;
+    }
 
     /** Pointer to the soundfile structure in wasm memory */
     private readonly fPtr: number;
@@ -166,8 +196,14 @@ export class Soundfile {
     private readonly fIntSize: number;
     private readonly fAllocator: WasmAllocator;
 
-    constructor(allocator: WasmAllocator, sampleSize: number, curChan: number, length: number, maxChan: number, totalParts: number) {
-
+    constructor(
+        allocator: WasmAllocator,
+        sampleSize: number,
+        curChan: number,
+        length: number,
+        maxChan: number,
+        totalParts: number
+    ) {
         this.fSampleSize = sampleSize;
 
         // To be coherent with the code generated by the wast/wasm backends:
@@ -175,19 +211,27 @@ export class Soundfile {
         // - that uses 8 bytes for int when double is used (to simplify the code generation)
         this.fIntSize = this.fSampleSize;
 
-        this.fPtrSize = 4;  // Not related to float/double choice, so always 4
+        this.fPtrSize = 4; // Not related to float/double choice, so always 4
 
         this.fAllocator = allocator;
 
-        console.log(`Soundfile constructor: curChan: ${curChan}, length: ${length}, maxChan: ${maxChan}, totalParts: ${totalParts}`);
+        console.log(
+            `Soundfile constructor: curChan: ${curChan}, length: ${length}, maxChan: ${maxChan}, totalParts: ${totalParts}`
+        );
 
         // Allocate wasm memory for the soundfile structure
         this.fPtr = allocator.alloc(4 * this.fPtrSize); // 4 fPtrSize: fBuffers, fLength, fSR, fOffset
 
         // Use the 4 or 8 bytes size for int. The access are then adapted in copyToOut and emptyFile methods
-        this.fLength = allocator.alloc(Soundfile.MAX_SOUNDFILE_PARTS * this.fIntSize);
-        this.fSR = allocator.alloc(Soundfile.MAX_SOUNDFILE_PARTS * this.fIntSize);
-        this.fOffset = allocator.alloc(Soundfile.MAX_SOUNDFILE_PARTS * this.fIntSize);
+        this.fLength = allocator.alloc(
+            Soundfile.MAX_SOUNDFILE_PARTS * this.fIntSize
+        );
+        this.fSR = allocator.alloc(
+            Soundfile.MAX_SOUNDFILE_PARTS * this.fIntSize
+        );
+        this.fOffset = allocator.alloc(
+            Soundfile.MAX_SOUNDFILE_PARTS * this.fIntSize
+        );
 
         this.fBuffers = this.allocBuffers(curChan, length, maxChan);
 
@@ -197,8 +241,8 @@ export class Soundfile {
         const HEAP32 = this.fAllocator.getInt32Array();
         HEAP32[this.fPtr >> 2] = this.fBuffers;
         HEAP32[(this.fPtr + this.fPtrSize) >> 2] = this.fLength;
-        HEAP32[(this.fPtr + (2 * this.fPtrSize)) >> 2] = this.fSR;
-        HEAP32[(this.fPtr + (3 * this.fPtrSize)) >> 2] = this.fOffset;
+        HEAP32[(this.fPtr + 2 * this.fPtrSize) >> 2] = this.fSR;
+        HEAP32[(this.fPtr + 3 * this.fPtrSize) >> 2] = this.fOffset;
 
         for (let chan = 0; chan < curChan; chan++) {
             const buffer: number = HEAP32[(this.fBuffers >> 2) + chan];
@@ -208,13 +252,19 @@ export class Soundfile {
         //this.displayMemory("Allocated soundfile structure 2");
     }
 
-    private allocBuffers(curChan: number, length: number, maxChan: number): number {
+    private allocBuffers(
+        curChan: number,
+        length: number,
+        maxChan: number
+    ): number {
         const buffers = this.fAllocator.alloc(maxChan * this.fPtrSize);
 
         console.log(`allocBuffers buffers: ${buffers}`);
 
         for (let chan = 0; chan < curChan; chan++) {
-            const buffer: number = this.fAllocator.alloc(length * this.fSampleSize);
+            const buffer: number = this.fAllocator.alloc(
+                length * this.fSampleSize
+            );
             // HEAP32 is the Int32Array view of the memory buffer which can change after grow in `alloc` method
             // so we need to recompute the buffer address
             const HEAP32 = this.fAllocator.getInt32Array();
@@ -228,25 +278,40 @@ export class Soundfile {
         // Share the same buffers for all other channels so that we have maxChan channels available
         const HEAP32 = this.fAllocator.getInt32Array();
         for (let chan = curChan; chan < maxChan; chan++) {
-            HEAP32[(this.fBuffers >> 2) + chan] = HEAP32[(this.fBuffers >> 2) + chan % curChan];
+            HEAP32[(this.fBuffers >> 2) + chan] =
+                HEAP32[(this.fBuffers >> 2) + (chan % curChan)];
         }
     }
 
-    copyToOut(part: number, maxChannels: number, offset: number, audioData: AudioData) {
+    copyToOut(
+        part: number,
+        maxChannels: number,
+        offset: number,
+        audioData: AudioData
+    ) {
         // Set the soundfile fields in wasm memory
         if (this.fIntSize === 4) {
             const HEAP32 = this.fAllocator.getInt32Array();
-            HEAP32[(this.fLength >> Math.log2(this.fIntSize)) + part] = audioData.audioBuffer[0].length;
-            HEAP32[(this.fSR >> Math.log2(this.fIntSize)) + part] = audioData.sampleRate;
+            HEAP32[(this.fLength >> Math.log2(this.fIntSize)) + part] =
+                audioData.audioBuffer[0].length;
+            HEAP32[(this.fSR >> Math.log2(this.fIntSize)) + part] =
+                audioData.sampleRate;
             HEAP32[(this.fOffset >> Math.log2(this.fIntSize)) + part] = offset;
         } else {
             const HEAP64 = this.fAllocator.getInt64Array();
-            HEAP64[(this.fLength >> Math.log2(this.fIntSize)) + part] = BigInt(audioData.audioBuffer[0].length);
-            HEAP64[(this.fSR >> Math.log2(this.fIntSize)) + part] = BigInt(audioData.sampleRate);
-            HEAP64[(this.fOffset >> Math.log2(this.fIntSize)) + part] = BigInt(offset);
+            HEAP64[(this.fLength >> Math.log2(this.fIntSize)) + part] = BigInt(
+                audioData.audioBuffer[0].length
+            );
+            HEAP64[(this.fSR >> Math.log2(this.fIntSize)) + part] = BigInt(
+                audioData.sampleRate
+            );
+            HEAP64[(this.fOffset >> Math.log2(this.fIntSize)) + part] =
+                BigInt(offset);
         }
 
-        console.log(`copyToOut: part: ${part}, maxChannels: ${maxChannels}, offset: ${offset}, buffer: ${audioData}`);
+        console.log(
+            `copyToOut: part: ${part}, maxChannels: ${maxChannels}, offset: ${offset}, buffer: ${audioData}`
+        );
 
         //this.displayMemory("IN copyToOut, BEFORE copyToOutReal", true);
         // Copy the soundfile data to the buffer
@@ -264,11 +329,21 @@ export class Soundfile {
         for (let chan = 0; chan < audioData.audioBuffer.length; chan++) {
             const input: Float32Array = audioData.audioBuffer[chan];
             const output: number = HEAP32[(this.fBuffers >> 2) + chan];
-            const begin: number = (output + (offset * this.fSampleSize)) >> Math.log2(this.fSampleSize);
-            const end: number = (output + (offset + input.length) * this.fSampleSize) >> Math.log2(this.fSampleSize);
-            console.log(`copyToOutReal32 begin: ${begin}, end: ${end}, delta: ${end - begin}`);
-            const outputReal: Float32Array = HEAPF.subarray((output + (offset * this.fSampleSize)) >> Math.log2(this.fSampleSize),
-                (output + (offset + input.length) * this.fSampleSize) >> Math.log2(this.fSampleSize));
+            const begin: number =
+                (output + offset * this.fSampleSize) >>
+                Math.log2(this.fSampleSize);
+            const end: number =
+                (output + (offset + input.length) * this.fSampleSize) >>
+                Math.log2(this.fSampleSize);
+            console.log(
+                `copyToOutReal32 begin: ${begin}, end: ${end}, delta: ${end - begin}`
+            );
+            const outputReal: Float32Array = HEAPF.subarray(
+                (output + offset * this.fSampleSize) >>
+                    Math.log2(this.fSampleSize),
+                (output + (offset + input.length) * this.fSampleSize) >>
+                    Math.log2(this.fSampleSize)
+            );
             for (let sample = 0; sample < input.length; sample++) {
                 outputReal[sample] = input[sample];
             }
@@ -281,11 +356,21 @@ export class Soundfile {
         for (let chan = 0; chan < audioData.audioBuffer.length; chan++) {
             const input: Float32Array = audioData.audioBuffer[chan];
             const output: number = HEAP32[(this.fBuffers >> 2) + chan];
-            const begin: number = (output + (offset * this.fSampleSize)) >> Math.log2(this.fSampleSize);
-            const end: number = (output + (offset + input.length) * this.fSampleSize) >> Math.log2(this.fSampleSize);
-            console.log(`copyToOutReal64 begin: ${begin}, end: ${end}, delta: ${end - begin}`);
-            const outputReal: Float64Array = HEAPF.subarray((output + (offset * this.fSampleSize)) >> Math.log2(this.fSampleSize),
-                (output + (offset + input.length) * this.fSampleSize) >> Math.log2(this.fSampleSize));
+            const begin: number =
+                (output + offset * this.fSampleSize) >>
+                Math.log2(this.fSampleSize);
+            const end: number =
+                (output + (offset + input.length) * this.fSampleSize) >>
+                Math.log2(this.fSampleSize);
+            console.log(
+                `copyToOutReal64 begin: ${begin}, end: ${end}, delta: ${end - begin}`
+            );
+            const outputReal: Float64Array = HEAPF.subarray(
+                (output + offset * this.fSampleSize) >>
+                    Math.log2(this.fSampleSize),
+                (output + (offset + input.length) * this.fSampleSize) >>
+                    Math.log2(this.fSampleSize)
+            );
             for (let sample = 0; sample < input.length; sample++) {
                 outputReal[sample] = input[sample];
             }
@@ -296,22 +381,29 @@ export class Soundfile {
         // Set the soundfile fields in wasm memory
         if (this.fIntSize === 4) {
             const HEAP32 = this.fAllocator.getInt32Array();
-            HEAP32[(this.fLength >> Math.log2(this.fIntSize)) + part] = Soundfile.BUFFER_SIZE;
-            HEAP32[(this.fSR >> Math.log2(this.fIntSize)) + part] = Soundfile.SAMPLE_RATE;
+            HEAP32[(this.fLength >> Math.log2(this.fIntSize)) + part] =
+                Soundfile.BUFFER_SIZE;
+            HEAP32[(this.fSR >> Math.log2(this.fIntSize)) + part] =
+                Soundfile.SAMPLE_RATE;
             HEAP32[(this.fOffset >> Math.log2(this.fIntSize)) + part] = offset;
         } else {
             const HEAP64 = this.fAllocator.getInt64Array();
-            HEAP64[(this.fLength >> Math.log2(this.fIntSize)) + part] = BigInt(Soundfile.BUFFER_SIZE);
-            HEAP64[(this.fSR >> Math.log2(this.fIntSize)) + part] = BigInt(Soundfile.SAMPLE_RATE);
-            HEAP64[(this.fOffset >> Math.log2(this.fIntSize)) + part] = BigInt(offset);
+            HEAP64[(this.fLength >> Math.log2(this.fIntSize)) + part] = BigInt(
+                Soundfile.BUFFER_SIZE
+            );
+            HEAP64[(this.fSR >> Math.log2(this.fIntSize)) + part] = BigInt(
+                Soundfile.SAMPLE_RATE
+            );
+            HEAP64[(this.fOffset >> Math.log2(this.fIntSize)) + part] =
+                BigInt(offset);
         }
 
         // Update and return the new offset
         return offset + Soundfile.BUFFER_SIZE;
     }
 
-    displayMemory(where: string = "", mem: boolean = false) {
-        console.log("Soundfile memory: " + where);
+    displayMemory(where: string = '', mem: boolean = false) {
+        console.log('Soundfile memory: ' + where);
         console.log(`fPtr: ${this.fPtr}`);
         console.log(`fBuffers: ${this.fBuffers}`);
         console.log(`fLength: ${this.fLength}`);
@@ -320,9 +412,15 @@ export class Soundfile {
         const HEAP32 = this.fAllocator.getInt32Array();
         if (mem) console.log(`HEAP32: ${HEAP32}`);
         console.log(`HEAP32[this.fPtr >> 2]: ${HEAP32[this.fPtr >> 2]}`);
-        console.log(`HEAP32[(this.fPtr + ptrSize) >> 2]: ${HEAP32[(this.fPtr + this.fPtrSize) >> 2]}`);
-        console.log(`HEAP32[(this.fPtr + 2 * ptrSize) >> 2]: ${HEAP32[(this.fPtr + 2 * this.fPtrSize) >> 2]}`);
-        console.log(`HEAP32[(this.fPtr + 3 * ptrSize) >> 2]: ${HEAP32[(this.fPtr + 3 * this.fPtrSize) >> 2]}`);
+        console.log(
+            `HEAP32[(this.fPtr + ptrSize) >> 2]: ${HEAP32[(this.fPtr + this.fPtrSize) >> 2]}`
+        );
+        console.log(
+            `HEAP32[(this.fPtr + 2 * ptrSize) >> 2]: ${HEAP32[(this.fPtr + 2 * this.fPtrSize) >> 2]}`
+        );
+        console.log(
+            `HEAP32[(this.fPtr + 3 * ptrSize) >> 2]: ${HEAP32[(this.fPtr + 3 * this.fPtrSize) >> 2]}`
+        );
     }
 
     // Return the pointer to the soundfile structure in wasm memory
@@ -345,7 +443,7 @@ export class Soundfile {
 /**
  * DSP implementation that mimic the C++ 'dsp' class:
  * - adding MIDI control: metadata are decoded and incoming MIDI messages will control the associated controllers
- * - an output handler can be set to treat produced output controllers (like 'bargraph') 
+ * - an output handler can be set to treat produced output controllers (like 'bargraph')
  * - regular controllers are handled using setParamValue/getParamValue and getParams methods
  */
 export interface IFaustBaseWebAudioDsp {
@@ -365,7 +463,7 @@ export interface IFaustBaseWebAudioDsp {
 
     /**
      * Call the output parameter handler with a path and value.
-     * 
+     *
      * @param path - the path to the wanted parameter (retrieved using 'getParams' method)
      * @param value - the float value for the wanted control
      */
@@ -455,17 +553,17 @@ export interface IFaustBaseWebAudioDsp {
 
     /**
      * Handle MIDI keyOn messages.
-     * @param channel 
-     * @param pitch 
-     * @param velocity 
+     * @param channel
+     * @param pitch
+     * @param velocity
      */
     keyOn(channel: number, pitch: number, velocity: number): void;
 
     /**
      * Handle MIDI keyOn messages.
-     * @param channel 
-     * @param pitch 
-     * @param velocity 
+     * @param channel
+     * @param pitch
+     * @param velocity
      */
     keyOff(channel: number, pitch: number, velocity: number): void;
 
@@ -508,10 +606,10 @@ export interface IFaustBaseWebAudioDsp {
     getUI(): FaustUIDescriptor;
 
     /**
-    * Get DSP UI items description.
-    *
-    * @return the DSP UI items description
-    */
+     * Get DSP UI items description.
+     *
+     * @return the DSP UI items description
+     */
     getDescriptors(): FaustUIInputItem[];
 
     /**
@@ -522,8 +620,8 @@ export interface IFaustBaseWebAudioDsp {
     getJSON(): string;
 
     /**
-    * Start accelerometer and gyroscope handlers.
-    */
+     * Start accelerometer and gyroscope handlers.
+     */
     startSensors(): void;
 
     /**
@@ -534,24 +632,31 @@ export interface IFaustBaseWebAudioDsp {
     /** Indicating if the DSP handles the accelerometer */
     readonly hasAccInput: boolean;
 
-    /** 
+    /**
      * Accelerometer handling.
      * accelerationIncludingGravity: DeviceMotionEvent["accelerationIncludingGravity"]
      * invert: boolean
      */
-    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean): void;
+    propagateAcc(
+        accelerationIncludingGravity: NonNullable<
+            DeviceMotionEvent['accelerationIncludingGravity']
+        >,
+        invert: boolean
+    ): void;
 
     /** Indicating if the DSP handles the gyroscope */
     readonly hasGyrInput: boolean;
 
-    /** 
+    /**
      * Gyroscope handling.
      * event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">
      */
-    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">): void;
+    propagateGyr(
+        event: Pick<DeviceOrientationEvent, 'alpha' | 'beta' | 'gamma'>
+    ): void;
 
     /**
-     * Start the DSP audio processing. 
+     * Start the DSP audio processing.
      */
     start(): void;
 
@@ -566,8 +671,10 @@ export interface IFaustBaseWebAudioDsp {
     destroy(): void;
 }
 
-export type IFaustMonoWebAudioDsp = IFaustBaseWebAudioDsp
-export interface IFaustMonoWebAudioNode extends IFaustMonoWebAudioDsp, AudioNode { }
+export type IFaustMonoWebAudioDsp = IFaustBaseWebAudioDsp;
+export interface IFaustMonoWebAudioNode
+    extends IFaustMonoWebAudioDsp,
+        AudioNode {}
 
 export interface IFaustPolyWebAudioDsp extends IFaustBaseWebAudioDsp {
     /**
@@ -595,7 +702,9 @@ export interface IFaustPolyWebAudioDsp extends IFaustBaseWebAudioDsp {
      */
     allNotesOff(hard: boolean): void;
 }
-export interface IFaustPolyWebAudioNode extends IFaustPolyWebAudioDsp, AudioNode { }
+export interface IFaustPolyWebAudioNode
+    extends IFaustPolyWebAudioDsp,
+        AudioNode {}
 
 export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fOutputHandler: OutputParamHandler | null = null;
@@ -618,7 +727,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 
     // Soundfile handling
     protected fSoundfiles: SoundfileItem[] = [];
-    protected fSoundfileBuffers: LooseFaustDspFactory["soundfiles"] = {};
+    protected fSoundfileBuffers: LooseFaustDspFactory['soundfiles'] = {};
     /** Keep the end of memory offset before soundfiles */
     protected fEndMemory: number;
 
@@ -635,20 +744,51 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fSampleSize: number;
 
     // MIDI handling
-    protected fPitchwheelLabel: { path: string; chan: number; min: number; max: number }[] = [];
-    protected fCtrlLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
+    protected fPitchwheelLabel: {
+        path: string;
+        chan: number;
+        min: number;
+        max: number;
+    }[] = [];
+    protected fCtrlLabel: {
+        path: string;
+        chan: number;
+        min: number;
+        max: number;
+    }[][] = new Array(128).fill(null).map(() => []);
     // array of MIDI key handlers; array index is the MIDI note number
-    protected fMidiKeyLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
-    protected fMidiKeyOnLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
-    protected fMidiKeyOffLabel: { path: string; chan: number; min: number; max: number }[][] = new Array(128).fill(null).map(() => []);
+    protected fMidiKeyLabel: {
+        path: string;
+        chan: number;
+        min: number;
+        max: number;
+    }[][] = new Array(128).fill(null).map(() => []);
+    protected fMidiKeyOnLabel: {
+        path: string;
+        chan: number;
+        min: number;
+        max: number;
+    }[][] = new Array(128).fill(null).map(() => []);
+    protected fMidiKeyOffLabel: {
+        path: string;
+        chan: number;
+        min: number;
+        max: number;
+    }[][] = new Array(128).fill(null).map(() => []);
 
     protected fPathTable: { [address: string]: number } = {};
     protected fUICallback: UIHandler = (item: FaustUIItem) => {
-        if (item.type === "hbargraph" || item.type === "vbargraph") {
+        if (item.type === 'hbargraph' || item.type === 'vbargraph') {
             // Keep bargraph adresses
             this.fOutputsItems.push(item.address);
             this.fPathTable[item.address] = item.index;
-        } else if (item.type === "vslider" || item.type === "hslider" || item.type === "button" || item.type === "checkbox" || item.type === "nentry") {
+        } else if (
+            item.type === 'vslider' ||
+            item.type === 'hslider' ||
+            item.type === 'button' ||
+            item.type === 'checkbox' ||
+            item.type === 'nentry'
+        ) {
             // Keep inputs adresses
             this.fInputsItems.push(item.address);
             this.fPathTable[item.address] = item.index;
@@ -659,14 +799,24 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                 // Parse 'midi' metadata
                 if (midi) {
                     const strMidi = midi.trim();
-                    if (strMidi === "pitchwheel") {
+                    if (strMidi === 'pitchwheel') {
                         const matched = strMidi.match(/^pitchwheel\s(\d+)/);
                         // "pitchwheel chan"
                         if (matched) {
-                            this.fPitchwheelLabel.push({ path: item.address, chan: parseInt(matched[1]), min: item.min as number, max: item.max as number });
+                            this.fPitchwheelLabel.push({
+                                path: item.address,
+                                chan: parseInt(matched[1]),
+                                min: item.min as number,
+                                max: item.max as number
+                            });
                             // "pitchwheel"
                         } else {
-                            this.fPitchwheelLabel.push({ path: item.address, chan: 0, min: item.min as number, max: item.max as number });
+                            this.fPitchwheelLabel.push({
+                                path: item.address,
+                                chan: 0,
+                                min: item.min as number,
+                                max: item.max as number
+                            });
                         }
                     } else {
                         // "ctrl num chan"
@@ -674,44 +824,106 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
                         // "ctrl num"
                         const matched1 = strMidi.match(/^ctrl\s(\d+)/);
                         // match `key <note>[ <channel>]`
-                        const matchedKey = strMidi.match(/^key\s+(\d+)(?:\s+(\d+))?$/);
+                        const matchedKey = strMidi.match(
+                            /^key\s+(\d+)(?:\s+(\d+))?$/
+                        );
                         //match `keyon <note>[ <channel>]`
-                        const matchedKeyOn = strMidi.match(/^keyon\s+(\d+)(?:\s+(\d+))?$/);
+                        const matchedKeyOn = strMidi.match(
+                            /^keyon\s+(\d+)(?:\s+(\d+))?$/
+                        );
                         //match `keyoff <note>[ <channel>]`
-                        const matchedKeyOff = strMidi.match(/^keyoff\s+(\d+)(?:\s+(\d+))?$/);
+                        const matchedKeyOff = strMidi.match(
+                            /^keyoff\s+(\d+)(?:\s+(\d+))?$/
+                        );
                         if (matched2) {
-                            this.fCtrlLabel[parseInt(matched2[1])].push({ path: item.address, chan: parseInt(matched2[2]), min: item.min as number, max: item.max as number });
+                            this.fCtrlLabel[parseInt(matched2[1])].push({
+                                path: item.address,
+                                chan: parseInt(matched2[2]),
+                                min: item.min as number,
+                                max: item.max as number
+                            });
                         } else if (matched1) {
-                            this.fCtrlLabel[parseInt(matched1[1])].push({ path: item.address, chan: 0, min: item.min as number, max: item.max as number });
+                            this.fCtrlLabel[parseInt(matched1[1])].push({
+                                path: item.address,
+                                chan: 0,
+                                min: item.min as number,
+                                max: item.max as number
+                            });
                         } else if (matchedKey) {
                             const note = parseInt(matchedKey[1]);
-                            const channel = matchedKey[2] ? parseInt(matchedKey[2]) : 0;
-                            this.fMidiKeyLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1 });
+                            const channel = matchedKey[2]
+                                ? parseInt(matchedKey[2])
+                                : 0;
+                            this.fMidiKeyLabel[note].push({
+                                path: item.address,
+                                chan: channel,
+                                min: (item.min as number) ?? 0,
+                                max: (item.max as number) ?? 1
+                            });
                         } else if (matchedKeyOn) {
                             const note = parseInt(matchedKeyOn[1]);
-                            const channel = matchedKeyOn[2] ? parseInt(matchedKeyOn[2]) : 0;
-                            this.fMidiKeyOnLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1 });
+                            const channel = matchedKeyOn[2]
+                                ? parseInt(matchedKeyOn[2])
+                                : 0;
+                            this.fMidiKeyOnLabel[note].push({
+                                path: item.address,
+                                chan: channel,
+                                min: (item.min as number) ?? 0,
+                                max: (item.max as number) ?? 1
+                            });
                         } else if (matchedKeyOff) {
                             const note = parseInt(matchedKeyOff[1]);
-                            const channel = matchedKeyOff[2] ? parseInt(matchedKeyOff[2]) : 0;
-                            this.fMidiKeyOffLabel[note].push({ path: item.address, chan: channel, min: item.min as number ?? 0, max: item.max as number ?? 1 });
+                            const channel = matchedKeyOff[2]
+                                ? parseInt(matchedKeyOff[2])
+                                : 0;
+                            this.fMidiKeyOffLabel[note].push({
+                                path: item.address,
+                                chan: channel,
+                                min: (item.min as number) ?? 0,
+                                max: (item.max as number) ?? 1
+                            });
                         }
                     }
                 }
 
                 // Parse 'acc' metadata
                 if (acc) {
-                    const numAcc: number[] = acc.trim().split(" ").map(Number);
-                    this.setupAccHandler(item.address, FaustSensors.convertToAxis(numAcc[0]), FaustSensors.convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
+                    const numAcc: number[] = acc.trim().split(' ').map(Number);
+                    this.setupAccHandler(
+                        item.address,
+                        FaustSensors.convertToAxis(numAcc[0]),
+                        FaustSensors.convertToCurve(numAcc[1]),
+                        numAcc[2],
+                        numAcc[3],
+                        numAcc[4],
+                        item.min as number,
+                        item.init as number,
+                        item.max as number
+                    );
                 }
                 // Parse 'gyr' metadata
                 if (gyr) {
-                    const numAcc: number[] = gyr.trim().split(" ").map(Number);
-                    this.setupGyrHandler(item.address, FaustSensors.convertToAxis(numAcc[0]), FaustSensors.convertToCurve(numAcc[1]), numAcc[2], numAcc[3], numAcc[4], item.min as number, item.init as number, item.max as number);
+                    const numAcc: number[] = gyr.trim().split(' ').map(Number);
+                    this.setupGyrHandler(
+                        item.address,
+                        FaustSensors.convertToAxis(numAcc[0]),
+                        FaustSensors.convertToCurve(numAcc[1]),
+                        numAcc[2],
+                        numAcc[3],
+                        numAcc[4],
+                        item.min as number,
+                        item.init as number,
+                        item.max as number
+                    );
                 }
             });
-        } else if (item.type === "soundfile") {
-            this.fSoundfiles.push({ name: item.label, url: item.url, index: item.index, basePtr: -1 });
+        } else if (item.type === 'soundfile') {
+            this.fSoundfiles.push({
+                name: item.label,
+                url: item.url,
+                index: item.index,
+                basePtr: -1
+            });
         }
     };
 
@@ -722,7 +934,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 
     protected fJSONDsp!: FaustDspMeta;
 
-    constructor(sampleSize: number, bufferSize: number, soundfiles: LooseFaustDspFactory["soundfiles"]) {
+    constructor(
+        sampleSize: number,
+        bufferSize: number,
+        soundfiles: LooseFaustDspFactory['soundfiles']
+    ) {
         this.fBufferSize = bufferSize;
         this.fPtrSize = sampleSize; // Done on wast/wasm backend side
         this.fSampleSize = sampleSize;
@@ -732,26 +948,45 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
 
     // Tools
-    static remap(v: number, mn0: number, mx0: number, mn1: number, mx1: number) {
-        return (v - mn0) / (mx0 - mn0) * (mx1 - mn1) + mn1;
+    static remap(
+        v: number,
+        mn0: number,
+        mx0: number,
+        mn1: number,
+        mx1: number
+    ) {
+        return ((v - mn0) / (mx0 - mn0)) * (mx1 - mn1) + mn1;
     }
 
     // JSON parsing functions
-    static parseUI(ui: FaustUIDescriptor, callback: (item: FaustUIItem) => any) {
-        ui.forEach(group => this.parseGroup(group, callback));
+    static parseUI(
+        ui: FaustUIDescriptor,
+        callback: (item: FaustUIItem) => any
+    ) {
+        ui.forEach((group) => this.parseGroup(group, callback));
     }
 
-    static parseGroup(group: FaustUIGroup, callback: (item: FaustUIItem) => any) {
+    static parseGroup(
+        group: FaustUIGroup,
+        callback: (item: FaustUIItem) => any
+    ) {
         if (group.items) {
             this.parseItems(group.items, callback);
         }
     }
-    static parseItems(items: FaustUIItem[], callback: (item: FaustUIItem) => any) {
-        items.forEach(item => this.parseItem(item, callback));
+    static parseItems(
+        items: FaustUIItem[],
+        callback: (item: FaustUIItem) => any
+    ) {
+        items.forEach((item) => this.parseItem(item, callback));
     }
 
     static parseItem(item: FaustUIItem, callback: (item: FaustUIItem) => any) {
-        if (item.type === "vgroup" || item.type === "hgroup" || item.type === "tgroup") {
+        if (
+            item.type === 'vgroup' ||
+            item.type === 'hgroup' ||
+            item.type === 'tgroup'
+        ) {
             this.parseItems(item.items, callback);
         } else {
             callback(item);
@@ -763,80 +998,143 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         // Trim off the curly braces at the start and end, if present
         const trimmed = input.replace(/^\{|\}$/g, '');
         // Split the string into an array of strings and remove first and last characters
-        return trimmed.split(";").map(str => str.length <= 2 ? '' : str.substring(1, str.length - 1));
+        return trimmed
+            .split(';')
+            .map((str) =>
+                str.length <= 2 ? '' : str.substring(1, str.length - 1)
+            );
     }
 
-    get hasAccInput() { return this.fAcc.x.length + this.fAcc.y.length + this.fAcc.z.length > 0; }
-    propagateAcc(accelerationIncludingGravity: NonNullable<DeviceMotionEvent["accelerationIncludingGravity"]>, invert: boolean = false) {
-
+    get hasAccInput() {
+        return this.fAcc.x.length + this.fAcc.y.length + this.fAcc.z.length > 0;
+    }
+    propagateAcc(
+        accelerationIncludingGravity: NonNullable<
+            DeviceMotionEvent['accelerationIncludingGravity']
+        >,
+        invert: boolean = false
+    ) {
         // Get accelerometervalues
         const { x, y, z } = accelerationIncludingGravity;
 
         if (invert) {
             // Call the accelerometer handlers
-            if (x !== null) this.fAcc.x.forEach(handler => handler(-x));
-            if (y !== null) this.fAcc.y.forEach(handler => handler(-y));
-            if (z !== null) this.fAcc.z.forEach(handler => handler(-z));
+            if (x !== null) this.fAcc.x.forEach((handler) => handler(-x));
+            if (y !== null) this.fAcc.y.forEach((handler) => handler(-y));
+            if (z !== null) this.fAcc.z.forEach((handler) => handler(-z));
         } else {
             // Call the accelerometer handlers
-            if (x !== null) this.fAcc.x.forEach(handler => handler(x));
-            if (y !== null) this.fAcc.y.forEach(handler => handler(y));
-            if (z !== null) this.fAcc.z.forEach(handler => handler(z));
+            if (x !== null) this.fAcc.x.forEach((handler) => handler(x));
+            if (y !== null) this.fAcc.y.forEach((handler) => handler(y));
+            if (z !== null) this.fAcc.z.forEach((handler) => handler(z));
         }
     }
 
-    get hasGyrInput() { return this.fGyr.x.length + this.fGyr.y.length + this.fGyr.z.length > 0; }
-    propagateGyr(event: Pick<DeviceOrientationEvent, "alpha" | "beta" | "gamma">) {
-
+    get hasGyrInput() {
+        return this.fGyr.x.length + this.fGyr.y.length + this.fGyr.z.length > 0;
+    }
+    propagateGyr(
+        event: Pick<DeviceOrientationEvent, 'alpha' | 'beta' | 'gamma'>
+    ) {
         // Get gyroscope values
         const { alpha, beta, gamma } = event;
 
         // Call the gyroscope handlers
-        if (alpha !== null) this.fGyr.x.forEach(handler => handler(alpha));
-        if (beta !== null) this.fGyr.y.forEach(handler => handler(beta));
-        if (gamma !== null) this.fGyr.z.forEach(handler => handler(gamma));
+        if (alpha !== null) this.fGyr.x.forEach((handler) => handler(alpha));
+        if (beta !== null) this.fGyr.y.forEach((handler) => handler(beta));
+        if (gamma !== null) this.fGyr.z.forEach((handler) => handler(gamma));
     }
 
     /** Build the accelerometer handler */
-    private setupAccHandler(path: string, axis: Axis, curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number) {
-
-        const handler: UpdatableValueConverter = FaustSensors.buildHandler(curve, amin, amid, amax, min, init, max);
+    private setupAccHandler(
+        path: string,
+        axis: Axis,
+        curve: Curve,
+        amin: number,
+        amid: number,
+        amax: number,
+        min: number,
+        init: number,
+        max: number
+    ) {
+        const handler: UpdatableValueConverter = FaustSensors.buildHandler(
+            curve,
+            amin,
+            amid,
+            amax,
+            min,
+            init,
+            max
+        );
         switch (axis) {
             case Axis.x:
-                this.fAcc.x.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                this.fAcc.x.push((val) =>
+                    this.setParamValue(path, handler.uiToFaust(val))
+                );
                 break;
             case Axis.y:
-                this.fAcc.y.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                this.fAcc.y.push((val) =>
+                    this.setParamValue(path, handler.uiToFaust(val))
+                );
                 break;
             case Axis.z:
-                this.fAcc.z.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                this.fAcc.z.push((val) =>
+                    this.setParamValue(path, handler.uiToFaust(val))
+                );
                 break;
         }
     }
 
     /** Build the gyroscope handler */
-    private setupGyrHandler(path: string, axis: Axis, curve: Curve, amin: number, amid: number, amax: number, min: number, init: number, max: number) {
-
-        const handler: UpdatableValueConverter = FaustSensors.buildHandler(curve, amin, amid, amax, min, init, max);
+    private setupGyrHandler(
+        path: string,
+        axis: Axis,
+        curve: Curve,
+        amin: number,
+        amid: number,
+        amax: number,
+        min: number,
+        init: number,
+        max: number
+    ) {
+        const handler: UpdatableValueConverter = FaustSensors.buildHandler(
+            curve,
+            amin,
+            amid,
+            amax,
+            min,
+            init,
+            max
+        );
         switch (axis) {
             case Axis.x:
-                this.fGyr.x.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                this.fGyr.x.push((val) =>
+                    this.setParamValue(path, handler.uiToFaust(val))
+                );
                 break;
             case Axis.y:
-                this.fGyr.y.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                this.fGyr.y.push((val) =>
+                    this.setParamValue(path, handler.uiToFaust(val))
+                );
                 break;
             case Axis.z:
-                this.fGyr.z.push((val) => this.setParamValue(path, handler.uiToFaust(val)));
+                this.fGyr.z.push((val) =>
+                    this.setParamValue(path, handler.uiToFaust(val))
+                );
                 break;
         }
     }
 
     static extractUrlsFromMeta(dspMeta: FaustDspMeta): string[] {
         // Find the entry with the "soundfiles" key
-        const soundfilesEntry = dspMeta.meta.find(entry => entry.soundfiles !== undefined);
+        const soundfilesEntry = dspMeta.meta.find(
+            (entry) => entry.soundfiles !== undefined
+        );
         // If the entry is found, split the string by semicolon to get the URLs
         if (soundfilesEntry) {
-            return soundfilesEntry.soundfiles.split(";").filter(url => url !== "");
+            return soundfilesEntry.soundfiles
+                .split(';')
+                .filter((url) => url !== '');
         } else {
             return [];
         }
@@ -845,45 +1143,65 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     /**
      * Load a soundfile possibly containing several parts in the DSP struct.
      * Soundfile pointers are located at 'index' offset, to be read in the JSON file.
-     * The DSP struct is located at baseDSP in the wasm memory, 
+     * The DSP struct is located at baseDSP in the wasm memory,
      * either a monophonic DSP, or a voice in a polyphonic context.
-     * 
+     *
      * @param allocator : the wasm memory allocator
      * @param baseDSP : the base DSP in the wasm memory
      * @param name : the name of the soundfile
      * @param url : the url of the soundfile
      */
-    private loadSoundfile(allocator: WasmAllocator, baseDSP: number, name: string, url: string) {
+    private loadSoundfile(
+        allocator: WasmAllocator,
+        baseDSP: number,
+        name: string,
+        url: string
+    ) {
         console.log(`Soundfile ${name} paths: ${url}`);
         const soundfileIds = FaustBaseWebAudioDsp.splitSoundfileNames(url);
-        const item = this.fSoundfiles.find(item => item.url === url);
+        const item = this.fSoundfiles.find((item) => item.url === url);
         if (!item) throw new Error(`Soundfile with ${url} cannot be found !}`);
         // Use the cached Soundfile
         if (item.basePtr !== -1) {
             // Update HEAP32 after soundfile creation
             const HEAP32 = allocator.getInt32Array();
             // Fill the soundfile structure in wasm memory, soundfiles are at the beginning of the DSP memory
-            console.log(`Soundfile CACHE ${url}} : ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`);
+            console.log(
+                `Soundfile CACHE ${url}} : ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`
+            );
             // Soundfile is located at 'index' in the DSP struct, to be added with baseDSP in the wasm memory
             HEAP32[(baseDSP + item.index) >> 2] = item.basePtr;
         } else {
             // Create the soundfiles
-            const soundfile = this.createSoundfile(allocator, soundfileIds, this.fSoundfileBuffers);
+            const soundfile = this.createSoundfile(
+                allocator,
+                soundfileIds,
+                this.fSoundfileBuffers
+            );
             if (soundfile) {
                 // Update HEAP32 after soundfile creation
                 const HEAP32 = soundfile.getHEAP32();
                 // Get the soundfile pointer in wasm memory
                 item.basePtr = soundfile.getPtr();
-                console.log(`Soundfile ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`);
+                console.log(
+                    `Soundfile ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`
+                );
                 // Soundfile is located at 'index' in the DSP struct, to be added with baseDSP in the wasm memory
                 HEAP32[(baseDSP + item.index) >> 2] = item.basePtr;
             } else {
-                console.log(`Soundfile ${name} for ${url} cannot be created !}`);
+                console.log(
+                    `Soundfile ${name} for ${url} cannot be created !}`
+                );
             }
         }
     }
 
-    createSoundfile(allocator: WasmAllocator, soundfileIdList: string[], soundfiles: LooseFaustDspFactory["soundfiles"], maxChan = Soundfile.MAX_CHAN) {
+    createSoundfile(
+        allocator: WasmAllocator,
+        soundfileIdList: string[],
+        soundfiles: LooseFaustDspFactory['soundfiles'],
+        maxChan = Soundfile.MAX_CHAN
+    ) {
         let curChan = 1; // At least one channel
         let totalLength = 0;
 
@@ -904,10 +1222,19 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         }
 
         // Complete with empty parts
-        totalLength += (Soundfile.MAX_SOUNDFILE_PARTS - soundfileIdList.length) * Soundfile.BUFFER_SIZE;
+        totalLength +=
+            (Soundfile.MAX_SOUNDFILE_PARTS - soundfileIdList.length) *
+            Soundfile.BUFFER_SIZE;
 
         // Create the soundfile
-        const soundfile = new Soundfile(allocator, this.fSampleSize, curChan, totalLength, maxChan, soundfileIdList.length);
+        const soundfile = new Soundfile(
+            allocator,
+            this.fSampleSize,
+            curChan,
+            totalLength,
+            maxChan,
+            soundfileIdList.length
+        );
 
         //soundfile.displayMemory("After soundfile creation");
         // Init offset
@@ -931,7 +1258,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         //soundfile.displayMemory("After reading soundfiles");
 
         // Complete with empty parts
-        for (let part = soundfileIdList.length; part < Soundfile.MAX_SOUNDFILE_PARTS; part++) {
+        for (
+            let part = soundfileIdList.length;
+            part < Soundfile.MAX_SOUNDFILE_PARTS;
+            part++
+        ) {
             offset = soundfile.emptyFile(part, offset);
         }
 
@@ -944,30 +1275,38 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 
         return soundfile;
     }
-    /** 
+    /**
      * Init soundfiles memory.
-     * 
+     *
      * @param allocator : the wasm memory allocator
      * @param baseDSP : the DSP struct (either a monophonic DSP of polyphonic voice) base DSP in the wasm memory
-    */
+     */
     protected initSoundfileMemory(allocator: WasmAllocator, baseDSP: number) {
         // Create and fill the soundfile structure
         for (const { name, url } of this.fSoundfiles) {
             this.loadSoundfile(allocator, baseDSP, name, url);
-        };
+        }
     }
 
     protected updateOutputs() {
-        if (this.fOutputsItems.length > 0 && this.fOutputHandler && this.fOutputsTimer-- === 0) {
+        if (
+            this.fOutputsItems.length > 0 &&
+            this.fOutputHandler &&
+            this.fOutputsTimer-- === 0
+        ) {
             this.fOutputsTimer = 5;
-            this.fOutputsItems.forEach(item => this.fOutputHandler?.(item, this.getParamValue(item)));
+            this.fOutputsItems.forEach((item) =>
+                this.fOutputHandler?.(item, this.getParamValue(item))
+            );
         }
     }
 
     // Public API
     metadata(handler: MetadataHandler) {
         if (this.fJSONDsp.meta) {
-            this.fJSONDsp.meta.forEach(meta => handler(Object.keys(meta)[0], meta[Object.keys(meta)[0]]));
+            this.fJSONDsp.meta.forEach((meta) =>
+                handler(Object.keys(meta)[0], meta[Object.keys(meta)[0]])
+            );
         }
     }
 
@@ -985,7 +1324,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         if (this.fOutputHandler) {
             this.fOutputHandler(path, value);
         } else {
-            console.warn("No OutputParamHandler set for this Faust node.");
+            console.warn('No OutputParamHandler set for this Faust node.');
         }
     }
 
@@ -1011,18 +1350,16 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
 
     midiMessage(data: number[] | Uint8Array) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ data, type: "midi" });
+        if (this.fPlotHandler) this.fCachedEvents.push({ data, type: 'midi' });
         const cmd = data[0] >> 4;
         const channel = data[0] & 0xf;
         const data1 = data[1];
         const data2 = data[2];
         if (cmd === 11) return this.ctrlChange(channel, data1, data2);
-        if (cmd === 14) return this.pitchWheel(channel, (data2 * 128.0 + data1));
+        if (cmd === 14) return this.pitchWheel(channel, data2 * 128.0 + data1);
         if (cmd === 9) {
-            if (data2 > 0)
-                return this.keyOn(channel, data1, data2);
-            else
-                return this.keyOff(channel, data1, data2);
+            if (data2 > 0) return this.keyOn(channel, data1, data2);
+            else return this.keyOff(channel, data1, data2);
         }
         if (cmd === 8) {
             return this.keyOff(channel, data1, data2);
@@ -1030,47 +1367,99 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
 
     ctrlChange(channel: number, ctrl: number, value: number) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ type: "ctrlChange", data: [channel, ctrl, value] });
+        if (this.fPlotHandler)
+            this.fCachedEvents.push({
+                type: 'ctrlChange',
+                data: [channel, ctrl, value]
+            });
         if (this.fCtrlLabel[ctrl].length) {
             this.fCtrlLabel[ctrl].forEach((ctrl) => {
                 const { path, chan } = ctrl;
                 if (chan === 0 || channel === chan - 1) {
-                    this.setParamValue(path, FaustBaseWebAudioDsp.remap(value, 0, 127, ctrl.min, ctrl.max));
+                    this.setParamValue(
+                        path,
+                        FaustBaseWebAudioDsp.remap(
+                            value,
+                            0,
+                            127,
+                            ctrl.min,
+                            ctrl.max
+                        )
+                    );
                     // Typically used to reflect parameter change on GUI
-                    if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+                    if (this.fOutputHandler)
+                        this.fOutputHandler(path, this.getParamValue(path));
                 }
             });
         }
     }
 
     keyOn(channel: number, pitch: number, velocity: number) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ type: "keyOn", data: [channel, pitch, velocity] });
+        if (this.fPlotHandler)
+            this.fCachedEvents.push({
+                type: 'keyOn',
+                data: [channel, pitch, velocity]
+            });
         this.fMidiKeyOnLabel[pitch].forEach((key) => {
             const { path, chan } = key;
             if (chan === 0 || channel === chan - 1) {
-                this.setParamValue(path, FaustBaseWebAudioDsp.remap(velocity, 0, 127, key.min, key.max));
+                this.setParamValue(
+                    path,
+                    FaustBaseWebAudioDsp.remap(
+                        velocity,
+                        0,
+                        127,
+                        key.min,
+                        key.max
+                    )
+                );
                 // Typically used to reflect parameter change on GUI
-                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+                if (this.fOutputHandler)
+                    this.fOutputHandler(path, this.getParamValue(path));
             }
         });
         this.fMidiKeyLabel[pitch].forEach((key) => {
             const { path, chan } = key;
             if (chan === 0 || channel === chan - 1) {
-                this.setParamValue(path, FaustBaseWebAudioDsp.remap(velocity, 0, 127, key.min, key.max));
+                this.setParamValue(
+                    path,
+                    FaustBaseWebAudioDsp.remap(
+                        velocity,
+                        0,
+                        127,
+                        key.min,
+                        key.max
+                    )
+                );
                 // Typically used to reflect parameter change on GUI
-                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+                if (this.fOutputHandler)
+                    this.fOutputHandler(path, this.getParamValue(path));
             }
         });
     }
 
     keyOff(channel: number, pitch: number, velocity: number) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ type: "keyOff", data: [channel, pitch, velocity] });
+        if (this.fPlotHandler)
+            this.fCachedEvents.push({
+                type: 'keyOff',
+                data: [channel, pitch, velocity]
+            });
         this.fMidiKeyOffLabel[pitch].forEach((key) => {
             const { path, chan } = key;
             if (chan === 0 || channel === chan - 1) {
-                this.setParamValue(path, FaustBaseWebAudioDsp.remap(velocity, 0, 127, key.min, key.max));
+                this.setParamValue(
+                    path,
+                    FaustBaseWebAudioDsp.remap(
+                        velocity,
+                        0,
+                        127,
+                        key.min,
+                        key.max
+                    )
+                );
                 // Typically used to reflect parameter change on GUI
-                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+                if (this.fOutputHandler)
+                    this.fOutputHandler(path, this.getParamValue(path));
             }
         });
         this.fMidiKeyLabel[pitch].forEach((key) => {
@@ -1078,33 +1467,56 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             if (chan === 0 || channel === chan - 1) {
                 this.setParamValue(path, 0);
                 // Typically used to reflect parameter change on GUI
-                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+                if (this.fOutputHandler)
+                    this.fOutputHandler(path, this.getParamValue(path));
             }
         });
     }
 
     pitchWheel(channel: number, wheel: number) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ type: "pitchWheel", data: [channel, wheel] });
+        if (this.fPlotHandler)
+            this.fCachedEvents.push({
+                type: 'pitchWheel',
+                data: [channel, wheel]
+            });
         this.fPitchwheelLabel.forEach((pw) => {
             const { path, chan } = pw;
             if (chan === 0 || channel === chan - 1) {
-                this.setParamValue(path, FaustBaseWebAudioDsp.remap(wheel, 0, 16383, pw.min, pw.max));
+                this.setParamValue(
+                    path,
+                    FaustBaseWebAudioDsp.remap(wheel, 0, 16383, pw.min, pw.max)
+                );
                 // Typically used to reflect parameter change on GUI
-                if (this.fOutputHandler) this.fOutputHandler(path, this.getParamValue(path));
+                if (this.fOutputHandler)
+                    this.fOutputHandler(path, this.getParamValue(path));
             }
         });
     }
 
-    setParamValue(path: string, value: number) { }
-    getParamValue(path: string) { return 0; }
+    setParamValue(path: string, value: number) {}
+    getParamValue(path: string) {
+        return 0;
+    }
 
-    getParams() { return this.fInputsItems; }
-    getMeta() { return this.fJSONDsp; }
-    getJSON() { return JSON.stringify(this.getMeta()); }
-    getUI() { return this.fJSONDsp.ui; }
-    getDescriptors() { return this.fDescriptor; }
+    getParams() {
+        return this.fInputsItems;
+    }
+    getMeta() {
+        return this.fJSONDsp;
+    }
+    getJSON() {
+        return JSON.stringify(this.getMeta());
+    }
+    getUI() {
+        return this.fJSONDsp.ui;
+    }
+    getDescriptors() {
+        return this.fDescriptor;
+    }
 
-    hasSoundfiles() { return this.fSoundfiles.length > 0; }
+    hasSoundfiles() {
+        return this.fSoundfiles.length > 0;
+    }
 
     startSensors(): void {
         this.startSensors();
@@ -1128,16 +1540,22 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         this.fComputeHandler = null;
         this.fPlotHandler = null;
     }
-
 }
 
-export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaustMonoWebAudioDsp {
-
+export class FaustMonoWebAudioDsp
+    extends FaustBaseWebAudioDsp
+    implements IFaustMonoWebAudioDsp
+{
     private fInstance: FaustMonoDspInstance;
     private fDSP!: number;
 
-    constructor(instance: FaustMonoDspInstance, sampleRate: number, sampleSize: number, bufferSize: number, soundfiles: LooseFaustDspFactory["soundfiles"]) {
-
+    constructor(
+        instance: FaustMonoDspInstance,
+        sampleRate: number,
+        sampleSize: number,
+        bufferSize: number,
+        soundfiles: LooseFaustDspFactory['soundfiles']
+    ) {
         super(sampleSize, bufferSize, soundfiles);
         this.fInstance = instance;
 
@@ -1157,9 +1575,11 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
 
         // Init soundfiles memory is needed
         if (this.fSoundfiles.length > 0) {
-
             // Create memory allocator for soundfiles in wasm memory, starting at the end of DSP memory
-            const allocator = new WasmAllocator(this.fInstance.memory, this.fEndMemory);
+            const allocator = new WasmAllocator(
+                this.fInstance.memory,
+                this.fEndMemory
+            );
 
             // Init soundfiles memory
             this.initSoundfileMemory(allocator, this.fDSP);
@@ -1167,7 +1587,6 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
     }
 
     private initMemory(): number {
-
         // Start of DSP memory: Mono DSP is placed first with index 0
         this.fDSP = 0;
 
@@ -1176,37 +1595,62 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
 
         // Setup audio pointers offset
         this.fAudioInputs = $audio;
-        this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.fPtrSize;
+        this.fAudioOutputs =
+            this.fAudioInputs + this.getNumInputs() * this.fPtrSize;
 
         // Prepare wasm memory layout
-        const $audioInputs = this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize;
-        const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.fSampleSize;
+        const $audioInputs =
+            this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize;
+        const $audioOutputs =
+            $audioInputs +
+            this.getNumInputs() * this.fBufferSize * this.fSampleSize;
         // Compute memory end in bytes
-        const endMemory = $audioOutputs + this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
+        const endMemory =
+            $audioOutputs +
+            this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
 
         // Setup Int32 and Real views of the memory
         const HEAP = this.fInstance.memory.buffer;
         const HEAP32 = new Int32Array(HEAP);
-        const HEAPF = (this.fSampleSize === 4) ? new Float32Array(HEAP) : new Float64Array(HEAP);
+        const HEAPF =
+            this.fSampleSize === 4
+                ? new Float32Array(HEAP)
+                : new Float64Array(HEAP);
 
         if (this.getNumInputs() > 0) {
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.fSampleSize * chan;
+                HEAP32[(this.fAudioInputs >> 2) + chan] =
+                    $audioInputs + this.fBufferSize * this.fSampleSize * chan;
             }
             // Prepare Ins buffer tables
-            const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, (this.fAudioInputs + this.getNumInputs() * this.fPtrSize) >> 2);
+            const dspInChans = HEAP32.subarray(
+                this.fAudioInputs >> 2,
+                (this.fAudioInputs + this.getNumInputs() * this.fPtrSize) >> 2
+            );
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                this.fInChannels[chan] = HEAPF.subarray(dspInChans[chan] >> Math.log2(this.fSampleSize), (dspInChans[chan] + this.fBufferSize * this.fSampleSize) >> Math.log2(this.fSampleSize));
+                this.fInChannels[chan] = HEAPF.subarray(
+                    dspInChans[chan] >> Math.log2(this.fSampleSize),
+                    (dspInChans[chan] + this.fBufferSize * this.fSampleSize) >>
+                        Math.log2(this.fSampleSize)
+                );
             }
         }
         if (this.getNumOutputs() > 0) {
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.fSampleSize * chan;
+                HEAP32[(this.fAudioOutputs >> 2) + chan] =
+                    $audioOutputs + this.fBufferSize * this.fSampleSize * chan;
             }
             // Prepare Out buffer tables
-            const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, (this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize) >> 2);
+            const dspOutChans = HEAP32.subarray(
+                this.fAudioOutputs >> 2,
+                (this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize) >> 2
+            );
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                this.fOutChannels[chan] = HEAPF.subarray(dspOutChans[chan] >> Math.log2(this.fSampleSize), (dspOutChans[chan] + this.fBufferSize * this.fSampleSize) >> Math.log2(this.fSampleSize));
+                this.fOutChannels[chan] = HEAPF.subarray(
+                    dspOutChans[chan] >> Math.log2(this.fSampleSize),
+                    (dspOutChans[chan] + this.fBufferSize * this.fSampleSize) >>
+                        Math.log2(this.fSampleSize)
+                );
             }
         }
 
@@ -1223,8 +1667,14 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
     }
 
     // Public API
-    compute(input: Float32Array[] | ((input: Float32Array[] | Float64Array[]) => any), output: Float32Array[] | ((output: Float32Array[] | Float64Array[]) => any)) {
-
+    compute(
+        input:
+            | Float32Array[]
+            | ((input: Float32Array[] | Float64Array[]) => any),
+        output:
+            | Float32Array[]
+            | ((output: Float32Array[] | Float64Array[]) => any)
+    ) {
         // Check DSP state
         if (this.fDestroyed) return false;
 
@@ -1237,25 +1687,36 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
             this.fFirstCall = false;
         }
 
-        if (typeof input === "function") {
+        if (typeof input === 'function') {
             // Call input callback to avoid array copy
             input(this.fInChannels);
         } else {
             // Check inputs
-            if (this.getNumInputs() > 0 && (!input || !input[0] || input[0].length === 0)) {
+            if (
+                this.getNumInputs() > 0 &&
+                (!input || !input[0] || input[0].length === 0)
+            ) {
                 // console.log("Process input error");
                 return true;
             }
 
             // Check outputs
-            if (this.getNumOutputs() > 0 && typeof output !== "function" && (!output || !output[0] || output[0].length === 0)) {
+            if (
+                this.getNumOutputs() > 0 &&
+                typeof output !== 'function' &&
+                (!output || !output[0] || output[0].length === 0)
+            ) {
                 // console.log("Process output error");
                 return true;
             }
 
             // Copy inputs
             if (input !== undefined) {
-                for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); chan++) {
+                for (
+                    let chan = 0;
+                    chan < Math.min(this.getNumInputs(), input.length);
+                    chan++
+                ) {
                     const dspInput = this.fInChannels[chan];
                     dspInput.set(input[chan]);
                 }
@@ -1265,18 +1726,27 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
 
         // Compute
-        this.fInstance.api.compute(this.fDSP, this.fBufferSize, this.fAudioInputs, this.fAudioOutputs);
+        this.fInstance.api.compute(
+            this.fDSP,
+            this.fBufferSize,
+            this.fAudioInputs,
+            this.fAudioOutputs
+        );
 
         // Update bargraph
         this.updateOutputs();
 
         let forPlot = this.fOutChannels;
-        if (typeof output === "function") {
+        if (typeof output === 'function') {
             // Call output callback to avoid array copy
             output(this.fOutChannels);
         } else {
             // Copy outputs
-            for (let chan = 0; chan < Math.min(this.getNumOutputs(), output.length); chan++) {
+            for (
+                let chan = 0;
+                chan < Math.min(this.getNumOutputs(), output.length);
+                chan++
+            ) {
                 const dspOutput = this.fOutChannels[chan];
                 output[chan].set(dspOutput);
                 // console.log("chan: " + chan + " output: " + dspOutput[0]);
@@ -1284,16 +1754,22 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
             forPlot = output;
         }
 
-        // PlotHandler handling 
+        // PlotHandler handling
         if (this.fPlotHandler) {
-            this.fPlotHandler(forPlot, this.fBufferNum++, (this.fCachedEvents.length ? this.fCachedEvents : undefined));
+            this.fPlotHandler(
+                forPlot,
+                this.fBufferNum++,
+                this.fCachedEvents.length ? this.fCachedEvents : undefined
+            );
             this.fCachedEvents = [];
         }
 
         return true;
     }
 
-    metadata(handler: MetadataHandler) { super.metadata(handler); }
+    metadata(handler: MetadataHandler) {
+        super.metadata(handler);
+    }
 
     getNumInputs() {
         return this.fInstance.api.getNumInputs(this.fDSP);
@@ -1303,34 +1779,62 @@ export class FaustMonoWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
     }
 
     setParamValue(path: string, value: number) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ type: "param", data: { path, value } });
-        this.fInstance.api.setParamValue(this.fDSP, this.fPathTable[path], value);
+        if (this.fPlotHandler)
+            this.fCachedEvents.push({ type: 'param', data: { path, value } });
+        this.fInstance.api.setParamValue(
+            this.fDSP,
+            this.fPathTable[path],
+            value
+        );
     }
     getParamValue(path: string) {
-        return this.fInstance.api.getParamValue(this.fDSP, this.fPathTable[path]);
+        return this.fInstance.api.getParamValue(
+            this.fDSP,
+            this.fPathTable[path]
+        );
     }
 
-    getMeta() { return this.fJSONDsp; }
-    getJSON() { return this.fInstance.json; }
-    getDescriptors() { return this.fDescriptor; }
-    getUI() { return this.fJSONDsp.ui; }
+    getMeta() {
+        return this.fJSONDsp;
+    }
+    getJSON() {
+        return this.fInstance.json;
+    }
+    getDescriptors() {
+        return this.fDescriptor;
+    }
+    getUI() {
+        return this.fJSONDsp.ui;
+    }
 }
 
 export class FaustWebAudioDspVoice {
     // Voice state
-    static get kActiveVoice() { return 0; }
-    static get kFreeVoice() { return -1; }
-    static get kReleaseVoice() { return -2; }
-    static get kLegatoVoice() { return -3; }
-    static get kNoVoice() { return -4; }
-    static get VOICE_STOP_LEVEL() { return 0.00003162; } // -90 db
+    static get kActiveVoice() {
+        return 0;
+    }
+    static get kFreeVoice() {
+        return -1;
+    }
+    static get kReleaseVoice() {
+        return -2;
+    }
+    static get kLegatoVoice() {
+        return -3;
+    }
+    static get kNoVoice() {
+        return -4;
+    }
+    static get VOICE_STOP_LEVEL() {
+        return 0.00003162;
+    } // -90 db
 
     private fFreqLabel: number[] = [];
     private fGateLabel: number[] = [];
     private fGainLabel: number[] = [];
     private fKeyLabel: number[] = [];
     private fVelLabel: number[] = [];
-    private fDSP: number;            // Voice DSP location in wasm memory
+    private fDSP: number; // Voice DSP location in wasm memory
     private fAPI: IFaustDspInstance; // Voice DSP code
     // Accessed by PolyDSPImp class
     fCurNote = FaustWebAudioDspVoice.kFreeVoice;
@@ -1339,28 +1843,41 @@ export class FaustWebAudioDspVoice {
     fDate = 0;
     fLevel = 0;
 
-    constructor($dsp: number, api: IFaustDspInstance, inputItems: string[], pathTable: { [address: string]: number }, sampleRate: number) {
+    constructor(
+        $dsp: number,
+        api: IFaustDspInstance,
+        inputItems: string[],
+        pathTable: { [address: string]: number },
+        sampleRate: number
+    ) {
         this.fDSP = $dsp;
         this.fAPI = api;
         this.fAPI.init(this.fDSP, sampleRate);
         this.extractPaths(inputItems, pathTable);
     }
 
-    static midiToFreq(note: number) { return 440.0 * 2 ** ((note - 69) / 12); }
+    static midiToFreq(note: number) {
+        return 440.0 * 2 ** ((note - 69) / 12);
+    }
 
-    static normalizeVelocity(velocity: number) { return velocity / 127.0; }
+    static normalizeVelocity(velocity: number) {
+        return velocity / 127.0;
+    }
 
-    private extractPaths(inputItems: string[], pathTable: { [address: string]: number }) {
+    private extractPaths(
+        inputItems: string[],
+        pathTable: { [address: string]: number }
+    ) {
         inputItems.forEach((item) => {
-            if (item.endsWith("/gate")) {
+            if (item.endsWith('/gate')) {
                 this.fGateLabel.push(pathTable[item]);
-            } else if (item.endsWith("/freq")) {
+            } else if (item.endsWith('/freq')) {
                 this.fFreqLabel.push(pathTable[item]);
-            } else if (item.endsWith("/key")) {
+            } else if (item.endsWith('/key')) {
                 this.fKeyLabel.push(pathTable[item]);
-            } else if (item.endsWith("/gain")) {
+            } else if (item.endsWith('/gain')) {
                 this.fGainLabel.push(pathTable[item]);
-            } else if (item.endsWith("/vel") && item.endsWith("/velocity")) {
+            } else if (item.endsWith('/vel') && item.endsWith('/velocity')) {
                 this.fVelLabel.push(pathTable[item]);
             }
         });
@@ -1372,18 +1889,38 @@ export class FaustWebAudioDspVoice {
             this.fNextNote = pitch;
             this.fNextVel = velocity;
         } else {
-            this.fFreqLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, FaustWebAudioDspVoice.midiToFreq(pitch)));
-            this.fGateLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, 1));
-            this.fGainLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, FaustWebAudioDspVoice.normalizeVelocity(velocity)));
-            this.fKeyLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, pitch));
-            this.fVelLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, velocity));
+            this.fFreqLabel.forEach((index) =>
+                this.fAPI.setParamValue(
+                    this.fDSP,
+                    index,
+                    FaustWebAudioDspVoice.midiToFreq(pitch)
+                )
+            );
+            this.fGateLabel.forEach((index) =>
+                this.fAPI.setParamValue(this.fDSP, index, 1)
+            );
+            this.fGainLabel.forEach((index) =>
+                this.fAPI.setParamValue(
+                    this.fDSP,
+                    index,
+                    FaustWebAudioDspVoice.normalizeVelocity(velocity)
+                )
+            );
+            this.fKeyLabel.forEach((index) =>
+                this.fAPI.setParamValue(this.fDSP, index, pitch)
+            );
+            this.fVelLabel.forEach((index) =>
+                this.fAPI.setParamValue(this.fDSP, index, velocity)
+            );
             // Keep pitch
             this.fCurNote = pitch;
         }
     }
 
     keyOff(hard: boolean = false) {
-        this.fGateLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, 0));
+        this.fGateLabel.forEach((index) =>
+            this.fAPI.setParamValue(this.fDSP, index, 0)
+        );
         if (hard) {
             this.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
         } else {
@@ -1391,12 +1928,18 @@ export class FaustWebAudioDspVoice {
         }
     }
 
-    computeLegato(bufferSize: number, $inputs: number, $outputZero: number, $outputsHalf: number) {
-
+    computeLegato(
+        bufferSize: number,
+        $inputs: number,
+        $outputZero: number,
+        $outputsHalf: number
+    ) {
         const size = bufferSize / 2;
 
         // Reset envelops
-        this.fGateLabel.forEach(index => this.fAPI.setParamValue(this.fDSP, index, 0));
+        this.fGateLabel.forEach((index) =>
+            this.fAPI.setParamValue(this.fDSP, index, 0)
+        );
 
         // Compute current voice on half buffer
         this.fAPI.compute(this.fDSP, size, $inputs, $outputZero);
@@ -1420,8 +1963,10 @@ export class FaustWebAudioDspVoice {
     }
 }
 
-export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaustPolyWebAudioDsp {
-
+export class FaustPolyWebAudioDsp
+    extends FaustBaseWebAudioDsp
+    implements IFaustPolyWebAudioDsp
+{
     private fInstance: FaustPolyDspInstance;
     private fEffect!: number;
     private fJSONEffect: FaustDspMeta | null;
@@ -1429,7 +1974,13 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
     private fAudioMixingHalf!: number;
     private fVoiceTable: FaustWebAudioDspVoice[];
 
-    constructor(instance: FaustPolyDspInstance, sampleRate: number, sampleSize: number, bufferSize: number, soundfiles: LooseFaustDspFactory["soundfiles"]) {
+    constructor(
+        instance: FaustPolyDspInstance,
+        sampleRate: number,
+        sampleSize: number,
+        bufferSize: number,
+        soundfiles: LooseFaustDspFactory['soundfiles']
+    ) {
         super(sampleSize, bufferSize, soundfiles);
         this.fInstance = instance;
 
@@ -1439,11 +1990,15 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         this.fJSONDsp = JSON.parse(this.fInstance.voiceJSON);
 
         // Create JSON for effect
-        this.fJSONEffect = (this.fInstance.effectAPI && this.fInstance.effectJSON) ? JSON.parse(this.fInstance.effectJSON) : null;
+        this.fJSONEffect =
+            this.fInstance.effectAPI && this.fInstance.effectJSON
+                ? JSON.parse(this.fInstance.effectJSON)
+                : null;
 
         // Setup GUI
         FaustBaseWebAudioDsp.parseUI(this.fJSONDsp.ui, this.fUICallback);
-        if (this.fJSONEffect) FaustBaseWebAudioDsp.parseUI(this.fJSONEffect.ui, this.fUICallback);
+        if (this.fJSONEffect)
+            FaustBaseWebAudioDsp.parseUI(this.fJSONEffect.ui, this.fUICallback);
 
         // Setup wasm memory
         this.fEndMemory = this.initMemory();
@@ -1451,22 +2006,28 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         // Init DSP voices
         this.fVoiceTable = [];
         for (let voice = 0; voice < this.fInstance.voices; voice++) {
-            this.fVoiceTable.push(new FaustWebAudioDspVoice(
-                this.fJSONDsp.size * voice,
-                this.fInstance.voiceAPI,
-                this.fInputsItems,
-                this.fPathTable,
-                sampleRate
-            ));
+            this.fVoiceTable.push(
+                new FaustWebAudioDspVoice(
+                    this.fJSONDsp.size * voice,
+                    this.fInstance.voiceAPI,
+                    this.fInputsItems,
+                    this.fPathTable,
+                    sampleRate
+                )
+            );
         }
 
         // Init effect
-        if (this.fInstance.effectAPI) this.fInstance.effectAPI.init(this.fEffect, sampleRate);
+        if (this.fInstance.effectAPI)
+            this.fInstance.effectAPI.init(this.fEffect, sampleRate);
 
         // Init soundfiles memory is needed
         if (this.fSoundfiles.length > 0) {
             // Create memory allocator for soundfiles in wasm memory, starting at the end of DSP memory
-            const allocator = new WasmAllocator(this.fInstance.memory, this.fEndMemory);
+            const allocator = new WasmAllocator(
+                this.fInstance.memory,
+                this.fEndMemory
+            );
             // Init soundfiles memory for all voices
             for (let voice = 0; voice < this.fInstance.voices; voice++) {
                 this.initSoundfileMemory(allocator, this.fJSONDsp.size * voice);
@@ -1475,52 +2036,85 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
     }
 
     private initMemory() {
-
         // Effet start at the end of all DSP voices
         this.fEffect = this.fJSONDsp.size * this.fInstance.voices;
 
         // Audio buffer start at the end of effect
-        const $audio = this.fEffect + (this.fJSONEffect ? this.fJSONEffect.size : 0);
+        const $audio =
+            this.fEffect + (this.fJSONEffect ? this.fJSONEffect.size : 0);
 
         // Setup audio pointers offset
         this.fAudioInputs = $audio;
-        this.fAudioOutputs = this.fAudioInputs + this.getNumInputs() * this.fPtrSize;
-        this.fAudioMixing = this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize;
-        this.fAudioMixingHalf = this.fAudioMixing + this.getNumOutputs() * this.fPtrSize;
+        this.fAudioOutputs =
+            this.fAudioInputs + this.getNumInputs() * this.fPtrSize;
+        this.fAudioMixing =
+            this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize;
+        this.fAudioMixingHalf =
+            this.fAudioMixing + this.getNumOutputs() * this.fPtrSize;
 
         // Prepare wasm memory layout
-        const $audioInputs = this.fAudioMixingHalf + this.getNumOutputs() * this.fPtrSize;
-        const $audioOutputs = $audioInputs + this.getNumInputs() * this.fBufferSize * this.fSampleSize;
-        const $audioMixing = $audioOutputs + this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
+        const $audioInputs =
+            this.fAudioMixingHalf + this.getNumOutputs() * this.fPtrSize;
+        const $audioOutputs =
+            $audioInputs +
+            this.getNumInputs() * this.fBufferSize * this.fSampleSize;
+        const $audioMixing =
+            $audioOutputs +
+            this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
 
         // Compute memory end in bytes
-        const endMemory = $audioMixing + this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
+        const endMemory =
+            $audioMixing +
+            this.getNumOutputs() * this.fBufferSize * this.fSampleSize;
 
         // Setup Int32 and Real views of the memory
         const HEAP = this.fInstance.memory.buffer;
         const HEAP32 = new Int32Array(HEAP);
-        const HEAPF = (this.fSampleSize === 4) ? new Float32Array(HEAP) : new Float64Array(HEAP);
+        const HEAPF =
+            this.fSampleSize === 4
+                ? new Float32Array(HEAP)
+                : new Float64Array(HEAP);
 
         if (this.getNumInputs() > 0) {
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                HEAP32[(this.fAudioInputs >> 2) + chan] = $audioInputs + this.fBufferSize * this.fSampleSize * chan;
+                HEAP32[(this.fAudioInputs >> 2) + chan] =
+                    $audioInputs + this.fBufferSize * this.fSampleSize * chan;
             }
             // Prepare Ins buffer tables
-            const dspInChans = HEAP32.subarray(this.fAudioInputs >> 2, (this.fAudioInputs + this.getNumInputs() * this.fPtrSize) >> 2);
+            const dspInChans = HEAP32.subarray(
+                this.fAudioInputs >> 2,
+                (this.fAudioInputs + this.getNumInputs() * this.fPtrSize) >> 2
+            );
             for (let chan = 0; chan < this.getNumInputs(); chan++) {
-                this.fInChannels[chan] = HEAPF.subarray(dspInChans[chan] >> Math.log2(this.fSampleSize), (dspInChans[chan] + this.fBufferSize * this.fSampleSize) >> Math.log2(this.fSampleSize));
+                this.fInChannels[chan] = HEAPF.subarray(
+                    dspInChans[chan] >> Math.log2(this.fSampleSize),
+                    (dspInChans[chan] + this.fBufferSize * this.fSampleSize) >>
+                        Math.log2(this.fSampleSize)
+                );
             }
         }
         if (this.getNumOutputs() > 0) {
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                HEAP32[(this.fAudioOutputs >> 2) + chan] = $audioOutputs + this.fBufferSize * this.fSampleSize * chan;
-                HEAP32[(this.fAudioMixing >> 2) + chan] = $audioMixing + this.fBufferSize * this.fSampleSize * chan;
-                HEAP32[(this.fAudioMixingHalf >> 2) + chan] = $audioMixing + this.fBufferSize * this.fSampleSize * chan + this.fBufferSize / 2 * this.fSampleSize;
+                HEAP32[(this.fAudioOutputs >> 2) + chan] =
+                    $audioOutputs + this.fBufferSize * this.fSampleSize * chan;
+                HEAP32[(this.fAudioMixing >> 2) + chan] =
+                    $audioMixing + this.fBufferSize * this.fSampleSize * chan;
+                HEAP32[(this.fAudioMixingHalf >> 2) + chan] =
+                    $audioMixing +
+                    this.fBufferSize * this.fSampleSize * chan +
+                    (this.fBufferSize / 2) * this.fSampleSize;
             }
             // Prepare Out buffer tables
-            const dspOutChans = HEAP32.subarray(this.fAudioOutputs >> 2, (this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize) >> 2);
+            const dspOutChans = HEAP32.subarray(
+                this.fAudioOutputs >> 2,
+                (this.fAudioOutputs + this.getNumOutputs() * this.fPtrSize) >> 2
+            );
             for (let chan = 0; chan < this.getNumOutputs(); chan++) {
-                this.fOutChannels[chan] = HEAPF.subarray(dspOutChans[chan] >> Math.log2(this.fSampleSize), (dspOutChans[chan] + this.fBufferSize * this.fSampleSize) >> Math.log2(this.fSampleSize));
+                this.fOutChannels[chan] = HEAPF.subarray(
+                    dspOutChans[chan] >> Math.log2(this.fSampleSize),
+                    (dspOutChans[chan] + this.fBufferSize * this.fSampleSize) >>
+                        Math.log2(this.fSampleSize)
+                );
             }
         }
 
@@ -1551,7 +2145,11 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
             const curNote = this.fVoiceTable[i].fCurNote;
             const nextNote = this.fVoiceTable[i].fNextNote;
 
-            if ((curNote === pitch) || ((curNote === FaustWebAudioDspVoice.kLegatoVoice) && (nextNote === pitch))) {
+            if (
+                curNote === pitch ||
+                (curNote === FaustWebAudioDspVoice.kLegatoVoice &&
+                    nextNote === pitch)
+            ) {
                 // Keeps oldest playing voice
                 if (this.fVoiceTable[i].fDate < oldestDatePlaying) {
                     oldestDatePlaying = this.fVoiceTable[i].fDate;
@@ -1564,8 +2162,14 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
 
     private getFreeVoice() {
         for (let voice = 0; voice < this.fInstance.voices; voice++) {
-            if (this.fVoiceTable[voice].fCurNote === FaustWebAudioDspVoice.kFreeVoice) {
-                return this.allocVoice(voice, FaustWebAudioDspVoice.kActiveVoice);
+            if (
+                this.fVoiceTable[voice].fCurNote ===
+                FaustWebAudioDspVoice.kFreeVoice
+            ) {
+                return this.allocVoice(
+                    voice,
+                    FaustWebAudioDspVoice.kActiveVoice
+                );
             }
         }
 
@@ -1574,9 +2178,13 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         let oldestDateRelease = Number.MAX_VALUE;
         let oldestDatePlaying = Number.MAX_VALUE;
 
-        for (let voice = 0; voice < this.fInstance.voices; voice++) { // Scan all voices
+        for (let voice = 0; voice < this.fInstance.voices; voice++) {
+            // Scan all voices
             // Try to steal a voice in DspVoice.kReleaseVoice mode...
-            if (this.fVoiceTable[voice].fCurNote === FaustWebAudioDspVoice.kReleaseVoice) {
+            if (
+                this.fVoiceTable[voice].fCurNote ===
+                FaustWebAudioDspVoice.kReleaseVoice
+            ) {
                 // Keeps oldest release voice
                 if (this.fVoiceTable[voice].fDate < oldestDateRelease) {
                     oldestDateRelease = this.fVoiceTable[voice].fDate;
@@ -1589,19 +2197,28 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         }
         // Then decide which one to steal
         if (oldestDateRelease !== Number.MAX_VALUE) {
-            console.log(`Steal release voice : voice_date = ${this.fVoiceTable[voiceRelease].fDate} voice = ${voiceRelease}`);
-            return this.allocVoice(voiceRelease, FaustWebAudioDspVoice.kLegatoVoice);
+            console.log(
+                `Steal release voice : voice_date = ${this.fVoiceTable[voiceRelease].fDate} voice = ${voiceRelease}`
+            );
+            return this.allocVoice(
+                voiceRelease,
+                FaustWebAudioDspVoice.kLegatoVoice
+            );
         }
         if (oldestDatePlaying !== Number.MAX_VALUE) {
-            console.log(`Steal playing voice : voice_date = ${this.fVoiceTable[voicePlaying].fDate} voice = ${voicePlaying}`);
-            return this.allocVoice(voicePlaying, FaustWebAudioDspVoice.kLegatoVoice);
+            console.log(
+                `Steal playing voice : voice_date = ${this.fVoiceTable[voicePlaying].fDate} voice = ${voicePlaying}`
+            );
+            return this.allocVoice(
+                voicePlaying,
+                FaustWebAudioDspVoice.kLegatoVoice
+            );
         }
         return FaustWebAudioDspVoice.kNoVoice;
     }
 
     // Public API
     compute(input: Float32Array[], output: Float32Array[]) {
-
         // Check DSP state
         if (this.fDestroyed) return false;
 
@@ -1615,20 +2232,30 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         if (!this.fProcessing) return true;
 
         // Check inputs
-        if (this.getNumInputs() > 0 && (!input || !input[0] || input[0].length === 0)) {
+        if (
+            this.getNumInputs() > 0 &&
+            (!input || !input[0] || input[0].length === 0)
+        ) {
             // console.log("Process input error");
             return true;
         }
 
         // Check outputs
-        if (this.getNumOutputs() > 0 && (!output || !output[0] || output[0].length === 0)) {
+        if (
+            this.getNumOutputs() > 0 &&
+            (!output || !output[0] || output[0].length === 0)
+        ) {
             // console.log("Process output error");
             return true;
         }
 
         // Copy inputs
         if (input !== undefined) {
-            for (let chan = 0; chan < Math.min(this.getNumInputs(), input.length); ++chan) {
+            for (
+                let chan = 0;
+                chan < Math.min(this.getNumInputs(), input.length);
+                ++chan
+            ) {
                 const dspInput = this.fInChannels[chan];
                 dspInput.set(input[chan]);
             }
@@ -1638,41 +2265,85 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
 
         // Compute
-        this.fInstance.mixerAPI.clearOutput(this.fBufferSize, this.getNumOutputs(), this.fAudioOutputs);
+        this.fInstance.mixerAPI.clearOutput(
+            this.fBufferSize,
+            this.getNumOutputs(),
+            this.fAudioOutputs
+        );
         this.fVoiceTable.forEach((voice) => {
             if (voice.fCurNote === FaustWebAudioDspVoice.kLegatoVoice) {
                 // Play from current note and next note
-                voice.computeLegato(this.fBufferSize, this.fAudioInputs, this.fAudioMixing, this.fAudioMixingHalf);
+                voice.computeLegato(
+                    this.fBufferSize,
+                    this.fAudioInputs,
+                    this.fAudioMixing,
+                    this.fAudioMixingHalf
+                );
                 // FadeOut on first half buffer
-                this.fInstance.mixerAPI.fadeOut(this.fBufferSize / 2, this.getNumOutputs(), this.fAudioMixing);
+                this.fInstance.mixerAPI.fadeOut(
+                    this.fBufferSize / 2,
+                    this.getNumOutputs(),
+                    this.fAudioMixing
+                );
                 // Mix it in result
-                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(this.fBufferSize, this.getNumOutputs(), this.fAudioMixing, this.fAudioOutputs);
+                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
+                    this.fBufferSize,
+                    this.getNumOutputs(),
+                    this.fAudioMixing,
+                    this.fAudioOutputs
+                );
             } else if (voice.fCurNote !== FaustWebAudioDspVoice.kFreeVoice) {
                 // Compute current note
-                voice.compute(this.fBufferSize, this.fAudioInputs, this.fAudioMixing);
+                voice.compute(
+                    this.fBufferSize,
+                    this.fAudioInputs,
+                    this.fAudioMixing
+                );
                 // Mix it in result
-                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(this.fBufferSize, this.getNumOutputs(), this.fAudioMixing, this.fAudioOutputs);
+                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
+                    this.fBufferSize,
+                    this.getNumOutputs(),
+                    this.fAudioMixing,
+                    this.fAudioOutputs
+                );
                 // Check the level to possibly set the voice in kFreeVoice again
-                if ((voice.fCurNote == FaustWebAudioDspVoice.kReleaseVoice) && ((voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL))) {
+                if (
+                    voice.fCurNote == FaustWebAudioDspVoice.kReleaseVoice &&
+                    voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL
+                ) {
                     voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
                 }
             }
         });
-        if (this.fInstance.effectAPI) this.fInstance.effectAPI.compute(this.fEffect, this.fBufferSize, this.fAudioOutputs, this.fAudioOutputs);
+        if (this.fInstance.effectAPI)
+            this.fInstance.effectAPI.compute(
+                this.fEffect,
+                this.fBufferSize,
+                this.fAudioOutputs,
+                this.fAudioOutputs
+            );
 
         // Update bargraph
         this.updateOutputs();
 
         if (output !== undefined) {
             // Copy outputs
-            for (let chan = 0; chan < Math.min(this.getNumOutputs(), output.length); chan++) {
+            for (
+                let chan = 0;
+                chan < Math.min(this.getNumOutputs(), output.length);
+                chan++
+            ) {
                 const dspOutput = this.fOutChannels[chan];
                 output[chan].set(dspOutput);
             }
 
-            // PlotHandler handling 
+            // PlotHandler handling
             if (this.fPlotHandler) {
-                this.fPlotHandler(output, this.fBufferNum++, (this.fCachedEvents.length ? this.fCachedEvents : undefined));
+                this.fPlotHandler(
+                    output,
+                    this.fBufferNum++,
+                    this.fCachedEvents.length ? this.fCachedEvents : undefined
+                );
                 this.fCachedEvents = [];
             }
         }
@@ -1688,10 +2359,10 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
     }
 
     private static findPath(o: any, p: string) {
-        if (typeof o !== "object") {
+        if (typeof o !== 'object') {
             return false;
         } else if (o.address) {
-            return (o.address === p);
+            return o.address === p;
         } else {
             for (const k in o) {
                 if (FaustPolyWebAudioDsp.findPath(o[k], p)) return true;
@@ -1701,16 +2372,34 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
     }
 
     setParamValue(path: string, value: number) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ type: "param", data: { path, value } });
-        if (this.fJSONEffect && FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) && this.fInstance.effectAPI) {
-            this.fInstance.effectAPI.setParamValue(this.fEffect, this.fPathTable[path], value);
+        if (this.fPlotHandler)
+            this.fCachedEvents.push({ type: 'param', data: { path, value } });
+        if (
+            this.fJSONEffect &&
+            FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) &&
+            this.fInstance.effectAPI
+        ) {
+            this.fInstance.effectAPI.setParamValue(
+                this.fEffect,
+                this.fPathTable[path],
+                value
+            );
         } else {
-            this.fVoiceTable.forEach(voice => voice.setParamValue(this.fPathTable[path], value));
+            this.fVoiceTable.forEach((voice) =>
+                voice.setParamValue(this.fPathTable[path], value)
+            );
         }
     }
     getParamValue(path: string) {
-        if (this.fJSONEffect && FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) && this.fInstance.effectAPI) {
-            return this.fInstance.effectAPI.getParamValue(this.fEffect, this.fPathTable[path]);
+        if (
+            this.fJSONEffect &&
+            FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) &&
+            this.fInstance.effectAPI
+        ) {
+            return this.fInstance.effectAPI.getParamValue(
+                this.fEffect,
+                this.fPathTable[path]
+            );
         } else {
             return this.fVoiceTable[0].getParamValue(this.fPathTable[path]);
         }
@@ -1721,18 +2410,24 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         const e = this.fJSONEffect;
         const r = { ...o };
         if (e) {
-            r.ui = [{
-                type: "tgroup", label: "Sequencer", items: [
-                    { type: "vgroup", label: "Instrument", items: o.ui },
-                    { type: "vgroup", label: "Effect", items: e.ui }
-                ]
-            }];
+            r.ui = [
+                {
+                    type: 'tgroup',
+                    label: 'Sequencer',
+                    items: [
+                        { type: 'vgroup', label: 'Instrument', items: o.ui },
+                        { type: 'vgroup', label: 'Effect', items: e.ui }
+                    ]
+                }
+            ];
         } else {
-            r.ui = [{
-                type: "tgroup", label: "Polyphonic", items: [
-                    { type: "vgroup", label: "Voices", items: o.ui }
-                ]
-            }];
+            r.ui = [
+                {
+                    type: 'tgroup',
+                    label: 'Polyphonic',
+                    items: [{ type: 'vgroup', label: 'Voices', items: o.ui }]
+                }
+            ];
         }
         return r as FaustDspMeta;
     }
@@ -1745,17 +2440,20 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
         return this.getMeta().ui;
     }
 
-    getDescriptors() { return this.fDescriptor; }
+    getDescriptors() {
+        return this.fDescriptor;
+    }
 
     midiMessage(data: number[] | Uint8Array) {
         const cmd = data[0] >> 4;
         const channel = data[0] & 0xf;
         const data1 = data[1];
         const data2 = data[2];
-        if (cmd === 8 || (cmd === 9 && data2 === 0)) return this.keyOff(channel, data1, data2);
+        if (cmd === 8 || (cmd === 9 && data2 === 0))
+            return this.keyOff(channel, data1, data2);
         else if (cmd === 9) return this.keyOn(channel, data1, data2);
         else super.midiMessage(data);
-    };
+    }
 
     ctrlChange(channel: number, ctrl: number, value: number) {
         if (ctrl === 123 || ctrl === 120) {
@@ -1766,23 +2464,36 @@ export class FaustPolyWebAudioDsp extends FaustBaseWebAudioDsp implements IFaust
     }
 
     keyOn(channel: number, pitch: number, velocity: number) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ type: "keyOn", data: [channel, pitch, velocity] });
+        if (this.fPlotHandler)
+            this.fCachedEvents.push({
+                type: 'keyOn',
+                data: [channel, pitch, velocity]
+            });
         const voice = this.getFreeVoice();
-        this.fVoiceTable[voice].keyOn(pitch, velocity, this.fVoiceTable[voice].fCurNote == FaustWebAudioDspVoice.kLegatoVoice);
+        this.fVoiceTable[voice].keyOn(
+            pitch,
+            velocity,
+            this.fVoiceTable[voice].fCurNote ==
+                FaustWebAudioDspVoice.kLegatoVoice
+        );
     }
 
     keyOff(channel: number, pitch: number, velocity: number) {
-        if (this.fPlotHandler) this.fCachedEvents.push({ type: "keyOff", data: [channel, pitch, velocity] });
+        if (this.fPlotHandler)
+            this.fCachedEvents.push({
+                type: 'keyOff',
+                data: [channel, pitch, velocity]
+            });
         const voice = this.getPlayingVoice(pitch);
         if (voice !== FaustWebAudioDspVoice.kNoVoice) {
             this.fVoiceTable[voice].keyOff();
         } else {
-            console.log("Playing pitch = %d not found\n", pitch);
+            console.log('Playing pitch = %d not found\n', pitch);
         }
     }
 
     allNotesOff(hard: boolean = true) {
-        this.fCachedEvents.push({ type: "ctrlChange", data: [0, 123, 0] });
-        this.fVoiceTable.forEach(voice => voice.keyOff(hard));
+        this.fCachedEvents.push({ type: 'ctrlChange', data: [0, 123, 0] });
+        this.fVoiceTable.forEach((voice) => voice.keyOff(hard));
     }
 }

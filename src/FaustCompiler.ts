@@ -1,8 +1,9 @@
-import { Sha256 } from "@aws-crypto/sha256-js";
-import type { ILibFaust } from "./LibFaust";
-import type { FaustDspFactory, IntVector } from "./types";
+import { Sha256 } from '@aws-crypto/sha256-js';
+import type { ILibFaust } from './LibFaust';
+import type { FaustDspFactory, IntVector } from './types';
 
-export const ab2str = (buf: Uint8Array) => String.fromCharCode.apply(null, Array.from(buf));
+export const ab2str = (buf: Uint8Array) =>
+    String.fromCharCode.apply(null, Array.from(buf));
 
 export const str2ab = (str: string) => {
     const buf = new ArrayBuffer(str.length);
@@ -16,7 +17,9 @@ const sha256 = async (str: string) => {
     const sha256 = new Sha256();
     sha256.update(str);
     const hashArray = Array.from(await sha256.digest());
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    const hashHex = hashArray
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
     return hashHex;
 };
 
@@ -34,7 +37,7 @@ export interface IFaustCompiler {
     getErrorMessage(): string;
 
     /**
-     * Create a wasm factory from Faust code i.e. wasm compiled code, to be used to create monophonic instances. 
+     * Create a wasm factory from Faust code i.e. wasm compiled code, to be used to create monophonic instances.
      * This function is running asynchronously.
      *
      * @param name - an arbitrary name for the Faust factory
@@ -42,10 +45,14 @@ export interface IFaustCompiler {
      * @param args - the compiler options
      * @returns returns the wasm factory
      */
-    createMonoDSPFactory(name: string, code: string, args: string): Promise<FaustDspFactory | null>;
+    createMonoDSPFactory(
+        name: string,
+        code: string,
+        args: string
+    ): Promise<FaustDspFactory | null>;
 
     /**
-     * Create a wasm factory from Faust code i.e. wasm compiled code, to be used to create polyphonic instances. 
+     * Create a wasm factory from Faust code i.e. wasm compiled code, to be used to create polyphonic instances.
      * This function is running asynchronously.
      *
      * @param name - an arbitrary name for the Faust factory
@@ -53,7 +60,11 @@ export interface IFaustCompiler {
      * @param args - the compiler options
      * @returns returns the wasm factory
      */
-    createPolyDSPFactory(name: string, code: string, args: string): Promise<FaustDspFactory | null>;
+    createPolyDSPFactory(
+        name: string,
+        code: string,
+        args: string
+    ): Promise<FaustDspFactory | null>;
 
     /**
      * Delete a dsp factory.
@@ -88,14 +99,22 @@ export interface IFaustCompiler {
 
     fs(): typeof FS;
 
-    getAsyncInternalMixerModule(isDouble?: boolean): Promise<{ mixerBuffer: Uint8Array; mixerModule: WebAssembly.Module }>;
-    getSyncInternalMixerModule(isDouble?: boolean): { mixerBuffer: Uint8Array; mixerModule: WebAssembly.Module };
+    getAsyncInternalMixerModule(
+        isDouble?: boolean
+    ): Promise<{ mixerBuffer: Uint8Array; mixerModule: WebAssembly.Module }>;
+    getSyncInternalMixerModule(isDouble?: boolean): {
+        mixerBuffer: Uint8Array;
+        mixerModule: WebAssembly.Module;
+    };
 }
 
 class FaustCompiler implements IFaustCompiler {
     private fLibFaust: ILibFaust;
     private fErrorMessage: string;
-    private static gFactories: Map<string, FaustDspFactory> = new Map<string, FaustDspFactory>();
+    private static gFactories: Map<string, FaustDspFactory> = new Map<
+        string,
+        FaustDspFactory
+    >();
     private mixer32Buffer!: Uint8Array;
     private mixer64Buffer!: Uint8Array;
     private mixer32Module!: WebAssembly.Module;
@@ -105,10 +124,17 @@ class FaustCompiler implements IFaustCompiler {
      * Get a stringified DSP factories table
      */
     static serializeDSPFactories() {
-        const table: Record<string, { code: string, json: any; poly: boolean }> = {};
+        const table: Record<
+            string,
+            { code: string; json: any; poly: boolean }
+        > = {};
         this.gFactories.forEach((factory, shaKey) => {
             const { code, json, poly } = factory;
-            table[shaKey] = { code: btoa(ab2str(code)), json: JSON.parse(json), poly };
+            table[shaKey] = {
+                code: btoa(ab2str(code)),
+                json: JSON.parse(json),
+                poly
+            };
         });
         return table;
     }
@@ -121,13 +147,27 @@ class FaustCompiler implements IFaustCompiler {
     /**
      * Import a DSP factories table
      */
-    static deserializeDSPFactories(table: Record<string, { code: string, json: any; poly: boolean }>) {
+    static deserializeDSPFactories(
+        table: Record<string, { code: string; json: any; poly: boolean }>
+    ) {
         const awaited: Promise<Map<string, FaustDspFactory>>[] = [];
         for (const shaKey in table) {
             const factory = table[shaKey];
             const { code, json, poly } = factory;
-            const ab = str2ab(atob(code))
-            awaited.push(WebAssembly.compile(ab).then(module => this.gFactories.set(shaKey, { shaKey, cfactory: 0, code: ab, module, json: JSON.stringify(json), poly, soundfiles: {} })));
+            const ab = str2ab(atob(code));
+            awaited.push(
+                WebAssembly.compile(ab).then((module) =>
+                    this.gFactories.set(shaKey, {
+                        shaKey,
+                        cfactory: 0,
+                        code: ab,
+                        module,
+                        json: JSON.stringify(json),
+                        poly,
+                        soundfiles: {}
+                    })
+                )
+            );
         }
         return Promise.all(awaited);
     }
@@ -135,12 +175,15 @@ class FaustCompiler implements IFaustCompiler {
      * Import a stringified DSP factories table
      */
     static importDSPFactories(tableStr: string) {
-        const table: Record<string, { code: string, json: any; poly: boolean }> = JSON.parse(tableStr);
+        const table: Record<
+            string,
+            { code: string; json: any; poly: boolean }
+        > = JSON.parse(tableStr);
         return this.deserializeDSPFactories(table);
     }
     constructor(libFaust: ILibFaust) {
         this.fLibFaust = libFaust;
-        this.fErrorMessage = "";
+        this.fErrorMessage = '';
     }
     private intVec2intArray(vec: IntVector) {
         const size = vec.size();
@@ -150,24 +193,44 @@ class FaustCompiler implements IFaustCompiler {
         }
         return ui8Code;
     }
-    private async createDSPFactory(name: string, code: string, args: string, poly: boolean) {
+    private async createDSPFactory(
+        name: string,
+        code: string,
+        args: string,
+        poly: boolean
+    ) {
         // Cleanup the cache
         if (FaustCompiler.gFactories.size > 10) {
             FaustCompiler.gFactories.clear();
         }
 
         // If code is already compiled, return the cached factory
-        const shaKey = await sha256(name + code + args + (poly ? "poly" : "mono"));
+        const shaKey = await sha256(
+            name + code + args + (poly ? 'poly' : 'mono')
+        );
         if (FaustCompiler.gFactories.has(shaKey)) {
             return FaustCompiler.gFactories.get(shaKey) || null;
         } else {
             try {
                 // Can possibly raise a C++ exception catched by the second catch()
-                const faustDspWasm = this.fLibFaust.createDSPFactory(name, code, args, !poly);
+                const faustDspWasm = this.fLibFaust.createDSPFactory(
+                    name,
+                    code,
+                    args,
+                    !poly
+                );
                 const ui8Code = this.intVec2intArray(faustDspWasm.data);
                 faustDspWasm.data.delete();
                 const module = await WebAssembly.compile(ui8Code);
-                const factory: FaustDspFactory = { shaKey, cfactory: faustDspWasm.cfactory, code: ui8Code, module, json: faustDspWasm.json, poly, soundfiles: {} };
+                const factory: FaustDspFactory = {
+                    shaKey,
+                    cfactory: faustDspWasm.cfactory,
+                    code: ui8Code,
+                    module,
+                    json: faustDspWasm.json,
+                    poly,
+                    soundfiles: {}
+                };
                 // Factory C++ side can be deallocated immediately
                 this.deleteDSPFactory(factory);
                 // Keep the compiled factory in the cache
@@ -199,7 +262,7 @@ class FaustCompiler implements IFaustCompiler {
     }
     expandDSP(code: string, args: string) {
         try {
-            return this.fLibFaust.expandDSP("FaustDSP", code, args);
+            return this.fLibFaust.expandDSP('FaustDSP', code, args);
         } catch (e) {
             this.fErrorMessage = this.fLibFaust.getErrorAfterException();
             // console.error(`=> exception raised while running expandDSP: ${this.fErrorMessage}`);
@@ -224,23 +287,37 @@ class FaustCompiler implements IFaustCompiler {
         return this.fLibFaust.fs();
     }
     async getAsyncInternalMixerModule(isDouble = false) {
-        const bufferKey = isDouble ? "mixer64Buffer" : "mixer32Buffer";
-        const moduleKey = isDouble ? "mixer64Module" : "mixer32Module";
-        if (this[moduleKey]) return { mixerBuffer: this[bufferKey], mixerModule: this[moduleKey] };
-        const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
-        const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
+        const bufferKey = isDouble ? 'mixer64Buffer' : 'mixer32Buffer';
+        const moduleKey = isDouble ? 'mixer64Module' : 'mixer32Module';
+        if (this[moduleKey])
+            return {
+                mixerBuffer: this[bufferKey],
+                mixerModule: this[moduleKey]
+            };
+        const path = isDouble
+            ? '/usr/rsrc/mixer64.wasm'
+            : '/usr/rsrc/mixer32.wasm';
+        const mixerBuffer = this.fs().readFile(path, { encoding: 'binary' });
         this[bufferKey] = mixerBuffer;
         // Compile mixer
-        const mixerModule = await WebAssembly.compile(new Uint8Array(mixerBuffer));
+        const mixerModule = await WebAssembly.compile(
+            new Uint8Array(mixerBuffer)
+        );
         this[moduleKey] = mixerModule;
         return { mixerBuffer, mixerModule };
     }
     getSyncInternalMixerModule(isDouble = false) {
-        const bufferKey = isDouble ? "mixer64Buffer" : "mixer32Buffer";
-        const moduleKey = isDouble ? "mixer64Module" : "mixer32Module";
-        if (this[moduleKey]) return { mixerBuffer: this[bufferKey], mixerModule: this[moduleKey] };
-        const path = isDouble ? "/usr/rsrc/mixer64.wasm" : "/usr/rsrc/mixer32.wasm";
-        const mixerBuffer = this.fs().readFile(path, { encoding: "binary" });
+        const bufferKey = isDouble ? 'mixer64Buffer' : 'mixer32Buffer';
+        const moduleKey = isDouble ? 'mixer64Module' : 'mixer32Module';
+        if (this[moduleKey])
+            return {
+                mixerBuffer: this[bufferKey],
+                mixerModule: this[moduleKey]
+            };
+        const path = isDouble
+            ? '/usr/rsrc/mixer64.wasm'
+            : '/usr/rsrc/mixer32.wasm';
+        const mixerBuffer = this.fs().readFile(path, { encoding: 'binary' });
         this[bufferKey] = mixerBuffer;
         // Compile mixer
         const mixerModule = new WebAssembly.Module(new Uint8Array(mixerBuffer));

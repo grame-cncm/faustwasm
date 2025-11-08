@@ -1,4 +1,4 @@
-import type FaustCompiler from "./FaustCompiler";
+import type FaustCompiler from './FaustCompiler';
 
 interface IFaustSvgDiagrams {
     /**
@@ -23,13 +23,26 @@ class FaustSvgDiagrams implements IFaustSvgDiagrams {
         const fs = this.compiler.fs();
         try {
             const files: string[] = fs.readdir(`/${name}-svg/`);
-            files.filter(file => file !== "." && file !== "..").forEach(file => fs.unlink(`/${name}-svg/${file}`));
-        } catch { }
-        const success = this.compiler.generateAuxFiles(name, code, `-lang wasm -o binary -svg ${args}`);
+            files
+                .filter((file) => file !== '.' && file !== '..')
+                .forEach((file) => fs.unlink(`/${name}-svg/${file}`));
+        } catch {}
+        const success = this.compiler.generateAuxFiles(
+            name,
+            code,
+            `-lang wasm -o binary -svg ${args}`
+        );
         if (!success) throw new Error(this.compiler.getErrorMessage());
         const svgs: Record<string, string> = {};
         const files: string[] = fs.readdir(`/${name}-svg/`);
-        files.filter(file => file !== "." && file !== "..").forEach(file => svgs[file] = fs.readFile(`/${name}-svg/${file}`, { encoding: "utf8" }) as string);
+        files
+            .filter((file) => file !== '.' && file !== '..')
+            .forEach(
+                (file) =>
+                    (svgs[file] = fs.readFile(`/${name}-svg/${file}`, {
+                        encoding: 'utf8'
+                    }) as string)
+            );
         return svgs;
     }
 }

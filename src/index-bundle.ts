@@ -2,4 +2,4 @@
 // export default faustwasm;
 // Bug with dts-bundle-generator
 
-export * from "./exports-bundle";
+export * from './exports-bundle';

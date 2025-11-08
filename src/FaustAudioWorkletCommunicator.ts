@@ -1,15 +1,14 @@
-
 /**
  * Layout:
- * 
- * 
+ *
+ *
  * invert-isAndroid (uint8)
  * new-acc-data-available (uint8)
  * new-gyr-data-available (uint8)
  * empty (uint8)
- * 
+ *
  * acc.x, acc.y, acc.z (f32)
- * 
+ *
  * gyr.alpha, gyr.beta, gyr.gamma (f32)
  */
 export class FaustAudioWorkletCommunicator {
@@ -24,10 +23,10 @@ export class FaustAudioWorkletCommunicator {
     constructor(port: MessagePort) {
         this.port = port;
         this.supportSharedArrayBuffer = !!globalThis.SharedArrayBuffer;
-        this.byteLength
-            = 4 * Uint8Array.BYTES_PER_ELEMENT
-            + 3 * Float32Array.BYTES_PER_ELEMENT
-            + 3 * Float32Array.BYTES_PER_ELEMENT;
+        this.byteLength =
+            4 * Uint8Array.BYTES_PER_ELEMENT +
+            3 * Float32Array.BYTES_PER_ELEMENT +
+            3 * Float32Array.BYTES_PER_ELEMENT;
     }
     initializeBuffer(ab: SharedArrayBuffer | ArrayBuffer) {
         let ptr = 0;
@@ -37,7 +36,7 @@ export class FaustAudioWorkletCommunicator {
         ptr += Uint8ClampedArray.BYTES_PER_ELEMENT;
         this.uin8NewGyrData = new Uint8ClampedArray(ab, ptr, 1);
         ptr += Uint8ClampedArray.BYTES_PER_ELEMENT;
-        ptr += Uint8ClampedArray.BYTES_PER_ELEMENT;; // empty
+        ptr += Uint8ClampedArray.BYTES_PER_ELEMENT; // empty
         this.f32Acc = new Float32Array(ab, ptr, 3);
         ptr += 3 * Float32Array.BYTES_PER_ELEMENT;
         this.f32Gyr = new Float32Array(ab, ptr, 3);
@@ -57,9 +56,9 @@ export class FaustAudioWorkletCommunicator {
     getNewGyrDataAvailable() {
         return !!this.uin8NewGyrData?.[0];
     }
-    setAcc({ x, y, z }: { x: number, y: number, z: number }, invert = false) {
+    setAcc({ x, y, z }: { x: number; y: number; z: number }, invert = false) {
         if (!this.supportSharedArrayBuffer) {
-            const e = { type: "acc", data: { x, y, z }, invert };
+            const e = { type: 'acc', data: { x, y, z }, invert };
             this.port.postMessage(e);
         }
         if (!this.uin8NewAccData) return;
@@ -75,9 +74,17 @@ export class FaustAudioWorkletCommunicator {
         const [x, y, z] = this.f32Acc;
         return { x, y, z, invert };
     }
-    setGyr({ alpha, beta, gamma }: { alpha: number, beta: number, gamma: number }) {
+    setGyr({
+        alpha,
+        beta,
+        gamma
+    }: {
+        alpha: number;
+        beta: number;
+        gamma: number;
+    }) {
         if (!this.supportSharedArrayBuffer) {
-            const e = { type: "gyr", data: { alpha, beta, gamma } };
+            const e = { type: 'gyr', data: { alpha, beta, gamma } };
             this.port.postMessage(e);
         }
         if (!this.uin8NewGyrData) return;
@@ -99,7 +106,7 @@ export class FaustAudioWorkletNodeCommunicator extends FaustAudioWorkletCommunic
         if (this.supportSharedArrayBuffer) {
             const sab = new SharedArrayBuffer(this.byteLength);
             this.initializeBuffer(sab);
-            this.port.postMessage({ type: "initSab", sab });
+            this.port.postMessage({ type: 'initSab', sab });
         } else {
             const ab = new ArrayBuffer(this.byteLength);
             this.initializeBuffer(ab);
@@ -112,25 +119,25 @@ export class FaustAudioWorkletProcessorCommunicator extends FaustAudioWorkletCom
         super(port);
 
         if (this.supportSharedArrayBuffer) {
-            this.port.addEventListener("message", (event) => {
+            this.port.addEventListener('message', (event) => {
                 const { data } = event;
-                if (data.type === "initSab") {
+                if (data.type === 'initSab') {
                     this.initializeBuffer(data.sab);
                 }
             });
         } else {
             const ab = new ArrayBuffer(this.byteLength);
             this.initializeBuffer(ab);
-            this.port.addEventListener("message", (event) => {
+            this.port.addEventListener('message', (event) => {
                 const msg = event.data;
 
                 switch (msg.type) {
                     // Sensors messages
-                    case "acc": {
+                    case 'acc': {
                         this.setAcc(msg.data, msg.invert);
                         break;
                     }
-                    case "gyr": {
+                    case 'gyr': {
                         this.setGyr(msg.data);
                         break;
                     }

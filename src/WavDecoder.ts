@@ -19,12 +19,12 @@ class WavDecoder {
     static decode(buffer: ArrayBuffer, options?: WavDecoderOptions) {
         const dataView = new DataView(buffer);
         const reader = new Reader(dataView);
-        if (reader.string(4) !== "RIFF") {
-            throw new TypeError("Invalid WAV file");
+        if (reader.string(4) !== 'RIFF') {
+            throw new TypeError('Invalid WAV file');
         }
         reader.uint32(); // skip file length
-        if (reader.string(4) !== "WAVE") {
-            throw new TypeError("Invalid WAV file");
+        if (reader.string(4) !== 'WAVE') {
+            throw new TypeError('Invalid WAV file');
         }
         let format: Format | null = null;
         let audioData: {
@@ -36,10 +36,15 @@ class WavDecoder {
         do {
             const chunkType = reader.string(4);
             const chunkSize = reader.uint32();
-            if (chunkType === "fmt ") {
+            if (chunkType === 'fmt ') {
                 format = this.decodeFormat(reader, chunkSize);
-            } else if (chunkType === "data") {
-                audioData = this.decodeData(reader, chunkSize, format as Format, options || {});
+            } else if (chunkType === 'data') {
+                audioData = this.decodeData(
+                    reader,
+                    chunkSize,
+                    format as Format,
+                    options || {}
+                );
             } else {
                 reader.skip(chunkSize);
             }
@@ -48,12 +53,14 @@ class WavDecoder {
     }
     private static decodeFormat(reader: Reader, chunkSize: number) {
         const formats = {
-            0x0001: "lpcm",
-            0x0003: "lpcm"
+            0x0001: 'lpcm',
+            0x0003: 'lpcm'
         };
         const formatId = reader.uint16();
         if (!Object.prototype.hasOwnProperty.call(formats, formatId)) {
-            throw new TypeError("Unsupported format in WAV file: 0x" + formatId.toString(16));
+            throw new TypeError(
+                'Unsupported format in WAV file: 0x' + formatId.toString(16)
+            );
         }
         const format: Format = {
             formatId: formatId,
@@ -67,14 +74,21 @@ class WavDecoder {
         reader.skip(chunkSize - 16);
         return format;
     }
-    private static decodeData(reader: Reader, chunkSizeIn: number, format: Format, options: WavDecoderOptions) {
+    private static decodeData(
+        reader: Reader,
+        chunkSizeIn: number,
+        format: Format,
+        options: WavDecoderOptions
+    ) {
         const chunkSize = Math.min(chunkSizeIn, reader.remain());
         const length = Math.floor(chunkSize / format.blockSize);
         const numberOfChannels = format.numberOfChannels;
         const sampleRate = format.sampleRate;
         const channelData: Float32Array[] = new Array(numberOfChannels);
         for (let ch = 0; ch < numberOfChannels; ch++) {
-            const AB = options.shared ? (globalThis.SharedArrayBuffer || globalThis.ArrayBuffer) : globalThis.ArrayBuffer;
+            const AB = options.shared
+                ? globalThis.SharedArrayBuffer || globalThis.ArrayBuffer
+                : globalThis.ArrayBuffer;
             const ab = new AB(length * Float32Array.BYTES_PER_ELEMENT);
             channelData[ch] = new Float32Array(ab);
         }
@@ -86,12 +100,20 @@ class WavDecoder {
             channelData
         };
     }
-    private static readPCM(reader: Reader, channelData: Float32Array[], length: number, format: Format, options: WavDecoderOptions) {
+    private static readPCM(
+        reader: Reader,
+        channelData: Float32Array[],
+        length: number,
+        format: Format,
+        options: WavDecoderOptions
+    ) {
         const bitDepth = format.bitDepth;
-        const decoderOption = format.float ? "f" : options.symmetric ? "s" : "";
-        const methodName = "pcm" + bitDepth + decoderOption as `pcm${8 | 16 | 32}${"f" | "s" | ""}`;
+        const decoderOption = format.float ? 'f' : options.symmetric ? 's' : '';
+        const methodName = ('pcm' +
+            bitDepth +
+            decoderOption) as `pcm${8 | 16 | 32}${'f' | 's' | ''}`;
         if (!(reader as any)[methodName]) {
-            throw new TypeError("Not supported bit depth: " + format.bitDepth);
+            throw new TypeError('Not supported bit depth: ' + format.bitDepth);
         }
         const read: () => number = (reader as any)[methodName].bind(reader);
         const numberOfChannels = format.numberOfChannels;
@@ -136,7 +158,7 @@ class Reader {
         return data;
     }
     string(n: number) {
-        let data = "";
+        let data = '';
         for (let i = 0; i < n; i++) {
             data += String.fromCharCode(this.uint8());
         }
@@ -166,7 +188,7 @@ class Reader {
         const x0 = this.dataView.getUint8(this.pos + 0);
         const x1 = this.dataView.getUint8(this.pos + 1);
         const x2 = this.dataView.getUint8(this.pos + 2);
-        const xx = (x0 + (x1 << 8) + (x2 << 16));
+        const xx = x0 + (x1 << 8) + (x2 << 16);
 
         const data = xx > 0x800000 ? xx - 0x1000000 : xx;
         this.pos += 3;
@@ -176,7 +198,7 @@ class Reader {
         const x0 = this.dataView.getUint8(this.pos + 0);
         const x1 = this.dataView.getUint8(this.pos + 1);
         const x2 = this.dataView.getUint8(this.pos + 2);
-        const xx = (x0 + (x1 << 8) + (x2 << 16));
+        const xx = x0 + (x1 << 8) + (x2 << 16);
 
         const data = xx > 0x800000 ? xx - 0x1000000 : xx;
         this.pos += 3;

@@ -1,43 +1,50 @@
 //@ts-check
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs';
+import * as path from 'path';
 import {
     instantiateFaustModuleFromFile,
     LibFaust,
     FaustCompiler,
     FaustMonoDspGenerator,
     FaustPolyDspGenerator
-} from "../dist/esm/index.js";
-import { fileURLToPath } from "url";
+} from '../dist/esm/index.js';
+import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const __filename = fileURLToPath(import.meta.url);
 
 /**
  *  Script to compile a Faust DSP file to WebAssembly and write the output to files.
- * 
+ *
  * @param {string} inputFile : The path to the Faust DSP file.
  * @param {string} outputDir : The path to the output directory.
  * @param {string[]} [argv] : An array of command-line arguments to pass to the Faust compiler.
  * @param {boolean} [poly] : Whether to compile the DSP as a polyphonic instrument.
  */
-const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) => {
-    const faustModule = await instantiateFaustModuleFromFile(path.join(__dirname, "../libfaust-wasm/libfaust-wasm.js"));
+const faust2wasmFiles = async (
+    inputFile,
+    outputDir,
+    argv = [],
+    poly = false
+) => {
+    const faustModule = await instantiateFaustModuleFromFile(
+        path.join(__dirname, '../libfaust-wasm/libfaust-wasm.js')
+    );
     const libFaust = new LibFaust(faustModule);
     const compiler = new FaustCompiler(libFaust);
     console.log(`Faust Compiler version: ${compiler.version()}`);
     console.log(`Reading file ${inputFile}`);
-    const code = fs.readFileSync(inputFile, { encoding: "utf8" });
+    const code = fs.readFileSync(inputFile, { encoding: 'utf8' });
 
-    const fileName = /** @type {string} */(inputFile.split('/').pop());
+    const fileName = /** @type {string} */ (inputFile.split('/').pop());
     const dspName = fileName.replace(/\.dsp$/, '');
     // Flush to zero to avoid costly denormalized numbers
-    argv.push("-ftz", "2");
+    argv.push('-ftz', '2');
     const dspModulePath = path.join(outputDir, `dsp-module.wasm`);
     const dspMetaPath = path.join(outputDir, `dsp-meta.json`);
     const effectModulePath = path.join(outputDir, `effect-module.wasm`);
     const effectMetaPath = path.join(outputDir, `effect-meta.json`);
-    const mixerModulePath = path.join(outputDir, "mixer-module.wasm");
+    const mixerModulePath = path.join(outputDir, 'mixer-module.wasm');
     /** @type {Uint8Array} */
     let dspModule;
     /** @type {import("./types").FaustDspMeta} */
@@ -52,10 +59,15 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     if (poly) {
         const generator = new FaustPolyDspGenerator();
         const t1 = Date.now();
-        const dsp = await generator.compile(compiler, name, code, argv.join(" "));
-        if (!dsp) throw new Error("Faust DSP not compiled");
+        const dsp = await generator.compile(
+            compiler,
+            name,
+            code,
+            argv.join(' ')
+        );
+        if (!dsp) throw new Error('Faust DSP not compiled');
         const { voiceFactory, effectFactory, mixerBuffer } = dsp;
-        if (!voiceFactory) throw new Error("Faust DSP Factory not compiled");
+        if (!voiceFactory) throw new Error('Faust DSP Factory not compiled');
         console.log(`Compilation successful (${Date.now() - t1} ms).`);
         dspModule = voiceFactory.code;
         dspMeta = JSON.parse(voiceFactory.json);
@@ -67,10 +79,15 @@ const faust2wasmFiles = async (inputFile, outputDir, argv = [], poly = false) =>
     } else {
         const generator = new FaustMonoDspGenerator();
         const t1 = Date.now();
-        const dsp = await generator.compile(compiler, name, code, argv.join(" "));
-        if (!dsp) throw new Error("Faust DSP not compiled");
+        const dsp = await generator.compile(
+            compiler,
+            name,
+            code,
+            argv.join(' ')
+        );
+        if (!dsp) throw new Error('Faust DSP not compiled');
         const { factory } = dsp;
-        if (!factory) throw new Error("Faust DSP Factory not compiled");
+        if (!factory) throw new Error('Faust DSP Factory not compiled');
         console.log(`Compilation successful (${Date.now() - t1} ms).`);
         dspModule = factory.code;
         dspMeta = JSON.parse(factory.json);
