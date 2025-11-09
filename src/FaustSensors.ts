@@ -187,7 +187,7 @@ export default class FaustSensors {
                     const x = this.fRange.clip(v);
                     return this.fOffset + x * this.fCoef;
                 }
-                getLowHigh(amin: number, amax: number): InterpolateObject {
+                getLowHigh(): InterpolateObject {
                     return { amin: this.fRange.fLo, amax: this.fRange.fHi };
                 }
             };

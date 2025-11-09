@@ -198,44 +198,34 @@ class FaustWasmInstantiator {
                 `=> exception raised while running loadDSPFactory, file not found: ${wasmPath}`
             );
         }
-        try {
-            const wasmBuffer = await wasmFile.arrayBuffer();
-            const module = await WebAssembly.compile(wasmBuffer);
-            const jsonFile = await fetch(jsonPath);
-            const json = await jsonFile.text();
-            const meta: FaustDspMeta = JSON.parse(json);
-            const cOptions = meta.compile_options;
-            const poly = cOptions.indexOf('wasm-e') !== -1;
-            return {
-                cfactory: 0,
-                code: new Uint8Array(wasmBuffer),
-                module,
-                json,
-                poly
-            } as FaustDspFactory;
-        } catch (e) {
-            // console.error(`=> exception raised while running loadDSPFactory: ${e}`);
-            throw e;
-        }
+        const wasmBuffer = await wasmFile.arrayBuffer();
+        const module = await WebAssembly.compile(wasmBuffer);
+        const jsonFile = await fetch(jsonPath);
+        const json = await jsonFile.text();
+        const meta: FaustDspMeta = JSON.parse(json);
+        const cOptions = meta.compile_options;
+        const poly = cOptions.indexOf('wasm-e') !== -1;
+        return {
+            cfactory: 0,
+            code: new Uint8Array(wasmBuffer),
+            module,
+            json,
+            poly
+        } as FaustDspFactory;
     }
 
     static async loadDSPMixer(mixerPath: string, fs?: typeof FS) {
-        try {
-            let mixerBuffer: BufferSource | null = null;
-            if (fs) {
-                mixerBuffer = new Uint8Array(
-                    fs.readFile(mixerPath, { encoding: 'binary' })
-                );
-            } else {
-                const mixerFile = await fetch(mixerPath);
-                mixerBuffer = await mixerFile.arrayBuffer();
-            }
-            // Compile mixer
-            return WebAssembly.compile(mixerBuffer);
-        } catch (e) {
-            // console.error(`=> exception raised while running loadMixer: ${e}`);
-            throw e;
+        let mixerBuffer: BufferSource | null = null;
+        if (fs) {
+            mixerBuffer = new Uint8Array(
+                fs.readFile(mixerPath, { encoding: 'binary' })
+            );
+        } else {
+            const mixerFile = await fetch(mixerPath);
+            mixerBuffer = await mixerFile.arrayBuffer();
         }
+        // Compile mixer
+        return WebAssembly.compile(mixerBuffer);
     }
 
     static async createAsyncMonoDSPInstance(factory: LooseFaustDspFactory) {

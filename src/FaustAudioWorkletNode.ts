@@ -78,7 +78,7 @@ export class FaustAudioWorkletNode<
                 this.fDescriptor.push(item);
                 if (!item.meta) return;
                 item.meta.forEach((meta) => {
-                    const { midi, acc, gyr } = meta;
+                    const { acc, gyr } = meta;
                     if (acc) this.#hasAccInput = true;
                     if (gyr) this.#hasGyrInput = true;
                 });
@@ -215,6 +215,7 @@ export class FaustAudioWorkletNode<
     }
 
     // Implemented in subclasses
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     compute(inputs: Float32Array[], outputs: Float32Array[]) {
         return false;
     }
@@ -403,7 +404,7 @@ export class FaustPolyAudioWorkletNode
         this.port.postMessage(e);
     }
 
-    allNotesOff(hard: boolean) {
+    allNotesOff() {
         const e = { type: 'ctrlChange', data: [0, 123, 0] };
         this.port.postMessage(e);
     }

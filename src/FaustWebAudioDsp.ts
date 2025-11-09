@@ -1310,6 +1310,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     compute(input: Float32Array[], output: Float32Array[]) {
         return false;
     }
@@ -1493,7 +1494,9 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     setParamValue(path: string, value: number) {}
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getParamValue(path: string) {
         return 0;
     }
