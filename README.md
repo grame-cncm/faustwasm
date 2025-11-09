@@ -37,6 +37,20 @@ Build the files:
 npm run build
 ```
 
+The source code uses [Prettier code formatter](https://prettier.io) to properly format all TS and JS files. Use:
+
+```bash
+npm run format
+```
+
+to apply format rules on `src`, and:
+
+```bash
+npm run lint
+```
+
+to check format rules on `src`. 
+
 ### Versioning
 
 You'll have to raise the package version number in `package.json` before `npm run build` to properly work.
