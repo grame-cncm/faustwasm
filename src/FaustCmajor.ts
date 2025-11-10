@@ -19,7 +19,7 @@ class FaustCmajor implements IFaustCmajor {
         this.fCompiler = compiler;
     }
 
-    compile(name: string, code: string) {
+    compile(name: string, code: string, args: string) {
         const fs = this.fCompiler.fs();
         const success = this.fCompiler.generateAuxFiles(
             name,

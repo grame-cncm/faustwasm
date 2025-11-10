@@ -21,10 +21,12 @@ class FaustSvgDiagrams implements IFaustSvgDiagrams {
 
     from(name: string, code: string, args: string) {
         const fs = this.compiler.fs();
-        const files: string[] = fs.readdir(`/${name}-svg/`);
-        files
-            .filter((file) => file !== '.' && file !== '..')
-            .forEach((file) => fs.unlink(`/${name}-svg/${file}`));
+        try {
+            const files: string[] = fs.readdir(`/${name}-svg/`);
+            files
+                .filter((file) => file !== '.' && file !== '..')
+                .forEach((file) => fs.unlink(`/${name}-svg/${file}`));
+        } catch {}
         const success = this.compiler.generateAuxFiles(
             name,
             code,
@@ -32,7 +34,7 @@ class FaustSvgDiagrams implements IFaustSvgDiagrams {
         );
         if (!success) throw new Error(this.compiler.getErrorMessage());
         const svgs: Record<string, string> = {};
-
+        const files: string[] = fs.readdir(`/${name}-svg/`);
         files
             .filter((file) => file !== '.' && file !== '..')
             .forEach(

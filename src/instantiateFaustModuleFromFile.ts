@@ -61,7 +61,10 @@ export default ${jsCode.match(jsCodeHead)?.[1]};
     }
     const faustModule = await FaustModule({
         wasmBinary,
-        getPreloadedPackage: (remotePackageName: string) => {
+        getPreloadedPackage: (
+            remotePackageName: string,
+            remotePackageSize: number
+        ) => {
             if (remotePackageName === 'libfaust-wasm.data') return dataBinary;
             return new ArrayBuffer(0);
         }

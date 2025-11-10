@@ -22,7 +22,10 @@ const instantiateFaustModule = async (
     const faustModule = await FaustModuleFactoryIn({
         // Create a copy to guarantee a standard ArrayBuffer
         wasmBinary: new Uint8Array(wasmBinaryIn).buffer,
-        getPreloadedPackage: (remotePackageName: string) => {
+        getPreloadedPackage: (
+            remotePackageName: string,
+            remotePackageSize: number
+        ) => {
             if (remotePackageName === 'libfaust-wasm.data') {
                 // Create a copy to guarantee a standard ArrayBuffer
                 return new Uint8Array(dataBinaryIn).buffer;
