@@ -47,7 +47,7 @@
         "@webaudiomodules/api": "^2.0.0-alpha.6",
         "@webaudiomodules/sdk-parammgr": "^0.0.13",
         "dts-bundle-generator": "^9.5.1",
-        "esbuild": "^0.25.12",
+        "esbuild": "^0.27.0",
         "eslint": "^9.39.1",
         "prettier": "^3.6.2",
         "typescript": "^5.4.5",
