@@ -4,7 +4,6 @@ import type {
     FaustPolyWebAudioDsp,
     IFaustMonoWebAudioDsp,
     IFaustPolyWebAudioDsp,
-    MetadataHandler,
     OutputParamHandler,
     PlotHandler
 } from './FaustWebAudioDsp';
@@ -155,7 +154,7 @@ export class FaustScriptProcessorNode<
         return this.fDSPCode.getNumOutputs();
     }
 
-    metadata(handler: MetadataHandler) {}
+    metadata() {}
 
     midiMessage(data: number[] | Uint8Array) {
         this.fDSPCode.midiMessage(data);
