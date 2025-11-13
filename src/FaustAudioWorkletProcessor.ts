@@ -394,6 +394,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
     /**
      * Polyphonic AudioWorkletProcessor
      */
+    /* __FAUST_POLY_BLOCK_START__ */
     class FaustPolyAudioWorkletProcessor extends FaustAudioWorkletProcessor<true> {
         constructor(options: FaustPolyAudioWorkletNodeOptions) {
             super(options);
@@ -480,6 +481,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
             this.fDSPCode.allNotesOff(hard);
         }
     }
+    /* __FAUST_POLY_BLOCK_END__ */
 
     const Processor = isPoly
         ? FaustPolyAudioWorkletProcessor

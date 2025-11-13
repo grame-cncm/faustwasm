@@ -71,6 +71,22 @@ var ${exportedName} = ${runtimeName};`;
 const hasSensorFeature = (features: FaustFeatureFlags) =>
     features.hasAcc || features.hasGyr;
 
+const POLY_BLOCK_START = '/* __FAUST_POLY_BLOCK_START__ */';
+const POLY_BLOCK_END = '/* __FAUST_POLY_BLOCK_END__ */';
+
+/**
+ * Returns the Faust AudioWorklet processor source with optional polyphonic code stripped out.
+ * This allows generating a smaller mono-only processor string when poly voices are not needed.
+ */
+const getWorkletProcessorSource = (includePoly: boolean) => {
+    const source = getFaustAudioWorkletProcessor.toString();
+    if (includePoly) return source;
+    const start = source.indexOf(POLY_BLOCK_START);
+    const end = source.indexOf(POLY_BLOCK_END, start);
+    if (start === -1 || end === -1) return source;
+    return source.slice(0, start) + source.slice(end + POLY_BLOCK_END.length);
+};
+
 export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
     /**
      * Compile a monophonic DSP factory from given code.
@@ -436,7 +452,7 @@ const dependencies = {
     ${dependencyEntries.join(',\n    ')}
 };
 // Generate the actual AudioWorkletProcessor code
-(${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
+(${getWorkletProcessorSource(featureFlags.hasPoly)})(dependencies, faustData);
 `;
                     const url = URL.createObjectURL(
                         new Blob([processorCode], { type: 'text/javascript' })
@@ -962,7 +978,7 @@ const dependencies = {
     ${dependencyEntries.join(',\n    ')}
 };
 // Generate the actual AudioWorkletProcessor code
-(${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
+(${getWorkletProcessorSource(featureFlags.hasPoly)})(dependencies, faustData);
 `;
                     const url = URL.createObjectURL(
                         new Blob([processorCode], { type: 'text/javascript' })

@@ -15,7 +15,8 @@ actually needed by a compiled patch.
   resulting flags are serialized into `faustData` so the AudioWorklet side can
   make decisions without parsing JSON again.
 - `FaustAudioWorkletProcessor` receives those flags and only installs the sensor
-  communicator when accelerometer or gyroscope bindings are present.
+  communicator when accelerometer or gyroscope bindings are present. Polyphonic
+  bindings can also toggle whether the poly processor class is serialized.
 - `FaustDspGenerator` also rewrites the `processorCode` templates so runtime
   helpers are injected on demand: `Soundfile`/`WasmAllocator` only land when
   `soundfile` UI items exist, and the sensor communicator stack is skipped when
