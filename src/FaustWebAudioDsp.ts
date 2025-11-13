@@ -782,7 +782,8 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             hasMidi: false,
             hasAcc: false,
             hasGyr: false,
-            hasSoundfiles: false
+            hasSoundfiles: false,
+            hasPoly: false
         });
 
     /**
@@ -818,6 +819,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             merged.hasGyr = merged.hasGyr || current.hasGyr;
             merged.hasSoundfiles =
                 merged.hasSoundfiles || current.hasSoundfiles;
+            merged.hasPoly = merged.hasPoly || current.hasPoly;
         }
         return merged;
     }

@@ -97,6 +97,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
     const { processorName, dspName, dspMeta, effectMeta, poly, features } =
         faustData;
     const needsSensors = features.hasAcc || features.hasGyr;
+    const isPoly = !!(poly || features.hasPoly);
 
     // Analyse voice JSON to generate AudioParam parameters
     const analysePolyParameters = (
@@ -113,7 +114,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         const isPolyReserved =
             'address' in item &&
             !!polyKeywords.find((k) => item.address.endsWith(k));
-        if (poly && isPolyReserved) return null;
+        if (isPoly && isPolyReserved) return null;
         if (
             item.type === 'vslider' ||
             item.type === 'hslider' ||
@@ -480,13 +481,13 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         }
     }
 
-    const Processor = poly
+    const Processor = isPoly
         ? FaustPolyAudioWorkletProcessor
         : FaustMonoAudioWorkletProcessor;
     if (register) {
         try {
             registerProcessor(
-                processorName || dspName || (poly ? 'mydsp_poly' : 'mydsp'),
+                processorName || dspName || (isPoly ? 'mydsp_poly' : 'mydsp'),
                 Processor
             );
         } catch (error) {
@@ -494,7 +495,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         }
     }
 
-    return poly
+    return isPoly
         ? FaustPolyAudioWorkletProcessor
         : FaustMonoAudioWorkletProcessor;
 };

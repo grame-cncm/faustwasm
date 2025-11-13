@@ -217,6 +217,7 @@ export interface FaustFeatureFlags {
     hasAcc: boolean;
     hasGyr: boolean;
     hasSoundfiles: boolean;
+    hasPoly: boolean;
 }
 
 export interface AudioParamDescriptor {

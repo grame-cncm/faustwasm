@@ -332,6 +332,7 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
 
         const meta = JSON.parse(factory.json);
         const featureFlags = FaustBaseWebAudioDsp.detectFeatures(meta);
+        featureFlags.hasPoly = false;
         const sampleSize = meta.compile_options.match('-double') ? 8 : 4;
         factory.soundfiles = await SoundfileReader.loadSoundfiles(
             meta,
@@ -592,6 +593,7 @@ const dependencies = {
 
         const meta = JSON.parse(factory.json);
         const featureFlags = FaustBaseWebAudioDsp.detectFeatures(meta);
+        featureFlags.hasPoly = false;
         const dependencies = {
             FaustBaseWebAudioDsp,
             FaustMonoWebAudioDsp,
@@ -836,6 +838,7 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
             voiceFeatures,
             effectFeatures
         );
+        featureFlags.hasPoly = true;
         const sampleSize = voiceMeta.compile_options.match('-double') ? 8 : 4;
         voiceFactory.soundfiles = await SoundfileReader.loadSoundfiles(
             voiceMeta,
@@ -1016,6 +1019,7 @@ const dependencies = {
             voiceFeatures,
             effectFeatures
         );
+        featureFlags.hasPoly = true;
         const sampleSize = voiceMeta.compile_options.match('-double') ? 8 : 4;
         // Dynamically create AudioWorkletProcessor if code not yet created
         try {
