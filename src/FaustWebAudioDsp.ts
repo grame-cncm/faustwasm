@@ -6,6 +6,7 @@ import type {
 import type {
     AudioData,
     FaustDspMeta,
+    FaustFeatureFlags,
     FaustUIDescriptor,
     FaustUIGroup,
     FaustUIInputItem,
@@ -775,6 +776,53 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         min: number;
         max: number;
     }[][] = new Array(128).fill(null).map(() => []);
+
+    static readonly defaultFeatureFlags: Readonly<FaustFeatureFlags> =
+        Object.freeze({
+            hasMidi: false,
+            hasAcc: false,
+            hasGyr: false,
+            hasSoundfiles: false,
+            hasPoly: false
+        });
+
+    /**
+     * Walk a Faust JSON description and report which optional runtime helpers are needed.
+     */
+    static detectFeatures(meta?: FaustDspMeta | null): FaustFeatureFlags {
+        const defaults = this.defaultFeatureFlags;
+        if (!meta) return { ...defaults };
+        const detected: FaustFeatureFlags = { ...defaults };
+
+        const visit = (item: FaustUIItem) => {
+            if (item.type === 'soundfile') detected.hasSoundfiles = true;
+            if (!('meta' in item) || !item.meta) return;
+            item.meta.forEach((entry) => {
+                if (entry.midi) detected.hasMidi = true;
+                if (entry.acc) detected.hasAcc = true;
+                if (entry.gyr) detected.hasGyr = true;
+            });
+        };
+
+        this.parseUI(meta.ui, visit);
+        return detected;
+    }
+
+    static mergeFeatureFlags(
+        ...flags: (FaustFeatureFlags | undefined)[]
+    ): FaustFeatureFlags {
+        const merged: FaustFeatureFlags = { ...this.defaultFeatureFlags };
+        for (const current of flags) {
+            if (!current) continue;
+            merged.hasMidi = merged.hasMidi || current.hasMidi;
+            merged.hasAcc = merged.hasAcc || current.hasAcc;
+            merged.hasGyr = merged.hasGyr || current.hasGyr;
+            merged.hasSoundfiles =
+                merged.hasSoundfiles || current.hasSoundfiles;
+            merged.hasPoly = merged.hasPoly || current.hasPoly;
+        }
+        return merged;
+    }
 
     protected fPathTable: { [address: string]: number } = {};
     protected fUICallback: UIHandler = (item: FaustUIItem) => {

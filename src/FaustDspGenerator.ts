@@ -46,6 +46,31 @@ import {
     FaustAudioWorkletCommunicator,
     FaustAudioWorkletProcessorCommunicator
 } from './FaustAudioWorkletCommunicator';
+import type { FaustFeatureFlags } from './types';
+
+/**
+ * Serialize a runtime constructor with an alias so it survives minification
+ */
+function serializeRuntimeCtor(
+    name: string,
+    ctor: { toString: () => string }
+): string {
+    return `var ${name} = ${ctor.toString()}\nvar ${name} = ${name};`;
+}
+
+/**
+ * Check if sensor features are needed
+ */
+function hasSensorFeature(features: FaustFeatureFlags): boolean {
+    return features.hasAcc || features.hasGyr;
+}
+
+/**
+ * Return the appropriate processor source based on polyphonic mode
+ */
+function getWorkletProcessorSource(isPoly: boolean): string {
+    return getFaustAudioWorkletProcessor.toString();
+}
 
 export interface GeneratorSupportingSoundfiles {
     /**
@@ -361,42 +386,73 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
                     ?.has(processorName)
             ) {
                 try {
+                    const featureFlags =
+                        FaustBaseWebAudioDsp.detectFeatures(meta);
+                    featureFlags.hasPoly = false;
+                    const needsSensors = hasSensorFeature(featureFlags);
+                    const runtimeCtors = [
+                        serializeRuntimeCtor(
+                            'FaustDspInstance',
+                            FaustDspInstance
+                        ),
+                        serializeRuntimeCtor(
+                            'FaustBaseWebAudioDsp',
+                            FaustBaseWebAudioDsp
+                        ),
+                        serializeRuntimeCtor(
+                            'FaustMonoWebAudioDsp',
+                            FaustMonoWebAudioDsp
+                        ),
+                        serializeRuntimeCtor(
+                            'FaustWasmInstantiator',
+                            FaustWasmInstantiator
+                        )
+                    ];
+                    if (featureFlags.hasSoundfiles) {
+                        runtimeCtors.push(
+                            serializeRuntimeCtor('Soundfile', Soundfile),
+                            serializeRuntimeCtor('WasmAllocator', WasmAllocator)
+                        );
+                    }
+                    if (needsSensors) {
+                        runtimeCtors.push(
+                            serializeRuntimeCtor('FaustSensors', FaustSensors),
+                            serializeRuntimeCtor(
+                                'FaustAudioWorkletCommunicator',
+                                FaustAudioWorkletCommunicator
+                            ),
+                            serializeRuntimeCtor(
+                                'FaustAudioWorkletProcessorCommunicator',
+                                FaustAudioWorkletProcessorCommunicator
+                            )
+                        );
+                    }
+                    const dependencyEntries = [
+                        'FaustBaseWebAudioDsp',
+                        'FaustMonoWebAudioDsp',
+                        'FaustWasmInstantiator'
+                    ];
+                    if (needsSensors)
+                        dependencyEntries.push(
+                            'FaustAudioWorkletProcessorCommunicator'
+                        );
                     const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
                         processorName,
                         dspName: name,
                         dspMeta: meta,
-                        poly: false
+                        poly: false,
+                        features: featureFlags
                     } as FaustData)};
 // Implementation needed classes of functions
-var ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
-var FaustDspInstance = ${FaustDspInstance.name};
-var ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
-var FaustBaseWebAudioDsp = ${FaustBaseWebAudioDsp.name};
-var ${FaustMonoWebAudioDsp.name} = ${FaustMonoWebAudioDsp.toString()}
-var FaustMonoWebAudioDsp = ${FaustMonoWebAudioDsp.name};
-var ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
-var FaustWasmInstantiator = ${FaustWasmInstantiator.name};
-var ${Soundfile.name} = ${Soundfile.toString()}
-var Soundfile = ${Soundfile.name};
-var ${WasmAllocator.name} = ${WasmAllocator.toString()}
-var WasmAllocator = ${WasmAllocator.name};
-var ${FaustSensors.name} = ${FaustSensors.toString()}
-var FaustSensors = ${FaustSensors.name};
-var ${FaustAudioWorkletCommunicator.name} = ${FaustAudioWorkletCommunicator.toString()}
-var FaustAudioWorkletCommunicator = ${FaustAudioWorkletCommunicator.name};
-var ${FaustAudioWorkletProcessorCommunicator.name} = ${FaustAudioWorkletProcessorCommunicator.toString()}
-var FaustAudioWorkletProcessorCommunicator = ${FaustAudioWorkletProcessorCommunicator.name};
+${runtimeCtors.join('\n')}
 // Put them in dependencies
 const dependencies = {
-    FaustBaseWebAudioDsp,
-    FaustMonoWebAudioDsp,
-    FaustWasmInstantiator,
-    FaustAudioWorkletProcessorCommunicator
+    ${dependencyEntries.join(',\n    ')}
 };
 // Generate the actual AudioWorkletProcessor code
-(${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
+(${getWorkletProcessorSource(featureFlags.hasPoly)})(dependencies, faustData);
 `;
                     const url = URL.createObjectURL(
                         new Blob([processorCode], { type: 'text/javascript' })
@@ -552,6 +608,8 @@ const dependencies = {
             );
 
         const meta = JSON.parse(factory.json);
+        const featureFlags = FaustBaseWebAudioDsp.detectFeatures(meta);
+        featureFlags.hasPoly = false;
         const dependencies = {
             FaustBaseWebAudioDsp,
             FaustMonoWebAudioDsp,
@@ -568,7 +626,8 @@ const dependencies = {
                 processorName,
                 dspName: name,
                 dspMeta: meta,
-                poly: false
+                poly: false,
+                features: featureFlags
             } as FaustData;
             // Generate the actual AudioWorkletProcessor code
             const Processor = getFaustAudioWorkletProcessor(
@@ -789,6 +848,13 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
         const effectMeta = effectFactory
             ? JSON.parse(effectFactory.json)
             : undefined;
+        const voiceFeatures = FaustBaseWebAudioDsp.detectFeatures(voiceMeta);
+        const effectFeatures = FaustBaseWebAudioDsp.detectFeatures(effectMeta);
+        const featureFlags = FaustBaseWebAudioDsp.mergeFeatureFlags(
+            voiceFeatures,
+            effectFeatures
+        );
+        featureFlags.hasPoly = true;
         const sampleSize = voiceMeta.compile_options.match('-double') ? 8 : 4;
         voiceFactory.soundfiles = await SoundfileReader.loadSoundfiles(
             voiceMeta,
@@ -844,6 +910,57 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
                     ?.has(processorName)
             ) {
                 try {
+                    const needsSensors = hasSensorFeature(featureFlags);
+                    const runtimeCtors = [
+                        serializeRuntimeCtor(
+                            'FaustDspInstance',
+                            FaustDspInstance
+                        ),
+                        serializeRuntimeCtor(
+                            'FaustBaseWebAudioDsp',
+                            FaustBaseWebAudioDsp
+                        ),
+                        serializeRuntimeCtor(
+                            'FaustPolyWebAudioDsp',
+                            FaustPolyWebAudioDsp
+                        ),
+                        serializeRuntimeCtor(
+                            'FaustWebAudioDspVoice',
+                            FaustWebAudioDspVoice
+                        ),
+                        serializeRuntimeCtor(
+                            'FaustWasmInstantiator',
+                            FaustWasmInstantiator
+                        )
+                    ];
+                    if (featureFlags.hasSoundfiles) {
+                        runtimeCtors.push(
+                            serializeRuntimeCtor('Soundfile', Soundfile),
+                            serializeRuntimeCtor('WasmAllocator', WasmAllocator)
+                        );
+                    }
+                    if (needsSensors) {
+                        runtimeCtors.push(
+                            serializeRuntimeCtor('FaustSensors', FaustSensors),
+                            serializeRuntimeCtor(
+                                'FaustAudioWorkletCommunicator',
+                                FaustAudioWorkletCommunicator
+                            ),
+                            serializeRuntimeCtor(
+                                'FaustAudioWorkletProcessorCommunicator',
+                                FaustAudioWorkletProcessorCommunicator
+                            )
+                        );
+                    }
+                    const dependencyEntries = [
+                        'FaustBaseWebAudioDsp',
+                        'FaustPolyWebAudioDsp',
+                        'FaustWasmInstantiator'
+                    ];
+                    if (needsSensors)
+                        dependencyEntries.push(
+                            'FaustAudioWorkletProcessorCommunicator'
+                        );
                     const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
@@ -851,38 +968,17 @@ const faustData = ${JSON.stringify({
                         dspName: name,
                         dspMeta: voiceMeta,
                         poly: true,
-                        effectMeta
+                        effectMeta,
+                        features: featureFlags
                     } as FaustData)};
 // Implementation needed classes of functions
-var ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
-var FaustDspInstance = ${FaustDspInstance.name};
-var ${FaustBaseWebAudioDsp.name} = ${FaustBaseWebAudioDsp.toString()}
-var FaustBaseWebAudioDsp = ${FaustBaseWebAudioDsp.name};
-var ${FaustPolyWebAudioDsp.name} = ${FaustPolyWebAudioDsp.toString()}
-var FaustPolyWebAudioDsp = ${FaustPolyWebAudioDsp.name};
-var ${FaustWebAudioDspVoice.name} = ${FaustWebAudioDspVoice.toString()}
-var FaustWebAudioDspVoice = ${FaustWebAudioDspVoice.name};
-var ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}
-var FaustWasmInstantiator = ${FaustWasmInstantiator.name};
-var ${Soundfile.name} = ${Soundfile.toString()}
-var Soundfile = ${Soundfile.name};
-var ${WasmAllocator.name} = ${WasmAllocator.toString()}
-var WasmAllocator = ${WasmAllocator.name};
-var ${FaustSensors.name} = ${FaustSensors.toString()}
-var FaustSensors = ${FaustSensors.name};
-var ${FaustAudioWorkletCommunicator.name} = ${FaustAudioWorkletCommunicator.toString()}
-var FaustAudioWorkletCommunicator = ${FaustAudioWorkletCommunicator.name};
-var ${FaustAudioWorkletProcessorCommunicator.name} = ${FaustAudioWorkletProcessorCommunicator.toString()}
-var FaustAudioWorkletProcessorCommunicator = ${FaustAudioWorkletProcessorCommunicator.name};
+${runtimeCtors.join('\n')}
 // Put them in dependencies
 const dependencies = {
-    FaustBaseWebAudioDsp,
-    FaustPolyWebAudioDsp,
-    FaustWasmInstantiator,
-    FaustAudioWorkletProcessorCommunicator
+    ${dependencyEntries.join(',\n    ')}
 };
 // Generate the actual AudioWorkletProcessor code
-(${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
+(${getWorkletProcessorSource(featureFlags.hasPoly)})(dependencies, faustData);
 `;
                     const url = URL.createObjectURL(
                         new Blob([processorCode], { type: 'text/javascript' })
@@ -933,6 +1029,13 @@ const dependencies = {
         const effectMeta = effectFactory
             ? JSON.parse(effectFactory.json)
             : undefined;
+        const voiceFeatures = FaustBaseWebAudioDsp.detectFeatures(voiceMeta);
+        const effectFeatures = FaustBaseWebAudioDsp.detectFeatures(effectMeta);
+        const featureFlags = FaustBaseWebAudioDsp.mergeFeatureFlags(
+            voiceFeatures,
+            effectFeatures
+        );
+        featureFlags.hasPoly = true;
         const sampleSize = voiceMeta.compile_options.match('-double') ? 8 : 4;
         // Dynamically create AudioWorkletProcessor if code not yet created
         try {
@@ -950,7 +1053,8 @@ const dependencies = {
                 dspName: name,
                 dspMeta: voiceMeta,
                 poly: true,
-                effectMeta
+                effectMeta,
+                features: featureFlags
             } as FaustData;
             // Generate the actual AudioWorkletProcessor code
             const Processor = getFaustAudioWorkletProcessor<true>(
