@@ -1,6 +1,23 @@
+/**
+ * Faust DSP Feature Test Suite
+ * 
+ * This test file compiles six different DSP test cases with various feature combinations
+ * and prints the raw byte length of the generated processor code for each one.
+ * 
+ * Test cases:
+ * - simple: Basic DSP without special features
+ * - soundfile: DSP with soundfile support
+ * - acc: DSP with accelerometer sensor support
+ * - gyr: DSP with gyroscope sensor support
+ * - midi: DSP with MIDI support
+ * - multi: Polyphonic DSP with effect
+ * 
+ * The processor code size is printed to help CI and developers observe the size
+ * of generated code for each feature combination during tests.
+ */
+
 import * as FaustWasm from "../../dist/esm/index.js";
 import * as path from "path";
-import * as fs from "fs";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
