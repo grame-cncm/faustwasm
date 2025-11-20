@@ -13,6 +13,26 @@ const compiler = new FaustWasm.FaustCompiler(faustModule);
 
 console.log("Testing feature detection...\n");
 
+// Helper: print size of generated processor code (raw byte length).
+// This helps track processorCode regressions during development and CI.
+function printProcessorCodeSize(gen, name) {
+    let code = "";
+    if (typeof gen.processorCode === "string") {
+        code = gen.processorCode;
+    } else if (typeof gen.getProcessorCode === "function") {
+        try {
+            code = gen.getProcessorCode();
+        } catch (e) {
+            console.log(`Warning: getProcessorCode() threw for ${name}: ${e}`);
+        }
+    } else {
+        console.log(`Warning: processorCode not found for generator ${name}.`);
+    }
+    const bytes = Buffer.byteLength(code || "", "utf8");
+    console.log(`Processor code size: ${bytes} bytes\n`);
+    return bytes;
+}
+
 // Test 1: Simple mono DSP without features
 const simpleDSP = `
 import("stdfaust.lib");
@@ -23,6 +43,7 @@ const monoGen = new FaustWasm.FaustMonoDspGenerator();
 await monoGen.compile(compiler, "simple", simpleDSP, "-I libraries/");
 // Should detect no features (hasSoundfiles, hasAcc, hasGyr, hasMidi should all be false)
 console.log("✓ Compiled successfully\n");
+printProcessorCodeSize(monoGen, 'simple');
 
 // Test 2: DSP with soundfile
 const soundfileDSP = `
@@ -35,6 +56,7 @@ const soundfileGen = new FaustWasm.FaustMonoDspGenerator();
 await soundfileGen.compile(compiler, "soundfile", soundfileDSP, "-I libraries/");
 // Should detect hasSoundfiles = true
 console.log("✓ Compiled successfully\n");
+printProcessorCodeSize(soundfileGen, 'soundfile');
 
 // Test 3: DSP with accelerometer
 const accDSP = `
@@ -47,6 +69,7 @@ const accGen = new FaustWasm.FaustMonoDspGenerator();
 await accGen.compile(compiler, "acc", accDSP, "-I libraries/");
 // Should detect hasAcc = true
 console.log("✓ Compiled successfully\n");
+printProcessorCodeSize(accGen, 'acc');
 
 // Test 4: DSP with gyroscope
 const gyrDSP = `
@@ -59,6 +82,7 @@ const gyrGen = new FaustWasm.FaustMonoDspGenerator();
 await gyrGen.compile(compiler, "gyr", gyrDSP, "-I libraries/");
 // Should detect hasGyr = true
 console.log("✓ Compiled successfully\n");
+printProcessorCodeSize(gyrGen, 'gyr');
 
 // Test 5: DSP with MIDI
 const midiDSP = `
@@ -71,6 +95,7 @@ const midiGen = new FaustWasm.FaustMonoDspGenerator();
 await midiGen.compile(compiler, "midi", midiDSP, "-I libraries/");
 // Should detect hasMidi = true
 console.log("✓ Compiled successfully\n");
+printProcessorCodeSize(midiGen, 'midi');
 
 // Test 6: DSP with multiple features
 const multiDSP = `
@@ -84,6 +109,7 @@ const multiGen = new FaustWasm.FaustMonoDspGenerator();
 await multiGen.compile(compiler, "multi", multiDSP, "-I libraries/");
 // Should detect hasSoundfiles = true, hasAcc = true, hasMidi = true
 console.log("✓ Compiled successfully\n");
+printProcessorCodeSize(multiGen, 'multi');
 
 console.log("All tests passed! ✓");
 console.log("\nNote: The feature detection happens during compilation.");
