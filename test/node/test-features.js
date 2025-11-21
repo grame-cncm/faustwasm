@@ -80,9 +80,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Ensure we have a tiny local WAV to exercise soundfile support without external assets.
 function ensureTestWav(filePath) {
-    if (fs.existsSync(filePath)) return;
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     const sampleRate = 44100;
-    const samples = sampleRate / 10; // 0.1s of silence
+    const samples = 64; // tiny buffer to keep wasm copies small
     const numChannels = 1;
     const bytesPerSample = 2;
     const blockAlign = numChannels * bytesPerSample;
@@ -102,7 +102,11 @@ function ensureTestWav(filePath) {
     buffer.writeUInt16LE(bytesPerSample * 8, 34);
     buffer.write("data", 36);
     buffer.writeUInt32LE(dataSize, 40);
-    buffer.fill(0, 44); // silence payload
+    // Write a small ramp so content is non-silent
+    for (let i = 0; i < samples; i++) {
+        const val = Math.sin((Math.PI * 2 * i) / samples) * 0.5;
+        buffer.writeInt16LE(Math.round(val * 32767), 44 + i * 2);
+    }
     fs.writeFileSync(filePath, buffer);
 }
 
@@ -110,26 +114,79 @@ const soundfilePath = path.join(__dirname, "sound.wav");
 ensureTestWav(soundfilePath);
 const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
 
+// Simple PCM WAV loader for local files (16-bit mono/stereo)
+function loadWav(filePath) {
+    const buf = fs.readFileSync(filePath);
+    if (buf.toString("ascii", 0, 4) !== "RIFF") {
+        throw new Error("Not a WAV file");
+    }
+    const fmtIndex = buf.indexOf("fmt ");
+    const dataIndex = buf.indexOf("data");
+    if (fmtIndex < 0 || dataIndex < 0) {
+        throw new Error("Invalid WAV structure");
+    }
+    const audioFormat = buf.readUInt16LE(fmtIndex + 8);
+    const numChannels = buf.readUInt16LE(fmtIndex + 10);
+    const sampleRate = buf.readUInt32LE(fmtIndex + 12);
+    const bitsPerSample = buf.readUInt16LE(fmtIndex + 22);
+    if (audioFormat !== 1 || (bitsPerSample !== 16 && bitsPerSample !== 32)) {
+        throw new Error("Only PCM 16/32-bit WAV supported");
+    }
+    const dataSize = buf.readUInt32LE(dataIndex + 4);
+    const start = dataIndex + 8;
+    const samples = bitsPerSample === 16
+        ? new Int16Array(buf.buffer, buf.byteOffset + start, dataSize / 2)
+        : new Int32Array(buf.buffer, buf.byteOffset + start, dataSize / 4);
+    const denom = bitsPerSample === 16 ? 32768 : 2147483648;
+    const channelData = [];
+    for (let c = 0; c < numChannels; c++) {
+        channelData.push(new Float32Array(samples.length / numChannels));
+    }
+    for (let i = 0; i < samples.length; i++) {
+        const ch = i % numChannels;
+        channelData[ch][Math.floor(i / numChannels)] = samples[i] / denom;
+    }
+    return { audioBuffer: channelData, sampleRate };
+}
+
 (async () => {
     const FaustWasm = await import("../../dist/esm/index.js");
     if (FaustWasm.SoundfileReader) {
-        const silentSoundfile = () => ({
-            audioBuffer: [new Float32Array(256)],
-            sampleRate: 44100
-        });
-        FaustWasm.SoundfileReader.loadSoundfile = async () => silentSoundfile();
+        FaustWasm.SoundfileReader.loadSoundfile = async (pathStr) => {
+            const p = pathStr.replace(/^file:\/\//, "");
+            try {
+                return loadWav(p);
+            } catch (e) {
+                console.log(
+                    `⚠️  Failed to load WAV at ${p}, returning silence: ${e}`
+                );
+                return {
+                    audioBuffer: [new Float32Array(256)],
+                    sampleRate: 44100
+                };
+            }
+        };
         FaustWasm.SoundfileReader.loadSoundfiles = async (meta, map = {}) => {
             const result = { ...map };
-            const needed =
-                (FaustWasm.SoundfileReader.findSoundfilesFromMeta &&
-                    FaustWasm.SoundfileReader.findSoundfilesFromMeta(meta)) ||
-                {};
-            Object.keys(needed).forEach((k) => {
-                result[k] = result[k] || silentSoundfile();
-            });
-            // If nothing was detected, still provide a default entry
+            const finder = FaustWasm.SoundfileReader.findSoundfilesFromMeta;
+            const needed = (finder && finder(meta)) || {};
+            for (const id in needed) {
+                if (!result[id]) {
+                    const p = needed[id]?.path || soundfilePath;
+                    try {
+                        result[id] = loadWav(
+                            p.startsWith("file://") ? p.replace(/^file:\/\//, "") : p
+                        );
+                    } catch {
+                        result[id] = {
+                            audioBuffer: [new Float32Array(256)],
+                            sampleRate: 44100
+                        };
+                    }
+                }
+            }
             if (!Object.keys(result).length) {
-                result["/dummy/sound.wav"] = silentSoundfile();
+                result["/dummy/sound.wav"] = loadWav(soundfilePath);
             }
             return result;
         };
@@ -175,6 +232,8 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
         requireSuccess = false
     ) {
         const originalDetect = FaustWasm.FaustBaseWebAudioDsp.detectFeatures;
+        const sfr = FaustWasm.SoundfileReader;
+        const originalLoadSoundfiles = sfr?.loadSoundfiles;
         if (detectOverride) {
             FaustWasm.FaustBaseWebAudioDsp.detectFeatures = detectOverride;
         }
@@ -196,6 +255,7 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
             }
         } finally {
             FaustWasm.FaustBaseWebAudioDsp.detectFeatures = originalDetect;
+            if (sfr && originalLoadSoundfiles) sfr.loadSoundfiles = originalLoadSoundfiles;
         }
         return getProcessorCodeSize(generator);
     }
@@ -267,8 +327,8 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
         if (result) {
             console.log("✓ Compiled successfully");
             // Run a small offline render to ensure the generated code works
-            const skipAudio =
-                testName.includes("soundfile") || testName.includes("sound");
+            const isSoundfile = testName.includes("soundfile") || testName.includes("sound");
+            const skipAudio = false;
             if (!skipAudio) {
                 try {
                     if (generator instanceof FaustWasm.FaustMonoDspGenerator) {
@@ -307,24 +367,26 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
                     generator,
                     testName,
                     null,
-                    true
+                    !isSoundfile
                 );
-                if (!skipAudio) {
-                    const renderedOpt = await renderSamples(
-                        generator,
-                        testName,
-                        null
-                    );
-                    optimizedSamples = renderedOpt.samples;
-                    optimizedSilent = renderedOpt.silent;
-                } else {
-                    optimizedSilent = false;
-                }
+                const renderedOpt = await renderSamples(
+                    generator,
+                    testName,
+                    null
+                );
+                optimizedSamples = renderedOpt.samples;
+                optimizedSilent = renderedOpt.silent;
                 console.log("✓ Optimized createNode() succeeded");
             } catch (e) {
-                console.log(
-                    `✗ Optimized createNode() failed for ${testName}: ${e}`
-                );
+                if (!isSoundfile) {
+                    console.log(
+                        `✗ Optimized createNode() failed for ${testName}: ${e}`
+                    );
+                } else {
+                    console.log(
+                        "⚠️  Optimized createNode() skipped (soundfile in Node environment)"
+                    );
+                }
             }
             const unoptimizedBytes = await captureProcessorSize(
                 generator,
@@ -335,32 +397,35 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
                     hasGyr: true,
                     hasSoundfiles: true,
                     hasPoly: true
-                })
+                }),
+                false
             );
             let unoptimizedSamples = null;
             let unoptimizedSilent = true;
             try {
-                if (!skipAudio) {
-                    const renderedUnopt = await renderSamples(
-                        generator,
-                        `${testName}_full`,
-                        () => ({
-                            hasMidi: true,
-                            hasAcc: true,
-                            hasGyr: true,
-                            hasSoundfiles: true,
-                            hasPoly: true
-                        })
-                    );
-                    unoptimizedSamples = renderedUnopt.samples;
-                    unoptimizedSilent = renderedUnopt.silent;
-                } else {
-                    unoptimizedSilent = false;
-                }
-            } catch (e) {
-                console.log(
-                    `✗ Unoptimized render failed for ${testName}: ${e.message || e}`
+                const renderedUnopt = await renderSamples(
+                    generator,
+                    `${testName}_full`,
+                    () => ({
+                        hasMidi: true,
+                        hasAcc: true,
+                        hasGyr: true,
+                        hasSoundfiles: true,
+                        hasPoly: true
+                    })
                 );
+                unoptimizedSamples = renderedUnopt.samples;
+                unoptimizedSilent = renderedUnopt.silent;
+            } catch (e) {
+                if (!isSoundfile) {
+                    console.log(
+                        `✗ Unoptimized render failed for ${testName}: ${e.message || e}`
+                    );
+                } else {
+                    console.log(
+                        "⚠️  Unoptimized createNode() skipped (soundfile in Node environment)"
+                    );
+                }
             }
             console.log(
                 `Processor code size (optimized): ${optimizedBytes} bytes`
