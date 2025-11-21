@@ -112,8 +112,27 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
 
 (async () => {
     const FaustWasm = await import("../../dist/esm/index.js");
-    if (FaustWasm.SoundfileReader?.loadSoundfiles) {
-        FaustWasm.SoundfileReader.loadSoundfiles = async () => ({});
+    if (FaustWasm.SoundfileReader) {
+        const silentSoundfile = () => ({
+            audioBuffer: [new Float32Array(256)],
+            sampleRate: 44100
+        });
+        FaustWasm.SoundfileReader.loadSoundfile = async () => silentSoundfile();
+        FaustWasm.SoundfileReader.loadSoundfiles = async (meta, map = {}) => {
+            const result = { ...map };
+            const needed =
+                (FaustWasm.SoundfileReader.findSoundfilesFromMeta &&
+                    FaustWasm.SoundfileReader.findSoundfilesFromMeta(meta)) ||
+                {};
+            Object.keys(needed).forEach((k) => {
+                result[k] = result[k] || silentSoundfile();
+            });
+            // If nothing was detected, still provide a default entry
+            if (!Object.keys(result).length) {
+                result["/dummy/sound.wav"] = silentSoundfile();
+            }
+            return result;
+        };
     }
 
     console.log("=".repeat(60));
@@ -149,7 +168,12 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
     }
 
     // Helper: capture processor code size by running createNode() with optional feature override
-    async function captureProcessorSize(generator, testName, detectOverride) {
+    async function captureProcessorSize(
+        generator,
+        testName,
+        detectOverride,
+        requireSuccess = false
+    ) {
         const originalDetect = FaustWasm.FaustBaseWebAudioDsp.detectFeatures;
         if (detectOverride) {
             FaustWasm.FaustBaseWebAudioDsp.detectFeatures = detectOverride;
@@ -158,13 +182,79 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
         lastWorkletBlob = null;
         const fakeContext = createFakeAudioContext();
         try {
-            await generator.createNode(fakeContext, testName);
+            const node = await generator.createNode(fakeContext, testName);
+            if (!node && requireSuccess) {
+                throw new Error("createNode() returned null/undefined");
+            }
         } catch (e) {
-            console.log(`⚠️  Warning: createNode() failed for ${testName}: ${e}`);
+            if (requireSuccess) {
+                throw e;
+            } else {
+                console.log(
+                    `⚠️  Warning: createNode() failed for ${testName}: ${e}`
+                );
+            }
         } finally {
             FaustWasm.FaustBaseWebAudioDsp.detectFeatures = originalDetect;
         }
         return getProcessorCodeSize(generator);
+    }
+
+    function isSilent(samples, tolerance = 1e-8) {
+        if (!samples) return true;
+        let max = 0;
+        for (const ch of samples) {
+            for (let i = 0; i < ch.length; i++) {
+                const v = Math.abs(ch[i]);
+                if (v > max) max = v;
+            }
+        }
+        return max <= tolerance;
+    }
+
+    async function renderSamples(generator, testName, detectOverride) {
+        const originalDetect = FaustWasm.FaustBaseWebAudioDsp.detectFeatures;
+        if (detectOverride) {
+            FaustWasm.FaustBaseWebAudioDsp.detectFeatures = detectOverride;
+        }
+        try {
+            if (generator instanceof FaustWasm.FaustMonoDspGenerator) {
+                const proc = await generator.createOfflineProcessor(44100, 256);
+                if (proc?.setParamValue) proc.setParamValue("gate", 1);
+                const rendered = proc?.render(null, 256);
+                if (!rendered) throw new Error("render() returned falsy");
+                const samples = rendered.map((ch) => Array.from(ch));
+                return { samples, silent: isSilent(samples) };
+            } else {
+                const proc = await generator.createOfflineProcessor(
+                    44100,
+                    256,
+                    4
+                );
+                if (proc?.setParamValue) proc.setParamValue("gate", 1);
+                if (proc?.keyOn) proc.keyOn(0, 60, 100);
+                const rendered = proc?.render(null, 256);
+                if (!rendered) throw new Error("render() returned falsy");
+                const samples = rendered.map((ch) => Array.from(ch));
+                return { samples, silent: isSilent(samples) };
+            }
+        } finally {
+            FaustWasm.FaustBaseWebAudioDsp.detectFeatures = originalDetect;
+        }
+    }
+
+    function compareSamples(a, b, tolerance = 1e-6) {
+        if (!a || !b) return false;
+        if (a.length !== b.length) return false;
+        for (let c = 0; c < a.length; c++) {
+            const ca = a[c];
+            const cb = b[c];
+            if (ca.length !== cb.length) return false;
+            for (let i = 0; i < ca.length; i++) {
+                if (Math.abs(ca[i] - cb[i]) > tolerance) return false;
+            }
+        }
+        return true;
     }
 
     // Helper: compile a DSP and print processor code sizes (optimized vs unoptimized)
@@ -176,7 +266,66 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
 
         if (result) {
             console.log("✓ Compiled successfully");
-            const optimizedBytes = await captureProcessorSize(generator, testName);
+            // Run a small offline render to ensure the generated code works
+            const skipAudio =
+                testName.includes("soundfile") || testName.includes("sound");
+            if (!skipAudio) {
+                try {
+                    if (generator instanceof FaustWasm.FaustMonoDspGenerator) {
+                        const proc = await generator.createOfflineProcessor(
+                            44100,
+                            256
+                        );
+                        const rendered = proc?.render(null, 512);
+                        if (!rendered) throw new Error("render() returned falsy");
+                    } else {
+                        const proc = await generator.createOfflineProcessor(
+                            44100,
+                            256,
+                            4
+                        );
+                        const rendered = proc?.render(null, 512);
+                        if (!rendered) throw new Error("render() returned falsy");
+                    }
+                    console.log("✓ Offline render succeeded");
+                } catch (e) {
+                    console.log(
+                        `✗ Offline render failed for ${testName}: ${
+                            e.message || e
+                        }`
+                    );
+                }
+            } else {
+                console.log("ℹ️  Audio render skipped for soundfile test in Node sandbox.");
+            }
+
+            let optimizedBytes = 0;
+            let optimizedSamples = null;
+            let optimizedSilent = true;
+            try {
+                optimizedBytes = await captureProcessorSize(
+                    generator,
+                    testName,
+                    null,
+                    true
+                );
+                if (!skipAudio) {
+                    const renderedOpt = await renderSamples(
+                        generator,
+                        testName,
+                        null
+                    );
+                    optimizedSamples = renderedOpt.samples;
+                    optimizedSilent = renderedOpt.silent;
+                } else {
+                    optimizedSilent = false;
+                }
+                console.log("✓ Optimized createNode() succeeded");
+            } catch (e) {
+                console.log(
+                    `✗ Optimized createNode() failed for ${testName}: ${e}`
+                );
+            }
             const unoptimizedBytes = await captureProcessorSize(
                 generator,
                 `${testName}_full`,
@@ -188,6 +337,31 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
                     hasPoly: true
                 })
             );
+            let unoptimizedSamples = null;
+            let unoptimizedSilent = true;
+            try {
+                if (!skipAudio) {
+                    const renderedUnopt = await renderSamples(
+                        generator,
+                        `${testName}_full`,
+                        () => ({
+                            hasMidi: true,
+                            hasAcc: true,
+                            hasGyr: true,
+                            hasSoundfiles: true,
+                            hasPoly: true
+                        })
+                    );
+                    unoptimizedSamples = renderedUnopt.samples;
+                    unoptimizedSilent = renderedUnopt.silent;
+                } else {
+                    unoptimizedSilent = false;
+                }
+            } catch (e) {
+                console.log(
+                    `✗ Unoptimized render failed for ${testName}: ${e.message || e}`
+                );
+            }
             console.log(
                 `Processor code size (optimized): ${optimizedBytes} bytes`
             );
@@ -198,6 +372,34 @@ const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
                 const ratio = (unoptimizedBytes / optimizedBytes).toFixed(2);
                 console.log(
                     `Size ratio (unoptimized / optimized): ${ratio}x\n`
+                );
+            }
+            if (optimizedSamples && unoptimizedSamples) {
+                const same = compareSamples(
+                    optimizedSamples,
+                    unoptimizedSamples
+                );
+                console.log(
+                    same
+                        ? "✓ Audio output matches between optimized and unoptimized"
+                        : "✗ Audio output differs between optimized and unoptimized"
+                );
+            }
+            if (!optimizedSilent && !unoptimizedSilent) {
+                if (optimizedSamples && unoptimizedSamples) {
+                    const same = compareSamples(
+                        optimizedSamples,
+                        unoptimizedSamples
+                    );
+                    console.log(
+                        same
+                            ? "✓ Audio output matches between optimized and unoptimized"
+                            : "✗ Audio output differs between optimized and unoptimized"
+                    );
+                }
+            } else {
+                console.log(
+                    "✗ One of the renders produced silence; cannot compare audio output"
                 );
             }
         } else {
