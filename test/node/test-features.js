@@ -1,117 +1,377 @@
-import * as FaustWasm from "../../dist/esm/index.js";
+/**
+ * Faust DSP Feature Test Suite
+ *
+ * This test file compiles six different DSP test cases with various feature combinations
+ * and prints the raw byte length of the generated processor code for each one.
+ *
+ * Test cases:
+ * - simple: Basic DSP without special features
+ * - soundfile: DSP with soundfile support
+ * - acc: DSP with accelerometer sensor support
+ * - gyr: DSP with gyroscope sensor support
+ * - midi: DSP with MIDI support
+ * - multi: Polyphonic DSP with effect
+ *
+ * The processor code size is printed to help CI and developers observe the size
+ * of generated code for each feature combination during tests.
+ */
+
 import * as path from "path";
 import * as fs from "fs";
 import { fileURLToPath } from "url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Minimal Web Audio stubs to allow createNode() to run in Node and capture processor code
+const navigatorStub = { userAgent: "node" };
+const navigatorValue =
+    typeof globalThis.navigator === "undefined"
+        ? navigatorStub
+        : globalThis.navigator;
+if (typeof globalThis.navigator === "undefined") {
+    globalThis.navigator = navigatorValue;
+}
+globalThis.location = globalThis.location || { href: "file://" };
+if (!globalThis.location.href) {
+    globalThis.location.href = "file://";
+}
+globalThis.window = globalThis.window || { navigator: navigatorValue };
 
-const faustModule = await FaustWasm.instantiateFaustModuleFromFile(
-    path.join(__dirname, "../../libfaust-wasm/libfaust-wasm.js")
-);
+let lastWorkletBlob = null;
+let capturedProcessorCode = "";
+const OriginalCreateObjectURL = URL.createObjectURL;
 
-const compiler = new FaustWasm.FaustCompiler(faustModule);
-
-console.log("Testing feature detection...\n");
-
-// Helper: print size of generated processor code (raw byte length).
-// This helps track processorCode regressions during development and CI.
-function printProcessorCodeSize(gen, name) {
-    let code = "";
-    if (typeof gen.processorCode === "string") {
-        code = gen.processorCode;
-    } else if (typeof gen.getProcessorCode === "function") {
-        try {
-            code = gen.getProcessorCode();
-        } catch (e) {
-            console.log(`Warning: getProcessorCode() threw for ${name}: ${e}`);
-        }
-    } else {
-        console.log(`Warning: processorCode not found for generator ${name}.`);
+class AudioWorkletNodeStub {
+    constructor(context, name, options = {}) {
+        this.context = context;
+        this.name = name;
+        this.options = options;
+        this.port = {
+            postMessage: () => {},
+            addEventListener: () => {},
+            start: () => {},
+            close: () => {}
+        };
     }
-    const bytes = Buffer.byteLength(code || "", "utf8");
-    console.log(`Processor code size: ${bytes} bytes\n`);
-    return bytes;
 }
 
-// Test 1: Simple mono DSP without features
-const simpleDSP = `
-import("stdfaust.lib");
-process = os.osc(440);
-`;
-console.log("Test 1: Simple mono DSP");
-const monoGen = new FaustWasm.FaustMonoDspGenerator();
-await monoGen.compile(compiler, "simple", simpleDSP, "-I libraries/");
-// Should detect no features (hasSoundfiles, hasAcc, hasGyr, hasMidi should all be false)
-console.log("✓ Compiled successfully\n");
-printProcessorCodeSize(monoGen, 'simple');
+globalThis.AudioWorkletNode =
+    globalThis.AudioWorkletNode || AudioWorkletNodeStub;
 
-// Test 2: DSP with soundfile
-const soundfileDSP = `
-import("stdfaust.lib");
-s = soundfile("test[url:{'sound.wav'}]", 1);
-process = s;
-`;
-console.log("Test 2: DSP with soundfile");
-const soundfileGen = new FaustWasm.FaustMonoDspGenerator();
-await soundfileGen.compile(compiler, "soundfile", soundfileDSP, "-I libraries/");
-// Should detect hasSoundfiles = true
-console.log("✓ Compiled successfully\n");
-printProcessorCodeSize(soundfileGen, 'soundfile');
+URL.createObjectURL = (blob) => {
+    lastWorkletBlob = blob;
+    capturedProcessorCode = "";
+    return "blob:faustwasm-test";
+};
 
-// Test 3: DSP with accelerometer
-const accDSP = `
-import("stdfaust.lib");
-freq = hslider("freq[acc: 0 0 -10 0 10]", 440, 20, 20000, 0.01);
-process = os.osc(freq);
-`;
-console.log("Test 3: DSP with accelerometer");
-const accGen = new FaustWasm.FaustMonoDspGenerator();
-await accGen.compile(compiler, "acc", accDSP, "-I libraries/");
-// Should detect hasAcc = true
-console.log("✓ Compiled successfully\n");
-printProcessorCodeSize(accGen, 'acc');
+function createFakeAudioContext() {
+    return {
+        sampleRate: 44100,
+        audioWorklet: {
+            addModule: async () => {
+                if (lastWorkletBlob) {
+                    capturedProcessorCode = await lastWorkletBlob.text();
+                }
+            }
+        }
+    };
+}
 
-// Test 4: DSP with gyroscope
-const gyrDSP = `
-import("stdfaust.lib");
-freq = hslider("freq[gyr: 0 0 -10 0 10]", 440, 20, 20000, 0.01);
-process = os.osc(freq);
-`;
-console.log("Test 4: DSP with gyroscope");
-const gyrGen = new FaustWasm.FaustMonoDspGenerator();
-await gyrGen.compile(compiler, "gyr", gyrDSP, "-I libraries/");
-// Should detect hasGyr = true
-console.log("✓ Compiled successfully\n");
-printProcessorCodeSize(gyrGen, 'gyr');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Test 5: DSP with MIDI
-const midiDSP = `
-import("stdfaust.lib");
-freq = hslider("freq[midi: ctrl 1]", 440, 20, 20000, 0.01);
-process = os.osc(freq);
-`;
-console.log("Test 5: DSP with MIDI");
-const midiGen = new FaustWasm.FaustMonoDspGenerator();
-await midiGen.compile(compiler, "midi", midiDSP, "-I libraries/");
-// Should detect hasMidi = true
-console.log("✓ Compiled successfully\n");
-printProcessorCodeSize(midiGen, 'midi');
+// Ensure we have a tiny local WAV to exercise soundfile support without external assets.
+function ensureTestWav(filePath) {
+    if (fs.existsSync(filePath)) return;
+    const sampleRate = 44100;
+    const samples = sampleRate / 10; // 0.1s of silence
+    const numChannels = 1;
+    const bytesPerSample = 2;
+    const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = samples * blockAlign;
+    const buffer = Buffer.alloc(44 + dataSize);
+    buffer.write("RIFF", 0);
+    buffer.writeUInt32LE(36 + dataSize, 4);
+    buffer.write("WAVE", 8);
+    buffer.write("fmt ", 12);
+    buffer.writeUInt32LE(16, 16); // PCM header size
+    buffer.writeUInt16LE(1, 20); // PCM format
+    buffer.writeUInt16LE(numChannels, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(byteRate, 28);
+    buffer.writeUInt16LE(blockAlign, 32);
+    buffer.writeUInt16LE(bytesPerSample * 8, 34);
+    buffer.write("data", 36);
+    buffer.writeUInt32LE(dataSize, 40);
+    buffer.fill(0, 44); // silence payload
+    fs.writeFileSync(filePath, buffer);
+}
 
-// Test 6: DSP with multiple features
-const multiDSP = `
-import("stdfaust.lib");
-s = soundfile("test[url:{'sound.wav'}]", 1);
-freq = hslider("freq[acc: 0 0 -10 0 10][midi: ctrl 1]", 440, 20, 20000, 0.01);
-process = os.osc(freq), s;
-`;
-console.log("Test 6: DSP with multiple features (soundfile + acc + MIDI)");
-const multiGen = new FaustWasm.FaustMonoDspGenerator();
-await multiGen.compile(compiler, "multi", multiDSP, "-I libraries/");
-// Should detect hasSoundfiles = true, hasAcc = true, hasMidi = true
-console.log("✓ Compiled successfully\n");
-printProcessorCodeSize(multiGen, 'multi');
+const soundfilePath = path.join(__dirname, "sound.wav");
+ensureTestWav(soundfilePath);
+const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
 
-console.log("All tests passed! ✓");
-console.log("\nNote: The feature detection happens during compilation.");
-console.log("The generated processorCode will only include the necessary runtime classes.");
-console.log("For example, a simple DSP without features will be ~10 kB instead of ~60 kB.");
+(async () => {
+    const FaustWasm = await import("../../dist/esm/index.js");
+    if (FaustWasm.SoundfileReader?.loadSoundfiles) {
+        FaustWasm.SoundfileReader.loadSoundfiles = async () => ({});
+    }
+
+    console.log("=".repeat(60));
+    console.log("Faust DSP Feature Test Suite");
+    console.log("Testing processor code size for various DSP features");
+    console.log("=".repeat(60));
+
+    // Helper: get processor code size from generator (or captured blob)
+    function getProcessorCodeSize(generator) {
+        let code = "";
+        if (generator.processorCode !== undefined && generator.processorCode !== null) {
+            code = generator.processorCode;
+        } else if (typeof generator.getProcessorCode === "function") {
+            try {
+                code = generator.getProcessorCode();
+            } catch (e) {
+                console.log(
+                    `⚠️  Warning: getProcessorCode() threw for ${generator?.name || "generator"}: ${e}`
+                );
+            }
+        } else {
+            code = capturedProcessorCode || "";
+            if (!code) {
+                console.log(
+                    "⚠️  Warning: Processor code is not available from generator instance."
+                );
+                console.log(
+                    "    The processor code is generated dynamically during createNode()."
+                );
+            }
+        }
+        return Buffer.byteLength(code || "", "utf8");
+    }
+
+    // Helper: capture processor code size by running createNode() with optional feature override
+    async function captureProcessorSize(generator, testName, detectOverride) {
+        const originalDetect = FaustWasm.FaustBaseWebAudioDsp.detectFeatures;
+        if (detectOverride) {
+            FaustWasm.FaustBaseWebAudioDsp.detectFeatures = detectOverride;
+        }
+        capturedProcessorCode = "";
+        lastWorkletBlob = null;
+        const fakeContext = createFakeAudioContext();
+        try {
+            await generator.createNode(fakeContext, testName);
+        } catch (e) {
+            console.log(`⚠️  Warning: createNode() failed for ${testName}: ${e}`);
+        } finally {
+            FaustWasm.FaustBaseWebAudioDsp.detectFeatures = originalDetect;
+        }
+        return getProcessorCodeSize(generator);
+    }
+
+    // Helper: compile a DSP and print processor code sizes (optimized vs unoptimized)
+    async function compileAndPrintSize(compiler, generator, testName, code, args) {
+        console.log(`\nTest: ${testName}`);
+        console.log(`Compiling ${testName}...`);
+
+        const result = await generator.compile(compiler, testName, code, args);
+
+        if (result) {
+            console.log("✓ Compiled successfully");
+            const optimizedBytes = await captureProcessorSize(generator, testName);
+            const unoptimizedBytes = await captureProcessorSize(
+                generator,
+                `${testName}_full`,
+                () => ({
+                    hasMidi: true,
+                    hasAcc: true,
+                    hasGyr: true,
+                    hasSoundfiles: true,
+                    hasPoly: true
+                })
+            );
+            console.log(
+                `Processor code size (optimized): ${optimizedBytes} bytes`
+            );
+            console.log(
+                `Processor code size (unoptimized/all features): ${unoptimizedBytes} bytes\n`
+            );
+            if (optimizedBytes > 0) {
+                const ratio = (unoptimizedBytes / optimizedBytes).toFixed(2);
+                console.log(
+                    `Size ratio (unoptimized / optimized): ${ratio}x\n`
+                );
+            }
+        } else {
+            console.log("✗ Compilation failed\n");
+        }
+
+        return result;
+    }
+
+    // Load Faust module
+    const savedWindow = globalThis.window;
+    globalThis.window = undefined;
+    const faustModule = await FaustWasm.instantiateFaustModuleFromFile(
+        path.join(__dirname, "../../libfaust-wasm/libfaust-wasm.js")
+    );
+    globalThis.window = savedWindow;
+    const libFaust = new FaustWasm.LibFaust(faustModule);
+    const compiler = new FaustWasm.FaustCompiler(libFaust);
+
+    console.log(`\nFaust version: ${compiler.version()}`);
+
+    const options = "-I libraries/";
+
+    // Test 1: Simple DSP (basic oscillator without special features)
+    const simpleCode = `
+import("stdfaust.lib");
+process = os.osc(440) * 0.1;
+`;
+    const simpleGen = new FaustWasm.FaustMonoDspGenerator();
+    await compileAndPrintSize(compiler, simpleGen, "simple", simpleCode, options);
+
+    // Test 2: Soundfile DSP (uses soundfile feature)
+    const soundfileCode = `
+import("stdfaust.lib");
+import("soundfiles.lib");
+s = soundfile("sound [url:{'${soundfileUrl}'}]", 1);
+process = so.sound(s, 0).loop;
+`;
+    const soundfileGen = new FaustWasm.FaustMonoDspGenerator();
+    await compileAndPrintSize(compiler, soundfileGen, "soundfile", soundfileCode, options);
+
+    // Test 3: Accelerometer DSP (uses accelerometer sensor)
+    const accCode = `
+import("stdfaust.lib");
+vol = hslider("volume [acc:1 1 -10 0 10]", 0.5, 0, 1, 0.01);
+freq = hslider("freq [acc:0 1 -10 0 10]", 440, 20, 2000, 1);
+process = os.osc(freq) * vol;
+`;
+    const accGen = new FaustWasm.FaustMonoDspGenerator();
+    await compileAndPrintSize(compiler, accGen, "acc", accCode, options);
+
+    // Test 4: Gyroscope DSP (uses gyroscope sensor)
+    const gyrCode = `
+import("stdfaust.lib");
+vol = hslider("volume [gyr:1 1 -10 0 10]", 0.5, 0, 1, 0.01);
+freq = hslider("freq [gyr:0 1 -10 0 10]", 440, 20, 2000, 1);
+process = os.osc(freq) * vol;
+`;
+    const gyrGen = new FaustWasm.FaustMonoDspGenerator();
+    await compileAndPrintSize(compiler, gyrGen, "gyr", gyrCode, options);
+
+    // Test 5: MIDI DSP (uses MIDI features)
+    const midiCode = `
+import("stdfaust.lib");
+freq = hslider("freq [midi:ctrl 1]", 440, 200, 2000, 0.01);
+vol = hslider("volume [midi:ctrl 7]", 0.5, 0, 1, 0.01);
+gate = button("gate [midi:key 60]");
+process = os.osc(freq) * vol * gate;
+`;
+    const midiGen = new FaustWasm.FaustMonoDspGenerator();
+    await compileAndPrintSize(compiler, midiGen, "midi", midiCode, options);
+
+    // Test 6: Multi/Polyphonic DSP (polyphonic voice)
+    const multiCode = `
+import("stdfaust.lib");
+freq = nentry("freq", 440, 20, 2000, 1);
+gain = nentry("gain", 0.5, 0, 1, 0.01);
+gate = button("gate");
+envelope = en.adsr(0.01, 0.1, 0.8, 0.5, gate);
+process = os.osc(freq) * gain * envelope;
+effect = dm.zita_light;
+`;
+    const multiGen = new FaustWasm.FaustPolyDspGenerator();
+    await compileAndPrintSize(compiler, multiGen, "multi", multiCode, options);
+
+    // Test 7: Polyphonic DSP with soundfile
+    const multiSoundfileCode = `
+import("stdfaust.lib");
+import("soundfiles.lib");
+freq = nentry("freq", 440, 20, 2000, 1);
+gain = nentry("gain", 0.5, 0, 1, 0.01);
+gate = button("gate");
+envelope = en.adsr(0.01, 0.1, 0.8, 0.5, gate);
+s = soundfile("sound [url:{'${soundfileUrl}'}]", 1);
+process = os.osc(freq) * gain * envelope, so.sound(s, 0).loop;
+effect = dm.zita_light;
+`;
+    const multiSoundfileGen = new FaustWasm.FaustPolyDspGenerator();
+    await compileAndPrintSize(
+        compiler,
+        multiSoundfileGen,
+        "multi_soundfile",
+        multiSoundfileCode,
+        options
+    );
+
+    // Test 8: Polyphonic DSP with accelerometer
+    const multiAccCode = `
+import("stdfaust.lib");
+freq = hslider("freq [acc:0 1 -10 0 10]", 440, 20, 2000, 1);
+gain = nentry("gain", 0.5, 0, 1, 0.01);
+gate = button("gate");
+envelope = en.adsr(0.01, 0.1, 0.8, 0.5, gate);
+process = os.osc(freq) * gain * envelope;
+effect = dm.zita_light;
+`;
+    const multiAccGen = new FaustWasm.FaustPolyDspGenerator();
+    await compileAndPrintSize(compiler, multiAccGen, "multi_acc", multiAccCode, options);
+
+    // Test 9: Polyphonic DSP with gyroscope
+    const multiGyrCode = `
+import("stdfaust.lib");
+freq = hslider("freq [gyr:0 1 -10 0 10]", 440, 20, 2000, 1);
+gain = nentry("gain", 0.5, 0, 1, 0.01);
+gate = button("gate");
+envelope = en.adsr(0.01, 0.1, 0.8, 0.5, gate);
+process = os.osc(freq) * gain * envelope;
+effect = dm.zita_light;
+`;
+    const multiGyrGen = new FaustWasm.FaustPolyDspGenerator();
+    await compileAndPrintSize(compiler, multiGyrGen, "multi_gyr", multiGyrCode, options);
+
+    // Test 10: Polyphonic DSP with gyroscope and accelerometer
+    const multiAccGyrCode = `
+import("stdfaust.lib");
+freq = hslider("freq [acc:0 1 -10 0 10][gyr:0 1 -10 0 10]", 440, 20, 2000, 1);
+gain = nentry("gain", 0.5, 0, 1, 0.01);
+gate = button("gate");
+envelope = en.adsr(0.01, 0.1, 0.8, 0.5, gate);
+process = os.osc(freq) * gain * envelope;
+effect = dm.zita_light;
+`;
+    const multiAccGyrGen = new FaustWasm.FaustPolyDspGenerator();
+    await compileAndPrintSize(
+        compiler,
+        multiAccGyrGen,
+        "multi_acc_gyr",
+        multiAccGyrCode,
+        options
+    );
+
+    // Test 11: Polyphonic DSP with gyroscope, accelerometer, and soundfile
+    const multiAccGyrSoundCode = `
+import("stdfaust.lib");
+import("soundfiles.lib");
+freq = hslider("freq [acc:0 1 -10 0 10][gyr:0 1 -10 0 10]", 440, 20, 2000, 1);
+gain = nentry("gain", 0.5, 0, 1, 0.01);
+gate = button("gate");
+envelope = en.adsr(0.01, 0.1, 0.8, 0.5, gate);
+s = soundfile("sound [url:{'${soundfileUrl}'}]", 1);
+process = os.osc(freq) * gain * envelope, so.sound(s, 0).loop;
+effect = dm.zita_light;
+`;
+    const multiAccGyrSoundGen = new FaustWasm.FaustPolyDspGenerator();
+    await compileAndPrintSize(
+        compiler,
+        multiAccGyrSoundGen,
+        "multi_acc_gyr_sound",
+        multiAccGyrSoundCode,
+        options
+    );
+
+    console.log("=".repeat(60));
+    console.log("All tests completed!");
+    console.log("=".repeat(60));
+
+    URL.createObjectURL = OriginalCreateObjectURL;
+})();
