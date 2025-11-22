@@ -30,12 +30,16 @@ the same flags.
 
 ## Impact
 
-The generated `processorCode` size is reduced from ~60 kB to a much smaller size
-depending on the features actually used:
-- Basic mono DSP without sensors, MIDI, or soundfiles: ~10 kB
-- With soundfiles: adds Soundfile and WasmAllocator classes
-- With sensors (accelerometer/gyroscope): adds sensor communicator classes
-- Polyphonic DSP: includes poly-specific classes
+Representative `processorCode` byte sizes (from `test/node/test-features.js`
+on the current codebase):
+
+- Mono, no extras (simple oscillator): ~47 kB optimized vs ~70 kB unoptimized.
+- Mono with soundfile: ~56 kB optimized vs ~70 kB unoptimized.
+- Mono with sensors (acc/gyr): ~61 kB optimized vs ~70 kB unoptimized.
+- Mono MIDI: ~47 kB optimized vs ~70 kB unoptimized.
+- Poly (voice+effect, no sensors): ~63 kB optimized vs ~86 kB unoptimized.
+- Poly soundfile variants: ~73–87 kB optimized depending on feature mix.
+- Full poly mix (acc+gyr+soundfile): ~87 kB optimized, similar unoptimized.
 
 This optimization significantly reduces the memory footprint and initial load time
 for DSPs that don't use all features, addressing the concerns raised in issue #32.
