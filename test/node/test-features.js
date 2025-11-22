@@ -82,7 +82,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 function ensureTestWav(filePath) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     const sampleRate = 44100;
-    const samples = 64; // tiny buffer to keep wasm copies small
+    const samples = 262144; // match the default length expected by soundfile runtime
     const numChannels = 1;
     const bytesPerSample = 2;
     const blockAlign = numChannels * bytesPerSample;
@@ -102,7 +102,7 @@ function ensureTestWav(filePath) {
     buffer.writeUInt16LE(bytesPerSample * 8, 34);
     buffer.write("data", 36);
     buffer.writeUInt32LE(dataSize, 40);
-    // Write a small ramp so content is non-silent
+    // Write a ramped sine to ensure non-silence
     for (let i = 0; i < samples; i++) {
         const val = Math.sin((Math.PI * 2 * i) / samples) * 0.5;
         buffer.writeInt16LE(Math.round(val * 32767), 44 + i * 2);
@@ -145,6 +145,13 @@ function loadWav(filePath) {
     for (let i = 0; i < samples.length; i++) {
         const ch = i % numChannels;
         channelData[ch][Math.floor(i / numChannels)] = samples[i] / denom;
+    }
+    // Copy channels to detatch from Node Buffer backing store and pad generously
+    const targetLen = Math.max(channelData[0].length, 600000);
+    for (let c = 0; c < channelData.length; c++) {
+        const copy = new Float32Array(targetLen);
+        copy.set(channelData[c]);
+        channelData[c] = copy;
     }
     return { audioBuffer: channelData, sampleRate };
 }
@@ -281,6 +288,38 @@ function loadWav(filePath) {
             if (generator instanceof FaustWasm.FaustMonoDspGenerator) {
                 const proc = await generator.createOfflineProcessor(44100, 256);
                 if (proc?.setParamValue) proc.setParamValue("gate", 1);
+                try {
+                    const dsp = proc?.fDSPCode;
+                    if (dsp?.fInstance?.memory && dsp?.fSoundfiles?.length) {
+                        const HEAP32 = new Int32Array(dsp.fInstance.memory.buffer);
+                        const index = dsp.fSoundfiles[0]?.index || 0;
+                        const basePtr = dsp.fSoundfiles[0]?.basePtr || 0;
+                        const ptrIndex = (dsp.fDSP + index) >> 2;
+                        const fPtr = HEAP32[ptrIndex];
+                        const fLength = HEAP32[(fPtr + dsp.fPtrSize) >> 2];
+                        const fSR = HEAP32[(fPtr + 2 * dsp.fPtrSize) >> 2];
+                        const fOffset = HEAP32[(fPtr + 3 * dsp.fPtrSize) >> 2];
+                        // Force pointer in case it was clobbered by a previous instantiation
+                        if (basePtr && fPtr !== basePtr) {
+                            HEAP32[ptrIndex] = basePtr;
+                        }
+                        console.log("Soundfile debug (mono renderSamples):", {
+                            fDSP: dsp.fDSP,
+                            index,
+                            basePtr,
+                            fPtr,
+                            fLengthPtr: fLength,
+                            fSRPtr: fSR,
+                            fOffsetPtr: fOffset,
+                            length0: HEAP32[fLength >> 2],
+                            sr0: HEAP32[fSR >> 2],
+                            offset0: HEAP32[fOffset >> 2],
+                            buffer0: HEAP32[fPtr >> 2]
+                        });
+                    }
+                } catch (err) {
+                    console.log("Soundfile debug read failed", err);
+                }
                 const rendered = proc?.render(null, 256);
                 if (!rendered) throw new Error("render() returned falsy");
                 const samples = rendered.map((ch) => Array.from(ch));
@@ -317,6 +356,20 @@ function loadWav(filePath) {
         return true;
     }
 
+    async function reloadSoundfiles(generator) {
+        const loader = FaustWasm.SoundfileReader;
+        if (!loader?.loadSoundfiles) return;
+        const meta = generator.factory
+            ? JSON.parse(generator.factory.json)
+            : null;
+        if (!meta) return;
+        generator.factory.soundfiles = await loader.loadSoundfiles(
+            meta,
+            {},
+            createFakeAudioContext()
+        );
+    }
+
     // Helper: compile a DSP and print processor code sizes (optimized vs unoptimized)
     async function compileAndPrintSize(compiler, generator, testName, code, args) {
         console.log(`\nTest: ${testName}`);
@@ -331,6 +384,7 @@ function loadWav(filePath) {
             const skipAudio = false;
             if (!skipAudio) {
                 try {
+                    if (isSoundfile) await reloadSoundfiles(generator);
                     if (generator instanceof FaustWasm.FaustMonoDspGenerator) {
                         const proc = await generator.createOfflineProcessor(
                             44100,
@@ -363,11 +417,25 @@ function loadWav(filePath) {
             let optimizedSamples = null;
             let optimizedSilent = true;
             try {
+                if (isSoundfile) await reloadSoundfiles(generator);
+                if (isSoundfile && generator.factory?.soundfiles) {
+                    console.log(
+                        `Soundfile buffers before optimized createNode:`,
+                        Object.entries(generator.factory.soundfiles).map(
+                            ([k, v]) => ({
+                                id: k,
+                                channels: v.audioBuffer.length,
+                                length: v.audioBuffer[0]?.length || 0,
+                                sampleRate: v.sampleRate
+                            })
+                        )
+                    );
+                }
                 optimizedBytes = await captureProcessorSize(
                     generator,
                     testName,
                     null,
-                    !isSoundfile
+                    true
                 );
                 const renderedOpt = await renderSamples(
                     generator,
@@ -378,15 +446,11 @@ function loadWav(filePath) {
                 optimizedSilent = renderedOpt.silent;
                 console.log("✓ Optimized createNode() succeeded");
             } catch (e) {
-                if (!isSoundfile) {
-                    console.log(
-                        `✗ Optimized createNode() failed for ${testName}: ${e}`
-                    );
-                } else {
-                    console.log(
-                        "⚠️  Optimized createNode() skipped (soundfile in Node environment)"
-                    );
-                }
+                console.log(
+                    `✗ Optimized createNode() failed for ${testName}: ${
+                        e.stack || e
+                    }`
+                );
             }
             const unoptimizedBytes = await captureProcessorSize(
                 generator,
@@ -398,11 +462,25 @@ function loadWav(filePath) {
                     hasSoundfiles: true,
                     hasPoly: true
                 }),
-                false
+                true
             );
             let unoptimizedSamples = null;
             let unoptimizedSilent = true;
             try {
+                if (isSoundfile) await reloadSoundfiles(generator);
+                if (isSoundfile && generator.factory?.soundfiles) {
+                    console.log(
+                        `Soundfile buffers before unoptimized createNode:`,
+                        Object.entries(generator.factory.soundfiles).map(
+                            ([k, v]) => ({
+                                id: k,
+                                channels: v.audioBuffer.length,
+                                length: v.audioBuffer[0]?.length || 0,
+                                sampleRate: v.sampleRate
+                            })
+                        )
+                    );
+                }
                 const renderedUnopt = await renderSamples(
                     generator,
                     `${testName}_full`,
@@ -417,15 +495,11 @@ function loadWav(filePath) {
                 unoptimizedSamples = renderedUnopt.samples;
                 unoptimizedSilent = renderedUnopt.silent;
             } catch (e) {
-                if (!isSoundfile) {
-                    console.log(
-                        `✗ Unoptimized render failed for ${testName}: ${e.message || e}`
-                    );
-                } else {
-                    console.log(
-                        "⚠️  Unoptimized createNode() skipped (soundfile in Node environment)"
-                    );
-                }
+                console.log(
+                    `✗ Unoptimized render failed for ${testName}: ${
+                        e.stack || e
+                    }`
+                );
             }
             console.log(
                 `Processor code size (optimized): ${optimizedBytes} bytes`

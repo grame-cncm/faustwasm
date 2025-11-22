@@ -1209,38 +1209,26 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         const soundfileIds = FaustBaseWebAudioDsp.splitSoundfileNames(url);
         const item = this.fSoundfiles.find((item) => item.url === url);
         if (!item) throw new Error(`Soundfile with ${url} cannot be found !}`);
-        // Use the cached Soundfile
-        if (item.basePtr !== -1) {
+        // Always allocate a fresh soundfile for each DSP instance to avoid
+        // reusing pointers from a different WebAssembly.Memory.
+        item.basePtr = -1;
+        const soundfile = this.createSoundfile(
+            allocator,
+            soundfileIds,
+            this.fSoundfileBuffers
+        );
+        if (soundfile) {
             // Update HEAP32 after soundfile creation
-            const HEAP32 = allocator.getInt32Array();
-            // Fill the soundfile structure in wasm memory, soundfiles are at the beginning of the DSP memory
+            const HEAP32 = soundfile.getHEAP32();
+            // Get the soundfile pointer in wasm memory
+            item.basePtr = soundfile.getPtr();
             console.log(
-                `Soundfile CACHE ${url}} : ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`
+                `Soundfile ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`
             );
             // Soundfile is located at 'index' in the DSP struct, to be added with baseDSP in the wasm memory
             HEAP32[(baseDSP + item.index) >> 2] = item.basePtr;
         } else {
-            // Create the soundfiles
-            const soundfile = this.createSoundfile(
-                allocator,
-                soundfileIds,
-                this.fSoundfileBuffers
-            );
-            if (soundfile) {
-                // Update HEAP32 after soundfile creation
-                const HEAP32 = soundfile.getHEAP32();
-                // Get the soundfile pointer in wasm memory
-                item.basePtr = soundfile.getPtr();
-                console.log(
-                    `Soundfile ${name} loaded at ${item.basePtr} in wasm memory with index ${item.index}`
-                );
-                // Soundfile is located at 'index' in the DSP struct, to be added with baseDSP in the wasm memory
-                HEAP32[(baseDSP + item.index) >> 2] = item.basePtr;
-            } else {
-                console.log(
-                    `Soundfile ${name} for ${url} cannot be created !}`
-                );
-            }
+            console.log(`Soundfile ${name} for ${url} cannot be created !}`);
         }
     }
 

@@ -48,6 +48,76 @@ import {
 } from './FaustAudioWorkletCommunicator';
 import type { FaustFeatureFlags } from './types';
 
+function createLoaderContext(
+    sampleRate?: number
+): BaseAudioContext | OfflineAudioContext | null {
+    const AC: typeof AudioContext | undefined =
+        (globalThis as any).AudioContext ||
+        (globalThis as any).webkitAudioContext;
+    const OAC: typeof OfflineAudioContext | undefined =
+        (globalThis as any).OfflineAudioContext ||
+        (globalThis as any).webkitOfflineAudioContext;
+    if (typeof AC === 'function') {
+        return new AC();
+    }
+    if (typeof OAC === 'function') {
+        return new OAC(1, 1, sampleRate || Soundfile.SAMPLE_RATE);
+    }
+    return null;
+}
+
+async function ensureSoundfilesLoaded(
+    meta: FaustDspMeta,
+    factory: LooseFaustDspFactory,
+    context?: BaseAudioContext,
+    sampleRate?: number
+) {
+    const required = SoundfileReader.findSoundfilesFromMeta(meta) || {};
+    const missingIds = Object.keys(required).filter(
+        (id) => !factory.soundfiles || !factory.soundfiles[id]
+    );
+    if (!missingIds.length) {
+        return factory.soundfiles;
+    }
+
+    let loaderCtx: BaseAudioContext | OfflineAudioContext | null =
+        context || createLoaderContext(sampleRate);
+    let createdCtx: BaseAudioContext | OfflineAudioContext | null = loaderCtx;
+
+    try {
+        factory.soundfiles = await SoundfileReader.loadSoundfiles(
+            meta,
+            factory.soundfiles || {},
+            (loaderCtx ||
+                // Allow custom loaders that ignore the context argument
+                ({} as BaseAudioContext)) as BaseAudioContext
+        );
+    } catch (e) {
+        console.warn(`Failed to load soundfiles: ${e}`);
+    } finally {
+        if (!context && createdCtx && typeof (createdCtx as any).close === 'function') {
+            try {
+                await (createdCtx as any).close();
+            } catch {
+                // ignore
+            }
+        }
+    }
+
+    // Fill missing entries with silence to keep the DSP stable even if loading failed.
+    const soundMap = factory.soundfiles || {};
+    missingIds.forEach((id) => {
+        if (!soundMap[id]) {
+            soundMap[id] = {
+                audioBuffer: [new Float32Array(Soundfile.BUFFER_SIZE)],
+                sampleRate: Soundfile.SAMPLE_RATE
+            };
+        }
+    });
+    factory.soundfiles = soundMap;
+    return factory.soundfiles;
+}
+
 /**
  * Serialize a runtime constructor with an alias so it survives minification
  */
@@ -657,12 +727,14 @@ const dependencies = {
         const instance =
             await FaustWasmInstantiator.createAsyncMonoDSPInstance(factory);
         const sampleSize = meta.compile_options.match('-double') ? 8 : 4;
-        if (context)
-            factory.soundfiles = await SoundfileReader.loadSoundfiles(
+        if (SoundfileReader.findSoundfilesFromMeta(meta)) {
+            await ensureSoundfilesLoaded(
                 meta,
-                factory.soundfiles || {},
-                context
+                factory,
+                context,
+                sampleRate
             );
+        }
         const monoDsp = new FaustMonoWebAudioDsp(
             instance,
             sampleRate,
@@ -1094,18 +1166,21 @@ const dependencies = {
             effectFactory || undefined
         );
         const sampleSize = voiceMeta.compile_options.match('-double') ? 8 : 4;
-        if (context) {
-            voiceFactory.soundfiles = await SoundfileReader.loadSoundfiles(
+        if (SoundfileReader.findSoundfilesFromMeta(voiceMeta)) {
+            await ensureSoundfilesLoaded(
                 voiceMeta,
-                voiceFactory.soundfiles || {},
-                context
+                voiceFactory,
+                context,
+                sampleRate
             );
-            if (effectFactory)
-                effectFactory.soundfiles = await SoundfileReader.loadSoundfiles(
-                    effectMeta,
-                    effectFactory.soundfiles || {},
-                    context
-                );
+        }
+        if (effectFactory && effectMeta && SoundfileReader.findSoundfilesFromMeta(effectMeta)) {
+            await ensureSoundfilesLoaded(
+                effectMeta,
+                effectFactory,
+                context,
+                sampleRate
+            );
         }
         const soundfiles = {
             ...effectFactory?.soundfiles,
