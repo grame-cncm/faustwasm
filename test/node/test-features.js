@@ -17,27 +17,30 @@
  * processor code size in CI and local development.
  */
 
-import * as path from "path";
-import * as fs from "fs";
-import { fileURLToPath } from "url";
+import * as path from 'path';
+import * as fs from 'fs';
+import { fileURLToPath } from 'url';
 
+// -----------------------------------------------------------------------------//
+// Web Audio stubs (Node context)
+// -----------------------------------------------------------------------------//
 // Minimal Web Audio stubs to allow createNode() to run in Node and capture processor code
-const navigatorStub = { userAgent: "node" };
+const navigatorStub = { userAgent: 'node' };
 const navigatorValue =
-    typeof globalThis.navigator === "undefined"
+    typeof globalThis.navigator === 'undefined'
         ? navigatorStub
         : globalThis.navigator;
-if (typeof globalThis.navigator === "undefined") {
+if (typeof globalThis.navigator === 'undefined') {
     globalThis.navigator = navigatorValue;
 }
-globalThis.location = globalThis.location || { href: "file://" };
+globalThis.location = globalThis.location || { href: 'file://' };
 if (!globalThis.location.href) {
-    globalThis.location.href = "file://";
+    globalThis.location.href = 'file://';
 }
 globalThis.window = globalThis.window || { navigator: navigatorValue };
 
 let lastWorkletBlob = null;
-let capturedProcessorCode = "";
+let capturedProcessorCode = '';
 const OriginalCreateObjectURL = URL.createObjectURL;
 
 class AudioWorkletNodeStub {
@@ -59,8 +62,8 @@ globalThis.AudioWorkletNode =
 
 URL.createObjectURL = (blob) => {
     lastWorkletBlob = blob;
-    capturedProcessorCode = "";
-    return "blob:faustwasm-test";
+    capturedProcessorCode = '';
+    return 'blob:faustwasm-test';
 };
 
 function createFakeAudioContext() {
@@ -78,7 +81,10 @@ function createFakeAudioContext() {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Ensure we have a tiny local WAV to exercise soundfile support without external assets.
+// -----------------------------------------------------------------------------//
+// Soundfile fixtures (local WAV generation/loading)
+// -----------------------------------------------------------------------------//
+// Always recreate a local WAV so soundfile tests stay offline and deterministic.
 function ensureTestWav(filePath) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     const sampleRate = 44100;
@@ -89,10 +95,10 @@ function ensureTestWav(filePath) {
     const byteRate = sampleRate * blockAlign;
     const dataSize = samples * blockAlign;
     const buffer = Buffer.alloc(44 + dataSize);
-    buffer.write("RIFF", 0);
+    buffer.write('RIFF', 0);
     buffer.writeUInt32LE(36 + dataSize, 4);
-    buffer.write("WAVE", 8);
-    buffer.write("fmt ", 12);
+    buffer.write('WAVE', 8);
+    buffer.write('fmt ', 12);
     buffer.writeUInt32LE(16, 16); // PCM header size
     buffer.writeUInt16LE(1, 20); // PCM format
     buffer.writeUInt16LE(numChannels, 22);
@@ -100,7 +106,7 @@ function ensureTestWav(filePath) {
     buffer.writeUInt32LE(byteRate, 28);
     buffer.writeUInt16LE(blockAlign, 32);
     buffer.writeUInt16LE(bytesPerSample * 8, 34);
-    buffer.write("data", 36);
+    buffer.write('data', 36);
     buffer.writeUInt32LE(dataSize, 40);
     // Write a ramped sine to ensure non-silence
     for (let i = 0; i < samples; i++) {
@@ -110,33 +116,34 @@ function ensureTestWav(filePath) {
     fs.writeFileSync(filePath, buffer);
 }
 
-const soundfilePath = path.join(__dirname, "sound.wav");
+const soundfilePath = path.join(__dirname, 'sound.wav');
 ensureTestWav(soundfilePath);
-const soundfileUrl = `file://${soundfilePath.replace(/\\/g, "/")}`;
+const soundfileUrl = `file://${soundfilePath.replace(/\\/g, '/')}`;
 
-// Simple PCM WAV loader for local files (16-bit mono/stereo)
+// Simple PCM WAV loader for local files (16/32-bit, mono/stereo), with padding to avoid wasm OOB.
 function loadWav(filePath) {
     const buf = fs.readFileSync(filePath);
-    if (buf.toString("ascii", 0, 4) !== "RIFF") {
-        throw new Error("Not a WAV file");
+    if (buf.toString('ascii', 0, 4) !== 'RIFF') {
+        throw new Error('Not a WAV file');
     }
-    const fmtIndex = buf.indexOf("fmt ");
-    const dataIndex = buf.indexOf("data");
+    const fmtIndex = buf.indexOf('fmt ');
+    const dataIndex = buf.indexOf('data');
     if (fmtIndex < 0 || dataIndex < 0) {
-        throw new Error("Invalid WAV structure");
+        throw new Error('Invalid WAV structure');
     }
     const audioFormat = buf.readUInt16LE(fmtIndex + 8);
     const numChannels = buf.readUInt16LE(fmtIndex + 10);
     const sampleRate = buf.readUInt32LE(fmtIndex + 12);
     const bitsPerSample = buf.readUInt16LE(fmtIndex + 22);
     if (audioFormat !== 1 || (bitsPerSample !== 16 && bitsPerSample !== 32)) {
-        throw new Error("Only PCM 16/32-bit WAV supported");
+        throw new Error('Only PCM 16/32-bit WAV supported');
     }
     const dataSize = buf.readUInt32LE(dataIndex + 4);
     const start = dataIndex + 8;
-    const samples = bitsPerSample === 16
-        ? new Int16Array(buf.buffer, buf.byteOffset + start, dataSize / 2)
-        : new Int32Array(buf.buffer, buf.byteOffset + start, dataSize / 4);
+    const samples =
+        bitsPerSample === 16
+            ? new Int16Array(buf.buffer, buf.byteOffset + start, dataSize / 2)
+            : new Int32Array(buf.buffer, buf.byteOffset + start, dataSize / 4);
     const denom = bitsPerSample === 16 ? 32768 : 2147483648;
     const channelData = [];
     for (let c = 0; c < numChannels; c++) {
@@ -156,11 +163,14 @@ function loadWav(filePath) {
     return { audioBuffer: channelData, sampleRate };
 }
 
+// -----------------------------------------------------------------------------//
+// Test runner
+// -----------------------------------------------------------------------------//
 (async () => {
-    const FaustWasm = await import("../../dist/esm/index.js");
+    const FaustWasm = await import('../../dist/esm/index.js');
     if (FaustWasm.SoundfileReader) {
         FaustWasm.SoundfileReader.loadSoundfile = async (pathStr) => {
-            const p = pathStr.replace(/^file:\/\//, "");
+            const p = pathStr.replace(/^file:\/\//, '');
             try {
                 return loadWav(p);
             } catch (e) {
@@ -182,7 +192,9 @@ function loadWav(filePath) {
                     const p = needed[id]?.path || soundfilePath;
                     try {
                         result[id] = loadWav(
-                            p.startsWith("file://") ? p.replace(/^file:\/\//, "") : p
+                            p.startsWith('file://')
+                                ? p.replace(/^file:\/\//, '')
+                                : p
                         );
                     } catch {
                         result[id] = {
@@ -193,45 +205,51 @@ function loadWav(filePath) {
                 }
             }
             if (!Object.keys(result).length) {
-                result["/dummy/sound.wav"] = loadWav(soundfilePath);
+                result['/dummy/sound.wav'] = loadWav(soundfilePath);
             }
             return result;
         };
     }
 
-    console.log("=".repeat(60));
-    console.log("Faust DSP Feature Test Suite");
-    console.log("Testing processor code size for various DSP features");
-    console.log("=".repeat(60));
+    // -------------------------------------------------------------------------//
+    // Helper utilities (size capture, rendering, comparison)
+    // -------------------------------------------------------------------------//
+    console.log('='.repeat(60));
+    console.log('Faust DSP Feature Test Suite');
+    console.log('Testing processor code size for various DSP features');
+    console.log('='.repeat(60));
 
     // Helper: get processor code size from generator (or captured blob)
     function getProcessorCodeSize(generator) {
-        let code = "";
-        if (generator.processorCode !== undefined && generator.processorCode !== null) {
+        let code = '';
+        if (
+            generator.processorCode !== undefined &&
+            generator.processorCode !== null
+        ) {
             code = generator.processorCode;
-        } else if (typeof generator.getProcessorCode === "function") {
+        } else if (typeof generator.getProcessorCode === 'function') {
             try {
                 code = generator.getProcessorCode();
             } catch (e) {
                 console.log(
-                    `⚠️  Warning: getProcessorCode() threw for ${generator?.name || "generator"}: ${e}`
+                    `⚠️  Warning: getProcessorCode() threw for ${generator?.name || 'generator'}: ${e}`
                 );
             }
         } else {
-            code = capturedProcessorCode || "";
+            code = capturedProcessorCode || '';
             if (!code) {
                 console.log(
-                    "⚠️  Warning: Processor code is not available from generator instance."
+                    '⚠️  Warning: Processor code is not available from generator instance.'
                 );
                 console.log(
-                    "    The processor code is generated dynamically during createNode()."
+                    '    The processor code is generated dynamically during createNode().'
                 );
             }
         }
-        return Buffer.byteLength(code || "", "utf8");
+        return Buffer.byteLength(code || '', 'utf8');
     }
 
-    // Helper: capture processor code size by running createNode() with optional feature override
+    // Capture processor code size by running createNode() with optional feature override.
     async function captureProcessorSize(
         generator,
         testName,
@@ -244,13 +262,13 @@ function loadWav(filePath) {
         if (detectOverride) {
             FaustWasm.FaustBaseWebAudioDsp.detectFeatures = detectOverride;
         }
-        capturedProcessorCode = "";
+        capturedProcessorCode = '';
         lastWorkletBlob = null;
         const fakeContext = createFakeAudioContext();
         try {
             const node = await generator.createNode(fakeContext, testName);
             if (!node && requireSuccess) {
-                throw new Error("createNode() returned null/undefined");
+                throw new Error('createNode() returned null/undefined');
             }
         } catch (e) {
             if (requireSuccess) {
@@ -262,11 +280,13 @@ function loadWav(filePath) {
             }
         } finally {
             FaustWasm.FaustBaseWebAudioDsp.detectFeatures = originalDetect;
-            if (sfr && originalLoadSoundfiles) sfr.loadSoundfiles = originalLoadSoundfiles;
+            if (sfr && originalLoadSoundfiles)
+                sfr.loadSoundfiles = originalLoadSoundfiles;
         }
         return getProcessorCodeSize(generator);
     }
 
+    // Return true if all samples are near zero (used to detect silent renders).
     function isSilent(samples, tolerance = 1e-8) {
         if (!samples) return true;
         let max = 0;
@@ -279,6 +299,7 @@ function loadWav(filePath) {
         return max <= tolerance;
     }
 
+    // Run a short offline render for mono or poly DSP and return audio plus silence flag.
     async function renderSamples(generator, testName, detectOverride) {
         const originalDetect = FaustWasm.FaustBaseWebAudioDsp.detectFeatures;
         if (detectOverride) {
@@ -287,11 +308,13 @@ function loadWav(filePath) {
         try {
             if (generator instanceof FaustWasm.FaustMonoDspGenerator) {
                 const proc = await generator.createOfflineProcessor(44100, 256);
-                if (proc?.setParamValue) proc.setParamValue("gate", 1);
+                if (proc?.setParamValue) proc.setParamValue('gate', 1);
                 try {
                     const dsp = proc?.fDSPCode;
                     if (dsp?.fInstance?.memory && dsp?.fSoundfiles?.length) {
-                        const HEAP32 = new Int32Array(dsp.fInstance.memory.buffer);
+                        const HEAP32 = new Int32Array(
+                            dsp.fInstance.memory.buffer
+                        );
                         const index = dsp.fSoundfiles[0]?.index || 0;
                         const basePtr = dsp.fSoundfiles[0]?.basePtr || 0;
                         const ptrIndex = (dsp.fDSP + index) >> 2;
@@ -303,7 +326,7 @@ function loadWav(filePath) {
                         if (basePtr && fPtr !== basePtr) {
                             HEAP32[ptrIndex] = basePtr;
                         }
-                        console.log("Soundfile debug (mono renderSamples):", {
+                        console.log('Soundfile debug (mono renderSamples):', {
                             fDSP: dsp.fDSP,
                             index,
                             basePtr,
@@ -318,10 +341,10 @@ function loadWav(filePath) {
                         });
                     }
                 } catch (err) {
-                    console.log("Soundfile debug read failed", err);
+                    console.log('Soundfile debug read failed', err);
                 }
                 const rendered = proc?.render(null, 256);
-                if (!rendered) throw new Error("render() returned falsy");
+                if (!rendered) throw new Error('render() returned falsy');
                 const samples = rendered.map((ch) => Array.from(ch));
                 return { samples, silent: isSilent(samples) };
             } else {
@@ -330,10 +353,10 @@ function loadWav(filePath) {
                     256,
                     4
                 );
-                if (proc?.setParamValue) proc.setParamValue("gate", 1);
+                if (proc?.setParamValue) proc.setParamValue('gate', 1);
                 if (proc?.keyOn) proc.keyOn(0, 60, 100);
                 const rendered = proc?.render(null, 256);
-                if (!rendered) throw new Error("render() returned falsy");
+                if (!rendered) throw new Error('render() returned falsy');
                 const samples = rendered.map((ch) => Array.from(ch));
                 return { samples, silent: isSilent(samples) };
             }
@@ -342,6 +365,7 @@ function loadWav(filePath) {
         }
     }
 
+    // Numeric comparison of two rendered buffers within tolerance.
     function compareSamples(a, b, tolerance = 1e-6) {
         if (!a || !b) return false;
         if (a.length !== b.length) return false;
@@ -356,6 +380,7 @@ function loadWav(filePath) {
         return true;
     }
 
+    // Reload soundfile map for a generator based on its JSON meta if available.
     async function reloadSoundfiles(generator) {
         const loader = FaustWasm.SoundfileReader;
         if (!loader?.loadSoundfiles) return;
@@ -370,17 +395,24 @@ function loadWav(filePath) {
         );
     }
 
-    // Helper: compile a DSP and print processor code sizes (optimized vs unoptimized)
-    async function compileAndPrintSize(compiler, generator, testName, code, args) {
+    // Compile a DSP, sanity render it, and print processor code sizes (optimized vs unoptimized).
+    async function compileAndPrintSize(
+        compiler,
+        generator,
+        testName,
+        code,
+        args
+    ) {
         console.log(`\nTest: ${testName}`);
         console.log(`Compiling ${testName}...`);
 
         const result = await generator.compile(compiler, testName, code, args);
 
         if (result) {
-            console.log("✓ Compiled successfully");
+            console.log('✓ Compiled successfully');
             // Run a small offline render to ensure the generated code works
-            const isSoundfile = testName.includes("soundfile") || testName.includes("sound");
+            const isSoundfile =
+                testName.includes('soundfile') || testName.includes('sound');
             const skipAudio = false;
             if (!skipAudio) {
                 try {
@@ -391,7 +423,8 @@ function loadWav(filePath) {
                             256
                         );
                         const rendered = proc?.render(null, 512);
-                        if (!rendered) throw new Error("render() returned falsy");
+                        if (!rendered)
+                            throw new Error('render() returned falsy');
                     } else {
                         const proc = await generator.createOfflineProcessor(
                             44100,
@@ -399,9 +432,10 @@ function loadWav(filePath) {
                             4
                         );
                         const rendered = proc?.render(null, 512);
-                        if (!rendered) throw new Error("render() returned falsy");
+                        if (!rendered)
+                            throw new Error('render() returned falsy');
                     }
-                    console.log("✓ Offline render succeeded");
+                    console.log('✓ Offline render succeeded');
                 } catch (e) {
                     console.log(
                         `✗ Offline render failed for ${testName}: ${
@@ -410,7 +444,9 @@ function loadWav(filePath) {
                     );
                 }
             } else {
-                console.log("ℹ️  Audio render skipped for soundfile test in Node sandbox.");
+                console.log(
+                    'ℹ️  Audio render skipped for soundfile test in Node sandbox.'
+                );
             }
 
             let optimizedBytes = 0;
@@ -444,7 +480,7 @@ function loadWav(filePath) {
                 );
                 optimizedSamples = renderedOpt.samples;
                 optimizedSilent = renderedOpt.silent;
-                console.log("✓ Optimized createNode() succeeded");
+                console.log('✓ Optimized createNode() succeeded');
             } catch (e) {
                 console.log(
                     `✗ Optimized createNode() failed for ${testName}: ${
@@ -520,8 +556,8 @@ function loadWav(filePath) {
                 );
                 console.log(
                     same
-                        ? "✓ Audio output matches between optimized and unoptimized"
-                        : "✗ Audio output differs between optimized and unoptimized"
+                        ? '✓ Audio output matches between optimized and unoptimized'
+                        : '✗ Audio output differs between optimized and unoptimized'
                 );
             }
             if (!optimizedSilent && !unoptimizedSilent) {
@@ -532,27 +568,30 @@ function loadWav(filePath) {
                     );
                     console.log(
                         same
-                            ? "✓ Audio output matches between optimized and unoptimized"
-                            : "✗ Audio output differs between optimized and unoptimized"
+                            ? '✓ Audio output matches between optimized and unoptimized'
+                            : '✗ Audio output differs between optimized and unoptimized'
                     );
                 }
             } else {
                 console.log(
-                    "✗ One of the renders produced silence; cannot compare audio output"
+                    '✗ One of the renders produced silence; cannot compare audio output'
                 );
             }
         } else {
-            console.log("✗ Compilation failed\n");
+            console.log('✗ Compilation failed\n');
         }
 
         return result;
     }
 
+    // -------------------------------------------------------------------------//
+    // Faust setup and individual test cases
+    // -------------------------------------------------------------------------//
     // Load Faust module
     const savedWindow = globalThis.window;
     globalThis.window = undefined;
     const faustModule = await FaustWasm.instantiateFaustModuleFromFile(
-        path.join(__dirname, "../../libfaust-wasm/libfaust-wasm.js")
+        path.join(__dirname, '../../libfaust-wasm/libfaust-wasm.js')
     );
     globalThis.window = savedWindow;
     const libFaust = new FaustWasm.LibFaust(faustModule);
@@ -560,7 +599,7 @@ function loadWav(filePath) {
 
     console.log(`\nFaust version: ${compiler.version()}`);
 
-    const options = "-I libraries/";
+    const options = '-I libraries/';
 
     // Test 1: Simple DSP (basic oscillator without special features)
     const simpleCode = `
@@ -568,7 +607,13 @@ import("stdfaust.lib");
 process = os.osc(440) * 0.1;
 `;
     const simpleGen = new FaustWasm.FaustMonoDspGenerator();
-    await compileAndPrintSize(compiler, simpleGen, "simple", simpleCode, options);
+    await compileAndPrintSize(
+        compiler,
+        simpleGen,
+        'simple',
+        simpleCode,
+        options
+    );
 
     // Test 2: Soundfile DSP (uses soundfile feature)
     const soundfileCode = `
@@ -578,7 +623,13 @@ s = soundfile("sound [url:{'${soundfileUrl}'}]", 1);
 process = so.sound(s, 0).loop;
 `;
     const soundfileGen = new FaustWasm.FaustMonoDspGenerator();
-    await compileAndPrintSize(compiler, soundfileGen, "soundfile", soundfileCode, options);
+    await compileAndPrintSize(
+        compiler,
+        soundfileGen,
+        'soundfile',
+        soundfileCode,
+        options
+    );
 
     // Test 3: Accelerometer DSP (uses accelerometer sensor)
     const accCode = `
@@ -588,7 +639,7 @@ freq = hslider("freq [acc:0 1 -10 0 10]", 440, 20, 2000, 1);
 process = os.osc(freq) * vol;
 `;
     const accGen = new FaustWasm.FaustMonoDspGenerator();
-    await compileAndPrintSize(compiler, accGen, "acc", accCode, options);
+    await compileAndPrintSize(compiler, accGen, 'acc', accCode, options);
 
     // Test 4: Gyroscope DSP (uses gyroscope sensor)
     const gyrCode = `
@@ -598,7 +649,7 @@ freq = hslider("freq [gyr:0 1 -10 0 10]", 440, 20, 2000, 1);
 process = os.osc(freq) * vol;
 `;
     const gyrGen = new FaustWasm.FaustMonoDspGenerator();
-    await compileAndPrintSize(compiler, gyrGen, "gyr", gyrCode, options);
+    await compileAndPrintSize(compiler, gyrGen, 'gyr', gyrCode, options);
 
     // Test 5: MIDI DSP (uses MIDI features)
     const midiCode = `
@@ -609,7 +660,7 @@ gate = button("gate [midi:key 60]");
 process = os.osc(freq) * vol * gate;
 `;
     const midiGen = new FaustWasm.FaustMonoDspGenerator();
-    await compileAndPrintSize(compiler, midiGen, "midi", midiCode, options);
+    await compileAndPrintSize(compiler, midiGen, 'midi', midiCode, options);
 
     // Test 6: Multi/Polyphonic DSP (polyphonic voice)
     const multiCode = `
@@ -622,7 +673,7 @@ process = os.osc(freq) * gain * envelope;
 effect = dm.zita_light;
 `;
     const multiGen = new FaustWasm.FaustPolyDspGenerator();
-    await compileAndPrintSize(compiler, multiGen, "multi", multiCode, options);
+    await compileAndPrintSize(compiler, multiGen, 'multi', multiCode, options);
 
     // Test 7: Polyphonic DSP with soundfile
     const multiSoundfileCode = `
@@ -640,7 +691,7 @@ effect = dm.zita_light;
     await compileAndPrintSize(
         compiler,
         multiSoundfileGen,
-        "multi_soundfile",
+        'multi_soundfile',
         multiSoundfileCode,
         options
     );
@@ -656,7 +707,13 @@ process = os.osc(freq) * gain * envelope;
 effect = dm.zita_light;
 `;
     const multiAccGen = new FaustWasm.FaustPolyDspGenerator();
-    await compileAndPrintSize(compiler, multiAccGen, "multi_acc", multiAccCode, options);
+    await compileAndPrintSize(
+        compiler,
+        multiAccGen,
+        'multi_acc',
+        multiAccCode,
+        options
+    );
 
     // Test 9: Polyphonic DSP with gyroscope
     const multiGyrCode = `
@@ -669,7 +726,13 @@ process = os.osc(freq) * gain * envelope;
 effect = dm.zita_light;
 `;
     const multiGyrGen = new FaustWasm.FaustPolyDspGenerator();
-    await compileAndPrintSize(compiler, multiGyrGen, "multi_gyr", multiGyrCode, options);
+    await compileAndPrintSize(
+        compiler,
+        multiGyrGen,
+        'multi_gyr',
+        multiGyrCode,
+        options
+    );
 
     // Test 10: Polyphonic DSP with gyroscope and accelerometer
     const multiAccGyrCode = `
@@ -685,7 +748,7 @@ effect = dm.zita_light;
     await compileAndPrintSize(
         compiler,
         multiAccGyrGen,
-        "multi_acc_gyr",
+        'multi_acc_gyr',
         multiAccGyrCode,
         options
     );
@@ -706,14 +769,14 @@ effect = dm.zita_light;
     await compileAndPrintSize(
         compiler,
         multiAccGyrSoundGen,
-        "multi_acc_gyr_sound",
+        'multi_acc_gyr_sound',
         multiAccGyrSoundCode,
         options
     );
 
-    console.log("=".repeat(60));
-    console.log("All tests completed!");
-    console.log("=".repeat(60));
+    console.log('='.repeat(60));
+    console.log('All tests completed!');
+    console.log('='.repeat(60));
 
     URL.createObjectURL = OriginalCreateObjectURL;
 })();
