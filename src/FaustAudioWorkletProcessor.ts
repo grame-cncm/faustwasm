@@ -11,6 +11,7 @@ import type {
     AudioWorkletGlobalScope,
     LooseFaustDspFactory,
     FaustDspMeta,
+    FaustFeatureFlags,
     FaustUIItem
 } from './types';
 import type {
@@ -27,6 +28,7 @@ export interface FaustData {
     dspMeta: FaustDspMeta;
     poly: boolean;
     effectMeta?: FaustDspMeta;
+    features: FaustFeatureFlags;
 }
 export interface FaustAudioWorkletProcessorDependencies<
     Poly extends boolean = false
@@ -92,7 +94,10 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         FaustAudioWorkletProcessorCommunicator
     } = dependencies;
 
-    const { processorName, dspName, dspMeta, effectMeta, poly } = faustData;
+    const { processorName, dspName, dspMeta, effectMeta, poly, features } =
+        faustData;
+    const needsSensors = features.hasAcc || features.hasGyr;
+    const isPoly = !!(poly || features.hasPoly);
 
     // Analyse voice JSON to generate AudioParam parameters
     const analysePolyParameters = (
@@ -109,7 +114,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         const isPolyReserved =
             'address' in item &&
             !!polyKeywords.find((k) => item.address.endsWith(k));
-        if (poly && isPolyReserved) return null;
+        if (isPoly && isPolyReserved) return null;
         if (
             item.type === 'vslider' ||
             item.type === 'hslider' ||
@@ -146,15 +151,19 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         protected paramValuesCache: Record<string, number> = {};
 
         protected wamInfo?: { moduleId: string; instanceId: string };
-        protected fCommunicator: FaustAudioWorkletProcessorCommunicator;
+        protected fCommunicator?: FaustAudioWorkletProcessorCommunicator;
+        protected readonly features: FaustFeatureFlags;
 
         constructor(options: FaustAudioWorkletNodeOptions<Poly>) {
             super(options);
 
             // Setup port message handling
-            this.fCommunicator = new FaustAudioWorkletProcessorCommunicator(
-                this.port
-            );
+            this.features = features;
+            if (needsSensors) {
+                this.fCommunicator = new FaustAudioWorkletProcessorCommunicator(
+                    this.port
+                );
+            }
 
             const { parameterDescriptors } = this
                 .constructor as typeof AudioWorkletProcessor;
@@ -212,7 +221,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                     this.setParamValue(path, paramValue);
                 }
             }
-            if (this.fCommunicator.getNewAccDataAvailable()) {
+            if (needsSensors && this.fCommunicator?.getNewAccDataAvailable()) {
                 const acc = this.fCommunicator.getAcc();
                 if (acc) {
                     this.fCommunicator.setNewAccDataAvailable(false);
@@ -220,7 +229,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                     this.propagateAcc(data, invert);
                 }
             }
-            if (this.fCommunicator.getNewGyrDataAvailable()) {
+            if (needsSensors && this.fCommunicator?.getNewGyrDataAvailable()) {
                 const gyr = this.fCommunicator.getGyr();
                 if (gyr) {
                     this.fCommunicator.setNewGyrDataAvailable(false);
