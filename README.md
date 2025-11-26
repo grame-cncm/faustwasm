@@ -333,7 +333,13 @@ An offline processor to render a DSP in a non real-time context and get the comp
 
 #### High-level API <a name="high"></a>
 
-A high-level API is available to compile a DSP program and create the audio node, either monophonic or polyphonic using `createNode`. Offline processing monophonic or polyphonic nodes can be created using `createOfflineProcessor`. FFT processing nodes can be created using `createFFTNode`. It is described in `FaustDspGenerator.ts`. 
+The high-level API provides convenient functions to compile a Faust DSP program and create its corresponding audio node, either monophonic or polyphonic.
+- `createNode` explicitly builds a mono or polyphonic node.
+- `createFaustNode` automatically selects mono or polyphonic mode by inspecting the `[nvoices:] `field in the DSP metadata.
+
+For offline rendering, `createOfflineProcessor` is available and supports both mono and polyphonic processing. FFT processing nodes can be created using `createFFTNode`.
+
+This API is implemented in FaustDspGenerator.ts.
 
 #### How to use with typescript <a name="tsuse"></a>
 
@@ -359,8 +365,6 @@ Html pages embedding the Faust compiler must be served using https, unless using
 
 ----
 <a href="http://faust.grame.fr"><img src=https://faust.grame.fr/community/logos/img/LOGO_FAUST_COMPLET_ORANGE.png width=200 /></a>
-
-
 
 
 

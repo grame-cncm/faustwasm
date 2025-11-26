@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>createFaustNode Test</title>
+    <!-- Ensure root-relative resolution for libfaust assets -->
+    <base href="/" />
+    <style>
+        body { font-family: sans-serif; margin: 1.5rem; }
+        button { padding: 0.5rem 1rem; margin-top: 1rem; }
+        pre { background: #f6f6f6; padding: 1rem; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>createFaustNode Test</h1>
+    <p>This page exercises <code>createFaustNode</code> for mono and poly DSP snippets. Serve the repo root (so <code>dist/</code> and <code>libfaust-wasm/</code> are reachable) and run <code>npm run build</code> first.</p>
+    <button id="run">Run tests</button>
+    <pre id="log"></pre>
+
+    <script type="module">
+        import { runTests } from '/test/web/create-faust-node.js';
+
+        const logEl = document.getElementById('log');
+        const runBtn = document.getElementById('run');
+
+        const originalLog = console.log.bind(console);
+        const originalErr = console.error.bind(console);
+        const append = (label, msg) => {
+            logEl.textContent += `${label}: ${msg}\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+        };
+        console.log = (...args) => {
+            append('LOG', args.join(' '));
+            originalLog(...args);
+        };
+        console.error = (...args) => {
+            append('ERR', args.join(' '));
+            originalErr(...args);
+        };
+
+        runBtn.addEventListener('click', async () => {
+            append('INFO', 'Starting tests…');
+            try {
+                await runTests();
+                append('INFO', 'Tests triggered (check audio/console logs).');
+            } catch (e) {
+                append('ERR', `Failed to start tests: ${e.message || e}`);
+            }
+        });
+    </script>
+</body>
+</html>

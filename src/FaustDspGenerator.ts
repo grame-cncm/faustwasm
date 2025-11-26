@@ -33,7 +33,7 @@ import {
 } from './FaustWebAudioDsp';
 import SoundfileReader from './SoundfileReader';
 import FaustSensors from './FaustSensors';
-import type { IFaustCompiler } from './FaustCompiler';
+import FaustCompiler, { IFaustCompiler } from './FaustCompiler';
 import type {
     FaustDspFactory,
     FaustUIDescriptor,
@@ -46,6 +46,8 @@ import {
     FaustAudioWorkletCommunicator,
     FaustAudioWorkletProcessorCommunicator
 } from './FaustAudioWorkletCommunicator';
+import instantiateFaustModuleFromFile from './instantiateFaustModuleFromFile';
+import LibFaust from './LibFaust';
 
 export interface GeneratorSupportingSoundfiles {
     /**
@@ -59,6 +61,27 @@ export interface GeneratorSupportingSoundfiles {
      * Get a list of soundfiles needed, call after `compile()`
      */
     getSoundfileList(): string[];
+}
+
+export interface IFaustDspGenerator {
+    /**
+     * Create a monophonic or polyphonic WebAudio node (either ScriptProcessorNode or AudioWorkletNode).
+     * Analyze the code to decide whether to create a monophonic or polyphonic node.
+     *
+     * @param context - the WebAudio context
+     * @param name - DSP name, can be used for processorName
+     * @param code - the DSP code
+     * @param sp - whether to compile a ScriptProcessorNode or an AudioWorkletNode
+     * @param bufferSize - the buffer size in frames to be used in ScriptProcessorNode only, since AudioWorkletNode always uses 128 frames
+     * @returns the compiled monophonic or polyphonic WebAudio node or 'null' if failure
+     */
+    createFaustNode(
+        context: BaseAudioContext,
+        name: string,
+        code: string,
+        sp?: boolean,
+        bufferSize?: number,
+    ): Promise<IFaustMonoWebAudioNode | IFaustPolyWebAudioNode | null>;
 }
 
 export interface IFaustMonoDspGenerator extends GeneratorSupportingSoundfiles {
@@ -1052,5 +1075,138 @@ const dependencies = {
 
     getUI() {
         return this.getMeta().ui;
+    }
+}
+
+interface JSONData {
+    meta: Array<{ options?: string }>;
+}
+
+export class FaustDspGenerator implements IFaustDspGenerator {
+    
+    private static compilerPromise: Promise<FaustCompiler> | null = null;
+    
+    // Analyze the metadata of a Faust JSON file and extract the [midi:on] and [nvoices:n] options
+    private extractMidiAndNvoices(
+        jsonData: JSONData
+    ): { midi: boolean; nvoices: number } {
+        const optionsMetadata = jsonData.meta.find((meta) => meta.options);
+        if (optionsMetadata && optionsMetadata.options) {
+            const options = optionsMetadata.options;
+
+            const midiRegex = /\[midi:(on|off)\]/;
+            const nvoicesRegex = /\[nvoices:(\d+)\]/;
+
+            const midiMatch = options.match(midiRegex);
+            const nvoicesMatch = options.match(nvoicesRegex);
+
+            const midi = midiMatch ? midiMatch[1] === 'on' : false;
+            const nvoices = nvoicesMatch ? parseInt(nvoicesMatch[1], 10) : -1;
+
+            return { midi, nvoices };
+        } else {
+            return { midi: false, nvoices: -1 };
+        }
+    }
+    
+    /**
+     * Compile DSP code, inspect metadata for [nvoices:] (and optionally [midi:on]), and build either a mono
+     * or poly WebAudio node (ScriptProcessor or AudioWorklet depending on `sp`). Compilation uses a shared,
+     * lazily-created libfaust instance to avoid repeatedly instantiating the WASM compiler.
+     */
+    async createFaustNode(
+        context: BaseAudioContext,
+        name: string,
+        code: string,
+        sp?: boolean,
+        bufferSize?: number,
+    ): Promise<IFaustMonoWebAudioNode | IFaustPolyWebAudioNode | null> {
+        const getCompiler = async () => {
+            if (!FaustDspGenerator.compilerPromise) {
+                // Resolve libfaust-wasm assets relative to current script/page location (works in browser and bundlers).
+                // Falling back to document/baseURI keeps things working when import.meta.url is unavailable (es2019 target).
+                const baseURL =
+                    (typeof document !== 'undefined'
+                        ? ('src' in (document.currentScript || {})
+                              ? (document.currentScript as HTMLScriptElement)
+                                    .src
+                              : document.baseURI)
+                        : undefined) ||
+                    (typeof window !== 'undefined'
+                        ? window.location.href
+                        : undefined);
+                if (!baseURL)
+                    throw new Error('Cannot resolve libfaust-wasm location.');
+                const jsURL = new URL(
+                    '../libfaust-wasm/libfaust-wasm.js',
+                    baseURL
+                    ).href;
+                const dataURL = jsURL.replace(/c?js$/, 'data');
+                const wasmURL = jsURL.replace(/c?js$/, 'wasm');
+                FaustDspGenerator.compilerPromise =
+                    instantiateFaustModuleFromFile(
+                        jsURL,
+                        dataURL,
+                        wasmURL
+                    ).then((module) => new FaustCompiler(new LibFaust(module)));
+            }
+            return FaustDspGenerator.compilerPromise;
+        };
+
+        const args = '-ftz 2';
+
+        try {
+            const compiler = await getCompiler();
+            // First compile as mono to inspect metadata for nvoices/midi tags; if nvoices > 0 we recompile as poly.
+            const monoGenerator = new FaustMonoDspGenerator();
+            const compiledMono = await monoGenerator.compile(
+                compiler,
+                name,
+                code,
+                args
+            );
+            if (!compiledMono) return null;
+
+            // Extract nvoices from metadata
+            const { nvoices } = this.extractMidiAndNvoices(
+                monoGenerator.getMeta() as unknown as JSONData
+            );
+
+            // If nvoices > 0, recompile as polyphonic
+            if (nvoices > 0) {
+                const polyGenerator = new FaustPolyDspGenerator();
+                const compiledPoly = await polyGenerator.compile(
+                    compiler,
+                    name,
+                    code,
+                    args
+                );
+                if (!compiledPoly) return null;
+
+                // Poly creation: combine voice/effect factories, create node with requested SP/AWN and buffer size.
+                return await polyGenerator.createNode(
+                    context,
+                    nvoices,
+                    name,
+                    undefined,
+                    undefined,
+                    undefined,
+                    sp,
+                    bufferSize
+                );
+            }
+
+            // Mono creation path when no polyphony hint is present.
+            return await monoGenerator.createNode(
+                context,
+                name,
+                undefined,
+                sp,
+                bufferSize
+            );
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
     }
 }
