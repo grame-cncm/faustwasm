@@ -19,11 +19,7 @@ process = gain * os.osc(freq) * gate;
 const polyEffectCode = `
 declare options "[nvoices:4][midi:on]";
 import("stdfaust.lib");
-freq = hslider("freq", 440, 50, 2000, 1);
-gain = hslider("gain", 0.5, 0, 1, 0.01);
-gate = button("gate");
-synth = gain * os.osc(freq) * gate;
-process = synth, synth : dm.zita_light;
+process = pm.clarinet_ui_MIDI <: dm.zita_light;
 `;
 
 const audioContext = new AudioContext({ latencyHint: 'interactive' });
@@ -44,8 +40,8 @@ async function runMonoPolyTest(modeLabel, sp = false, bufferSize) {
 
     try {
         log(`Starting ${modeLabel} mono test for 5 seconds…`);
-        const monoGenerator = new FaustDspGenerator();
-        const monoNode = await monoGenerator.createFaustNode(
+        const generator = new FaustDspGenerator();
+        const monoNode = await generator.createFaustNode(
             audioContext,
             `${modeLabel}_mono_test`,
             monoCode,
@@ -67,8 +63,7 @@ async function runMonoPolyTest(modeLabel, sp = false, bufferSize) {
         monoNode.disconnect();
         log(`${modeLabel} mono stopped after 5 seconds; starting poly test…`);
 
-        const polyGenerator = new FaustDspGenerator();
-        const polyNode = await polyGenerator.createFaustNode(
+        const polyNode = await generator.createFaustNode(
             audioContext,
             `${modeLabel}_poly_test`,
             polyCode,

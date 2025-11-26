@@ -334,8 +334,8 @@ An offline processor to render a DSP in a non real-time context and get the comp
 #### High-level API <a name="high"></a>
 
 The high-level API provides convenient functions to compile a Faust DSP program and create its corresponding audio node, either monophonic or polyphonic.
-- `createNode` explicitly builds a mono or polyphonic node.
-- `createFaustNode` automatically selects mono or polyphonic mode by inspecting the `[nvoices:] `field in the DSP metadata.
+- using the appropriate `FaustMonoDspGenerator` or `FaustPolyDspGenerator` class, `createNode` explicitly builds a mono or polyphonic node.
+- `createFaustNode` automatically selects mono or polyphonic mode by inspecting the `[nvoices:N] `field in the DSP metadata.
 
 For offline rendering, `createOfflineProcessor` is available and supports both mono and polyphonic processing. FFT processing nodes can be created using `createFFTNode`.
 
