@@ -1,4 +1,4 @@
-# Feature Flag Plumbing
+# Feature flags memory Optimization
 
 This change introduces minimal plumbing that lets the Faust worklet runtime know
 which optional helpers (MIDI, accelerometer, gyroscope and soundfiles) are
@@ -31,15 +31,20 @@ the same flags.
 ## Impact
 
 Representative `processorCode` byte sizes (from `test/node/test-features.js`
-on the current codebase):
+on the current codebase). Percent values show reduction versus the unoptimized
+baseline:
 
-- Mono, no extras (simple oscillator): ~47 kB optimized vs ~70 kB unoptimized.
-- Mono with soundfile: ~56 kB optimized vs ~70 kB unoptimized.
-- Mono with sensors (acc/gyr): ~61 kB optimized vs ~70 kB unoptimized.
-- Mono MIDI: ~47 kB optimized vs ~70 kB unoptimized.
-- Poly (voice+effect, no sensors): ~63 kB optimized vs ~86 kB unoptimized.
-- Poly soundfile variants: ~73–87 kB optimized depending on feature mix.
-- Full poly mix (acc+gyr+soundfile): ~87 kB optimized, similar unoptimized.
+| hasMidi | hasAcc | hasGyr | hasSoundFile | hasPoly | unoptimized | optimized | % |
+|---------|--------|--------|--------------|---------|-------------|-----------|---|
+| no      | no     | no     | no           | no      | ~70 kB      | ~47 kB    | 33% |
+| no      | no     | no     | yes          | no      | ~70 kB      | ~56 kB    | 20% |
+| no      | yes    | yes    | no           | no      | ~70 kB      | ~61 kB    | 13% |
+| yes     | no     | no     | no           | no      | ~70 kB      | ~47 kB    | 33% |
+| yes     | no     | no     | no           | yes     | ~86 kB      | ~63 kB    | 27% |
+| yes     | no     | no     | yes          | yes     | ~86 kB      | ~73 kB    | 15% |
+| yes     | yes    | no     | yes          | yes     | ~86 kB      | ~80 kB    | 7% |
+| yes     | no     | yes    | yes          | yes     | ~86 kB      | ~80 kB    | 7% |
+| yes     | yes    | yes    | yes          | yes     | ~87 kB      | ~87 kB    | ~0% |
 
 This optimization significantly reduces the memory footprint and initial load time
 for DSPs that don't use all features, addressing the concerns raised in issue #32.
