@@ -4,7 +4,7 @@
 
 const monoCode = `
 import("stdfaust.lib");
-process = os.osc(220) * 0.05;
+process = os.osc(220) * 0.5;
 `;
 
 const polyCode = `
@@ -13,13 +13,14 @@ import("stdfaust.lib");
 freq = hslider("freq", 440, 50, 2000, 1);
 gain = hslider("gain", 0.5, 0, 1, 0.01);
 gate = button("gate");
-process = gain * os.osc(freq) * gate;
+process = gain * os.osc(freq) * gate * 0.25;
 `;
 
 const polyEffectCode = `
 declare options "[nvoices:4][midi:on]";
 import("stdfaust.lib");
-process = pm.clarinet_ui_MIDI <: dm.zita_light;
+process = pm.clarinet_ui_MIDI;
+effect = dm.zita_light;
 `;
 
 const audioContext = new AudioContext({ latencyHint: 'interactive' });

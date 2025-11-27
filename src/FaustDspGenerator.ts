@@ -741,7 +741,13 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
                 }
             }
         } catch (e) {
-            console.warn(e);
+            // Hack to detect 'undefined effect' symbol error, when no effect is defined in the polyphonic code.
+            // The error message is not printed to avoid confusing the user.
+            const errorMessage =
+                e instanceof Error ? e.message : String(e ?? 'unknown error');
+            if (!errorMessage.includes('undefined symbol : effect')) {
+                console.warn(e);
+            }
             this.voiceFactory = await compiler.createPolyDSPFactory(
                 name,
                 dspCodeAux,
