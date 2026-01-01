@@ -32,6 +32,7 @@ export class FaustAudioWorkletNode<
     protected fUICallback: UIHandler;
     protected fDescriptor: FaustUIInputItem[];
     protected fCommunicator: FaustAudioWorkletNodeCommunicator;
+    protected fParamAliases: Record<string, string>;
     #hasAccInput = false;
     #hasGyrInput = false;
 
@@ -62,6 +63,7 @@ export class FaustAudioWorkletNode<
         this.fComputeHandler = null;
         this.fPlotHandler = null;
         this.fDescriptor = [];
+        this.fParamAliases = {};
 
         // Parse UI
         this.fInputsItems = [];
@@ -76,6 +78,13 @@ export class FaustAudioWorkletNode<
                 // Keep inputs adresses
                 this.fInputsItems.push(item.address);
                 this.fDescriptor.push(item);
+                const registerAlias = (alias: string) => {
+                    if (!this.fParamAliases[alias]) {
+                        this.fParamAliases[alias] = item.address;
+                    }
+                };
+                registerAlias(item.shortname);
+                registerAlias(item.label);
                 if (!item.meta) return;
                 item.meta.forEach((meta) => {
                     const { midi, acc, gyr } = meta;
@@ -289,15 +298,16 @@ export class FaustAudioWorkletNode<
     }
 
     setParamValue(path: string, value: number) {
-        const e = { type: 'param', data: { path, value } };
-        this.port.postMessage(e);
+        const resolved = this.fParamAliases[path] || path;
+        this.port.postMessage({ type: 'param', data: { path: resolved, value } });
         // Set value on AudioParam (but this is not used on Processor side for now)
-        const param = this.parameters.get(path);
+        const param = this.parameters.get(resolved);
         if (param) param.setValueAtTime(value, this.context.currentTime);
     }
     getParamValue(path: string) {
         // Get value of AudioParam
-        const param = this.parameters.get(path);
+        const resolved = this.fParamAliases[path] || path;
+        const param = this.parameters.get(resolved);
         return param ? param.value : 0;
     }
 

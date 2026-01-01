@@ -778,10 +778,17 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 
     protected fPathTable: { [address: string]: number } = {};
     protected fUICallback: UIHandler = (item: FaustUIItem) => {
+        const registerPath = (alias: string) => {
+            if (this.fPathTable[alias] === undefined) {
+                this.fPathTable[alias] = item.index;
+            }
+        };
         if (item.type === 'hbargraph' || item.type === 'vbargraph') {
             // Keep bargraph adresses
             this.fOutputsItems.push(item.address);
-            this.fPathTable[item.address] = item.index;
+            registerPath(item.address);
+            registerPath(item.shortname);
+            registerPath(item.label);
         } else if (
             item.type === 'vslider' ||
             item.type === 'hslider' ||
@@ -791,7 +798,9 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         ) {
             // Keep inputs adresses
             this.fInputsItems.push(item.address);
-            this.fPathTable[item.address] = item.index;
+            registerPath(item.address);
+            registerPath(item.shortname);
+            registerPath(item.label);
             this.fDescriptor.push(item);
             if (!item.meta) return;
             item.meta.forEach((meta) => {

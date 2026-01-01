@@ -167,6 +167,7 @@ export interface FaustUIInputItem {
     type: FaustUIInputType;
     label: string;
     address: string;
+    shortname: string;
     url: string;
     index: number;
     init?: number;
@@ -179,6 +180,7 @@ export interface FaustUIOutputItem {
     type: FaustUIOutputType;
     label: string;
     address: string;
+    shortname: string;
     index: number;
     min?: number;
     max?: number;
