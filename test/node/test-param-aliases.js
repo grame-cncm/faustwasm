@@ -1,3 +1,6 @@
+/**
+ * Smoke test: ensure setParamValue/getParamValue accept path, shortname, and label.
+ */
 import * as FaustWasm from "../../dist/esm/index.js";
 import * as path from "path";
 import { fileURLToPath } from "url";

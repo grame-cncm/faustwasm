@@ -778,12 +778,12 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
 
     protected fPathTable: { [address: string]: number } = {};
     protected fUICallback: UIHandler = (item: FaustUIItem) => {
-        const registerPath = (alias: string) => {
-            if (this.fPathTable[alias] === undefined) {
-                this.fPathTable[alias] = item.index;
-            }
-        };
         if (item.type === 'hbargraph' || item.type === 'vbargraph') {
+            const registerPath = (alias: string) => {
+                if (this.fPathTable[alias] === undefined) {
+                    this.fPathTable[alias] = item.index;
+                }
+            };
             // Keep bargraph adresses
             this.fOutputsItems.push(item.address);
             registerPath(item.address);
@@ -796,6 +796,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             item.type === 'checkbox' ||
             item.type === 'nentry'
         ) {
+            const registerPath = (alias: string) => {
+                if (this.fPathTable[alias] === undefined) {
+                    this.fPathTable[alias] = item.index;
+                }
+            };
             // Keep inputs adresses
             this.fInputsItems.push(item.address);
             registerPath(item.address);
