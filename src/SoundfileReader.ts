@@ -8,13 +8,21 @@ import type {
 
 /** Read metadata and fetch soundfiles */
 class SoundfileReader {
-    // Set the fallback paths
+    /**
+     * Set fallback base URLs used to resolve soundfile paths.
+     *
+     * In Node or other non-browser runtimes, `location` may be undefined;
+     * in that case this returns an empty list to avoid resolution errors.
+     */
     static get fallbackPaths() {
-        return [
-            location.href,
-            this.getParentUrl(location.href),
-            location.origin
-        ];
+        const loc =
+            typeof location !== 'undefined' ? (location as Location) : null;
+        const href = loc?.href;
+        const origin = loc?.origin;
+        const parent = href ? this.getParentUrl(href) : null;
+        return [href, parent, origin].filter(
+            (value): value is string => typeof value === 'string' && value.length > 0
+        );
     }
 
     /**
