@@ -134,6 +134,7 @@ async function createFaustUI(divFaustUI, faustNode) {
     });
     faustUI.paramChangeByUI = (path, value) => faustNode.setParamValue(path, value);
     faustNode.setOutputParamHandler((path, value) => faustUI.paramChangeByDSP(path, value));
+    faustNode.setInputParamHandler((path, value) => faustUI.paramChangeByDSP(path, value));
     $container.style.minWidth = `${faustUI.minWidth}px`;
     $container.style.minHeight = `${faustUI.minHeight}px`;
     faustUI.resize();

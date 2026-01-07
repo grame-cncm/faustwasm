@@ -768,7 +768,10 @@ const getFaustFFTAudioWorkletProcessor = (
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) =>
-                this.port.postMessage({ path, value, type: 'param' })
+                this.port.postMessage({ path, value, type: 'out-param' })
+            );
+            this.fDSPCode.setInputParamHandler((path, value) =>
+                this.port.postMessage({ path, value, type: 'in-param' })
             );
             this.fDSPCode.setPlotHandler(this.fPlotHandler);
             const params = this.fDSPCode.getParams();

@@ -6,6 +6,7 @@ import {
     IFaustBaseWebAudioDsp,
     IFaustMonoWebAudioDsp,
     IFaustPolyWebAudioDsp,
+    InputParamHandler,
     MetadataHandler,
     OutputParamHandler,
     PlotHandler
@@ -114,6 +115,16 @@ export class FaustOfflineProcessor<Poly extends boolean = false> {
     }
     callOutputParamHandler(path: string, value: number) {
         this.fDSPCode.callOutputParamHandler(path, value);
+    }
+
+    setInputParamHandler(handler: InputParamHandler) {
+        this.fDSPCode.setInputParamHandler(handler);
+    }
+    getInputParamHandler() {
+        return this.fDSPCode.getInputParamHandler();
+    }
+    callInputParamHandler(path: string, value: number) {
+        this.fDSPCode.callInputParamHandler(path, value);
     }
 
     setComputeHandler(handler: ComputeHandler) {

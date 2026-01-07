@@ -370,7 +370,10 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) =>
-                this.port.postMessage({ path, value, type: 'param' })
+                this.port.postMessage({ path, value, type: 'out-param' })
+            );
+            this.fDSPCode.setInputParamHandler((path, value) =>
+                this.port.postMessage({ path, value, type: 'in-param' })
             );
 
             this.fDSPCode.start();
@@ -425,7 +428,10 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
 
             // Setup output handler
             this.fDSPCode.setOutputParamHandler((path, value) =>
-                this.port.postMessage({ path, value, type: 'param' })
+                this.port.postMessage({ path, value, type: 'out-param' })
+            );
+            this.fDSPCode.setInputParamHandler((path, value) =>
+                this.port.postMessage({ path, value, type: 'in-param' })
             );
 
             this.fDSPCode.start();

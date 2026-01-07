@@ -1,4 +1,5 @@
 import {
+    InputParamHandler,
     OutputParamHandler,
     ComputeHandler,
     PlotHandler,
@@ -27,6 +28,7 @@ export class FaustAudioWorkletNode<
     protected fJSON: string;
     protected fInputsItems: string[];
     protected fOutputHandler: OutputParamHandler | null;
+    protected fInputHandler: InputParamHandler | null;
     protected fComputeHandler: ComputeHandler | null;
     protected fPlotHandler: PlotHandler | null;
     protected fUICallback: UIHandler;
@@ -60,6 +62,7 @@ export class FaustAudioWorkletNode<
         this.fJSONDsp = JSONObj;
         this.fJSON = factory.json;
         this.fOutputHandler = null;
+        this.fInputHandler = null;
         this.fComputeHandler = null;
         this.fPlotHandler = null;
         this.fDescriptor = [];
@@ -104,8 +107,10 @@ export class FaustAudioWorkletNode<
     }
 
     protected handleMessageAux = (e: MessageEvent) => {
-        if (e.data.type === 'param' && this.fOutputHandler) {
+        if (e.data.type === 'out-param' && this.fOutputHandler) {
             this.fOutputHandler(e.data.path, e.data.value);
+        } else if (e.data.type === 'in-param' && this.fInputHandler) {
+            this.fInputHandler(e.data.path, e.data.value);
         } else if (e.data.type === 'plot' && this.fPlotHandler) {
             this.fPlotHandler(e.data.value, e.data.index, e.data.events);
         }
@@ -187,8 +192,18 @@ export class FaustAudioWorkletNode<
     callOutputParamHandler(path: string, value: number) {
         if (this.fOutputHandler) {
             this.fOutputHandler(path, value);
-        } else {
-            console.warn('No OutputParamHandler set for this Faust node.');
+        }
+    }
+
+    setInputParamHandler(handler: InputParamHandler | null) {
+        this.fInputHandler = handler;
+    }
+    getInputParamHandler() {
+        return this.fInputHandler;
+    }
+    callInputParamHandler(path: string, value: number) {
+        if (this.fInputHandler) {
+            this.fInputHandler(path, value);
         }
     }
 

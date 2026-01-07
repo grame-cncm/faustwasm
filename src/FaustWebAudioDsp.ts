@@ -20,6 +20,7 @@ import FaustSensors, {
 
 // Public API
 export type OutputParamHandler = (path: string, value: number) => void;
+export type InputParamHandler = (path: string, value: number) => void;
 export type ComputeHandler = (buffer_size: number) => void;
 export type PlotHandler = (
     plotted: Float32Array[] | Float64Array[],
@@ -444,6 +445,7 @@ export class Soundfile {
  * DSP implementation that mimic the C++ 'dsp' class:
  * - adding MIDI control: metadata are decoded and incoming MIDI messages will control the associated controllers
  * - an output handler can be set to treat produced output controllers (like 'bargraph')
+ * - an input handler can be set to follow control parameter changes (like sliders)
  * - regular controllers are handled using setParamValue/getParamValue and getParams methods
  */
 export interface IFaustBaseWebAudioDsp {
@@ -467,8 +469,29 @@ export interface IFaustBaseWebAudioDsp {
      * @param path - the path to the wanted parameter (retrieved using 'getParams' method)
      * @param value - the float value for the wanted control
      */
-
     callOutputParamHandler(path: string, value: number): void;
+
+    /**
+     * Set the parameter input handler, to be called when input parameters change (like sliders).
+     *
+     * @param handler - the input handler
+     */
+    setInputParamHandler(handler: InputParamHandler | null): void;
+
+    /**
+     * Get the parameter input handler.
+     *
+     * @return the current input handler
+     */
+    getInputParamHandler(): InputParamHandler | null;
+
+    /**
+     * Call the input parameter handler with a path and value.
+     *
+     * @param path - the path to the wanted parameter (retrieved using 'getParams' method)
+     * @param value - the float value for the wanted control
+     */
+    callInputParamHandler(path: string, value: number): void;
 
     /**
      * Set the compute handler, to  be called in the 'compute' method with buffer size.
@@ -708,6 +731,7 @@ export interface IFaustPolyWebAudioNode
 
 export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fOutputHandler: OutputParamHandler | null = null;
+    protected fInputHandler: InputParamHandler | null = null;
     protected fComputeHandler: ComputeHandler | null = null;
 
     // To handle MIDI events plot
@@ -1337,8 +1361,18 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     callOutputParamHandler(path: string, value: number) {
         if (this.fOutputHandler) {
             this.fOutputHandler(path, value);
-        } else {
-            console.warn('No OutputParamHandler set for this Faust node.');
+        }
+    }
+
+    setInputParamHandler(handler: InputParamHandler | null) {
+        this.fInputHandler = handler;
+    }
+    getInputParamHandler() {
+        return this.fInputHandler;
+    }
+    callInputParamHandler(path: string, value: number) {
+        if (this.fInputHandler) {
+            this.fInputHandler(path, value);
         }
     }
 
@@ -1551,6 +1585,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     destroy() {
         this.fDestroyed = true;
         this.fOutputHandler = null;
+        this.fInputHandler = null;
         this.fComputeHandler = null;
         this.fPlotHandler = null;
     }
@@ -1800,6 +1835,7 @@ export class FaustMonoWebAudioDsp
             this.fPathTable[path],
             value
         );
+        this.callInputParamHandler(path, this.getParamValue(path));
     }
     getParamValue(path: string) {
         return this.fInstance.api.getParamValue(
@@ -2403,6 +2439,7 @@ export class FaustPolyWebAudioDsp
                 voice.setParamValue(this.fPathTable[path], value)
             );
         }
+        this.callInputParamHandler(path, this.getParamValue(path));
     }
     getParamValue(path: string) {
         if (
