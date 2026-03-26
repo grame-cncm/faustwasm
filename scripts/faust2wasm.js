@@ -8,7 +8,7 @@ const argv = process.argv.slice(2);
 
 if (argv.includes("-help") || argv.includes("-h")) {
     console.log(`
-faust2wasm.js <file.dsp> <outputDir> [-poly] [-standalone] [-pwa] [-no-template]
+faust2wasm.js <file.dsp> <outputDir> [-poly] [-standalone] [-pwa] [-no-template] [-rust-compiler <compiler.wasm>]
 Generates WebAssembly and metadata JSON files of a given Faust DSP.
 `);
     process.exit();
@@ -24,6 +24,17 @@ const poly = takeFlag("-poly");
 const standalone = takeFlag("-standalone");
 const pwa = takeFlag("-pwa");
 const noTemplate = takeFlag("-no-template");
+const takeOption = (flag) => {
+    const index = argv.indexOf(flag);
+    if (index === -1) return null;
+    const value = argv[index + 1];
+    if (!value) {
+        throw new Error(`Missing value for ${flag}`);
+    }
+    argv.splice(index, 2);
+    return value;
+};
+const rustCompilerWasm = takeOption("-rust-compiler");
 
 // Allow Faust flags (like -I) anywhere while keeping the first two positionals as input/output.
 const positionals = [];
@@ -50,7 +61,13 @@ if (!fileName) throw new Error("No input DSP file");
 const dspName = fileName.replace(/\.dsp$/, '');
 
 (async () => {
-    const { dspMeta, effectMeta } = await faust2wasmFiles(inputFile, outputDir, argvFaust, poly);
+    const { dspMeta, effectMeta } = await faust2wasmFiles(
+        inputFile,
+        outputDir,
+        argvFaust,
+        poly,
+        rustCompilerWasm
+    );
     if (standalone) {
         copyWebStandaloneAssets(outputDir, dspName, poly, !!effectMeta);
     } else if (pwa) {

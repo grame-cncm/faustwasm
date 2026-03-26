@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
     instantiateFaustModuleFromFile,
+    instantiateRustFaustModuleFromFile,
     LibFaust,
     FaustCompiler,
     FaustMonoDspGenerator,
@@ -42,16 +43,20 @@ const __filename = fileURLToPath(import.meta.url);
  * @param {string} outputDir : The path to the output directory.
  * @param {string[]} [argv] : An array of command-line arguments to pass to the Faust compiler.
  * @param {boolean} [poly] : Whether to compile the DSP as a polyphonic instrument.
+ * @param {string | null} [rustCompilerWasm] : Optional path to the raw Rust compiler-module `.wasm`.
  */
 const faust2wasmFiles = async (
     inputFile,
     outputDir,
     argv = [],
-    poly = false
+    poly = false,
+    rustCompilerWasm = null
 ) => {
-    const faustModule = await instantiateFaustModuleFromFile(
-        path.join(__dirname, '../libfaust-wasm/libfaust-wasm.js')
-    );
+    const faustModule = rustCompilerWasm
+        ? await instantiateRustFaustModuleFromFile(rustCompilerWasm)
+        : await instantiateFaustModuleFromFile(
+            path.join(__dirname, '../libfaust-wasm/libfaust-wasm.js')
+        );
     const libFaust = new LibFaust(faustModule);
     const compiler = new FaustCompiler(libFaust);
     console.log(`Faust Compiler version: ${compiler.version()}`);
@@ -60,8 +65,12 @@ const faust2wasmFiles = async (
 
     const fileName = /** @type {string} */ (inputFile.split('/').pop());
     const dspName = fileName.replace(/\.dsp$/, '');
-    // Step 1: get the compiler's in-memory FS (host FS is not visible to WASM).
-    const faustFs = compiler.fs();
+    // Step 1: get the compiler's in-memory FS when available.
+    // The historical C++ compiler module exposes one; the Rust raw compiler
+    // path currently does not and instead relies on embedded standard Faust
+    // libraries inside the compiler-module itself.
+    const compilerHasFs = !rustCompilerWasm;
+    const faustFs = compilerHasFs ? compiler.fs() : null;
     const inputDir = path.dirname(path.resolve(inputFile));
     // Step 2: split include flags from other args so we can remap include paths.
     const parseIncludeArgs = (args) => {
@@ -78,8 +87,9 @@ const faust2wasmFiles = async (
         }
         return { includeDirs, otherArgs };
     };
-    // Step 3: helpers to build the in-memory include tree.
+    // Step 3: helpers to build the in-memory include tree when a compiler FS exists.
     const ensureFsDir = (dir) => {
+        if (!faustFs) return;
         try {
             faustFs.mkdirTree(dir);
         } catch {}
@@ -90,6 +100,7 @@ const faust2wasmFiles = async (
     };
     // Step 4: mirror a host include directory into the in-memory FS.
     const copyIncludeDirToFs = (srcDir, destDir) => {
+        if (!faustFs) return;
         if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) return;
         const entries = fs.readdirSync(srcDir, { withFileTypes: true });
         for (const entry of entries) {
@@ -106,6 +117,16 @@ const faust2wasmFiles = async (
     };
     // Step 5: parse include args and build a unified include list.
     const { includeDirs: rawIncludeDirs, otherArgs } = parseIncludeArgs(argv);
+    if (!faustFs) {
+        if (rawIncludeDirs.length > 0) {
+            throw new Error(
+                'The Rust raw compiler module does not expose an in-memory FS yet; host -I include paths are not supported in faust2wasm.js.'
+            );
+        }
+        argv.length = 0;
+        argv.push(...otherArgs);
+        argv.push('-ftz', '2');
+    } else {
     const includeDirs = [];
     const seenHostDirs = new Set();
     const seenFsDirs = new Set();
@@ -142,6 +163,7 @@ const faust2wasmFiles = async (
     argv.length = 0;
     memfsIncludeDirs.forEach((dir) => argv.push('-I', dir));
     argv.push(...otherArgs);
+    }
     // Flush to zero to avoid costly denormalized numbers
     argv.push('-ftz', '2');
     const dspModulePath = path.join(outputDir, `dsp-module.wasm`);

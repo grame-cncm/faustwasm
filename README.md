@@ -107,6 +107,26 @@ node scripts/faust2wasm.js test/organ1.dsp test/organ1 -poly -pwa
 ```
 will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `effect-module.wasm`, `effect-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `organ1` folder.
 
+#### Using the Rust raw compiler module
+
+The CLI can also use a raw Rust compiler module instead of the bundled
+historical `libfaust-wasm` package:
+
+```bash
+node scripts/faust2wasm.js test/rev.dsp test/rev-rust -pwa \
+  -rust-compiler /path/to/faust_wasm_ffi.wasm
+```
+
+This switches the embedded compiler used by the script while keeping the same
+output layout (`dsp-module.wasm`, `dsp-meta.json`, templates/assets).
+
+Current limitation:
+
+- when `-rust-compiler` is used, host `-I <dir>` mirroring through the
+  in-memory compiler filesystem is not available yet
+- the Rust path currently relies on the standard Faust libraries embedded in
+  the compiler-module itself
+
 #### Creating a standalone version of a Faust DSP, with audio and MIDI devices selector
 
 You can create a standalone using the command line:
