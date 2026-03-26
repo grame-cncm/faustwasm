@@ -1,6 +1,7 @@
 import { Sha256 } from '@aws-crypto/sha256-js';
 import type { ILibFaust } from './LibFaust';
 import type { FaustDspFactory, IntVector } from './types';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 export const ab2str = (buf: Uint8Array) =>
     String.fromCharCode.apply(null, Array.from(buf));
@@ -119,6 +120,54 @@ class FaustCompiler implements IFaustCompiler {
     private mixer64Buffer!: Uint8Array;
     private mixer32Module!: WebAssembly.Module;
     private mixer64Module!: WebAssembly.Module;
+
+    private resolveMixerAssetURL(fileName: string) {
+        if (typeof window === 'object') {
+            const baseURL =
+                (typeof document !== 'undefined'
+                    ? ('src' in (document.currentScript || {})
+                          ? (document.currentScript as HTMLScriptElement).src
+                          : document.baseURI)
+                    : undefined) || window.location.href;
+            return new URL(`../libfaust-wasm/${fileName}`, baseURL);
+        }
+        const rootDir =
+            typeof process !== 'undefined'
+                ? process.env.FAUSTWASM_ROOT || process.cwd()
+                : null;
+        if (!rootDir) {
+            throw new Error('Cannot resolve packaged mixer assets location');
+        }
+        return new URL(`libfaust-wasm/${fileName}`, pathToFileURL(`${rootDir}/`));
+    }
+
+    private async loadPackagedMixerBuffer(isDouble = false): Promise<Uint8Array> {
+        const fileName = isDouble ? 'mixer64.wasm' : 'mixer32.wasm';
+        const url = this.resolveMixerAssetURL(fileName);
+        if (typeof window === 'object') {
+            return new Uint8Array(await (await fetch(url)).arrayBuffer());
+        }
+        const { promises: fs } = await import('fs');
+        return new Uint8Array(await fs.readFile(fileURLToPath(url)));
+    }
+
+    private loadPackagedMixerBufferSync(isDouble = false): Uint8Array {
+        if (typeof window !== 'object') {
+            throw new Error(
+                'Packaged mixer fallback is only available asynchronously on the Rust raw faustwasm backend'
+            );
+        }
+        const fileName = isDouble ? 'mixer64.wasm' : 'mixer32.wasm';
+        const url = this.resolveMixerAssetURL(fileName);
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, false);
+        xhr.responseType = 'arraybuffer';
+        xhr.send(null);
+        if (!xhr.response) {
+            throw new Error(`Cannot load packaged mixer asset: ${fileName}`);
+        }
+        return new Uint8Array(xhr.response);
+    }
 
     /**
      * Get a stringified DSP factories table
@@ -297,7 +346,12 @@ class FaustCompiler implements IFaustCompiler {
         const path = isDouble
             ? '/usr/rsrc/mixer64.wasm'
             : '/usr/rsrc/mixer32.wasm';
-        const mixerBuffer = this.fs().readFile(path, { encoding: 'binary' });
+        let mixerBuffer: Uint8Array;
+        try {
+            mixerBuffer = this.fs().readFile(path, { encoding: 'binary' });
+        } catch {
+            mixerBuffer = await this.loadPackagedMixerBuffer(isDouble);
+        }
         this[bufferKey] = mixerBuffer;
         // Compile mixer
         const mixerModule = await WebAssembly.compile(
@@ -317,7 +371,12 @@ class FaustCompiler implements IFaustCompiler {
         const path = isDouble
             ? '/usr/rsrc/mixer64.wasm'
             : '/usr/rsrc/mixer32.wasm';
-        const mixerBuffer = this.fs().readFile(path, { encoding: 'binary' });
+        let mixerBuffer: Uint8Array;
+        try {
+            mixerBuffer = this.fs().readFile(path, { encoding: 'binary' });
+        } catch {
+            mixerBuffer = this.loadPackagedMixerBufferSync(isDouble);
+        }
         this[bufferKey] = mixerBuffer;
         // Compile mixer
         const mixerModule = new WebAssembly.Module(new Uint8Array(mixerBuffer));

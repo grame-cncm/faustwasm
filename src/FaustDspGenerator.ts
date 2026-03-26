@@ -745,7 +745,11 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
             // The error message is not printed to avoid confusing the user.
             const errorMessage =
                 e instanceof Error ? e.message : String(e ?? 'unknown error');
-            if (!errorMessage.includes('undefined symbol : effect')) {
+            const missingEffect =
+                errorMessage.includes('undefined symbol : effect') ||
+                (errorMessage.includes('undefined symbol') &&
+                    errorMessage.includes('effect'));
+            if (!missingEffect) {
                 console.warn(e);
             }
             this.voiceFactory = await compiler.createPolyDSPFactory(
