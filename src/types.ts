@@ -43,6 +43,23 @@ export interface RustFaustModule {
         argsLen: number,
         internalMemory: number
     ): number;
+    faust_wasm_get_info(whatPtr: number, whatLen: number): number;
+    faust_wasm_expand_dsp(
+        namePtr: number,
+        nameLen: number,
+        sourcePtr: number,
+        sourceLen: number,
+        argsPtr: number,
+        argsLen: number
+    ): number;
+    faust_wasm_generate_aux_files(
+        namePtr: number,
+        nameLen: number,
+        sourcePtr: number,
+        sourceLen: number,
+        argsPtr: number,
+        argsLen: number
+    ): number;
     faust_wasm_result_is_ok(handle: number): number;
     faust_wasm_result_wasm_ptr(handle: number): number;
     faust_wasm_result_wasm_len(handle: number): number;
@@ -51,6 +68,10 @@ export interface RustFaustModule {
     faust_wasm_result_error_ptr(handle: number): number;
     faust_wasm_result_error_len(handle: number): number;
     faust_wasm_result_free(handle: number): void;
+    faust_wasm_text_result_is_ok(handle: number): number;
+    faust_wasm_text_result_ptr(handle: number): number;
+    faust_wasm_text_result_len(handle: number): number;
+    faust_wasm_text_result_free(handle: number): void;
 }
 
 export type FaustCompilerModule = FaustModule | RustFaustModule;

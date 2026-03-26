@@ -58,6 +58,20 @@ class RustLibFaust implements LibFaustWasm {
         throw new Error(message);
     }
 
+    private readTextResult(handle: number) {
+        const ok = this.fModule.faust_wasm_text_result_is_ok(handle) !== 0;
+        const text = this.readUtf8(
+            this.fModule.faust_wasm_text_result_ptr(handle),
+            this.fModule.faust_wasm_text_result_len(handle)
+        );
+        this.fModule.faust_wasm_text_result_free(handle);
+        if (!ok) {
+            return this.fail(text || 'Rust Faust helper request failed');
+        }
+        this.fLastError = '';
+        return text;
+    }
+
     version() {
         return this.readUtf8(
             this.fModule.faust_wasm_version_ptr(),
@@ -116,16 +130,53 @@ class RustLibFaust implements LibFaustWasm {
 
     deleteDSPFactory(_cFactory: number) {}
 
-    expandDSP(_name: string, _code: string, _args: string) {
-        return this.fail(
-            'expandDSP is not supported by the Rust raw faustwasm backend yet'
-        );
+    expandDSP(name: string, code: string, args: string) {
+        const nameBuf = this.allocUtf8(name);
+        const codeBuf = this.allocUtf8(code);
+        const argsBuf = this.allocUtf8(args);
+        try {
+            const handle = this.fModule.faust_wasm_expand_dsp(
+                nameBuf.ptr,
+                nameBuf.len,
+                codeBuf.ptr,
+                codeBuf.len,
+                argsBuf.ptr,
+                argsBuf.len
+            );
+            return this.readTextResult(handle);
+        } finally {
+            this.fModule.faust_wasm_dealloc(nameBuf.ptr, nameBuf.len);
+            this.fModule.faust_wasm_dealloc(codeBuf.ptr, codeBuf.len);
+            this.fModule.faust_wasm_dealloc(argsBuf.ptr, argsBuf.len);
+        }
     }
 
-    generateAuxFiles(_name: string, _code: string, _args: string) {
-        return this.fail(
-            'generateAuxFiles is not supported by the Rust raw faustwasm backend yet'
-        );
+    generateAuxFiles(name: string, code: string, args: string) {
+        const nameBuf = this.allocUtf8(name);
+        const codeBuf = this.allocUtf8(code);
+        const argsBuf = this.allocUtf8(args);
+        try {
+            const ok =
+                this.fModule.faust_wasm_generate_aux_files(
+                    nameBuf.ptr,
+                    nameBuf.len,
+                    codeBuf.ptr,
+                    codeBuf.len,
+                    argsBuf.ptr,
+                    argsBuf.len
+                ) !== 0;
+            if (!ok) {
+                this.fLastError =
+                    'generateAuxFiles is not implemented yet in the Rust faustwasm service';
+            } else {
+                this.fLastError = '';
+            }
+            return ok;
+        } finally {
+            this.fModule.faust_wasm_dealloc(nameBuf.ptr, nameBuf.len);
+            this.fModule.faust_wasm_dealloc(codeBuf.ptr, codeBuf.len);
+            this.fModule.faust_wasm_dealloc(argsBuf.ptr, argsBuf.len);
+        }
     }
 
     deleteAllDSPFactories() {}
@@ -142,9 +193,14 @@ class RustLibFaust implements LibFaustWasm {
         if (what === 'version') {
             return this.version();
         }
-        return this.fail(
-            `getInfos(${what}) is not supported by the Rust raw faustwasm backend yet`
-        );
+        const whatBuf = this.allocUtf8(what);
+        try {
+            return this.readTextResult(
+                this.fModule.faust_wasm_get_info(whatBuf.ptr, whatBuf.len)
+            );
+        } finally {
+            this.fModule.faust_wasm_dealloc(whatBuf.ptr, whatBuf.len);
+        }
     }
 }
 
