@@ -1107,9 +1107,73 @@ interface JSONData {
     meta: Array<{ options?: string }>;
 }
 
+export type FaustCompilerLoader = () => Promise<IFaustCompiler>;
+
 export class FaustDspGenerator implements IFaustDspGenerator {
     
-    private static compilerPromise: Promise<FaustCompiler> | null = null;
+    private static compilerPromise: Promise<IFaustCompiler> | null = null;
+    private static compilerLoader: FaustCompilerLoader | null = null;
+
+    /**
+     * Override the lazy compiler creation hook used by `createFaustNode`.
+     *
+     * This allows applications to inject an alternative embedded compiler path,
+     * such as the raw Rust compiler-module loader, while keeping the default
+     * historical `libfaust-wasm` loader unchanged when no hook is configured.
+     */
+    static setCompilerLoader(loader: FaustCompilerLoader) {
+        FaustDspGenerator.compilerLoader = loader;
+        FaustDspGenerator.compilerPromise = null;
+    }
+
+    /**
+     * Drop any custom compiler loader and cached compiler instance.
+     *
+     * The next `createFaustNode` call falls back to the bundled
+     * `libfaust-wasm` loading path unless another hook is installed first.
+     */
+    static resetCompilerLoader() {
+        FaustDspGenerator.compilerLoader = null;
+        FaustDspGenerator.compilerPromise = null;
+    }
+
+    private static async instantiateBundledCompiler(): Promise<IFaustCompiler> {
+        // Resolve libfaust-wasm assets relative to current script/page location (works in browser and bundlers).
+        // Falling back to document/baseURI keeps things working when import.meta.url is unavailable (es2019 target).
+        const baseURL =
+            (typeof document !== 'undefined'
+                ? ('src' in (document.currentScript || {})
+                      ? (document.currentScript as HTMLScriptElement)
+                            .src
+                      : document.baseURI)
+                : undefined) ||
+            (typeof window !== 'undefined'
+                ? window.location.href
+                : undefined);
+        if (!baseURL)
+            throw new Error('Cannot resolve libfaust-wasm location.');
+        const jsURL = new URL(
+            '../libfaust-wasm/libfaust-wasm.js',
+            baseURL
+            ).href;
+        const dataURL = jsURL.replace(/c?js$/, 'data');
+        const wasmURL = jsURL.replace(/c?js$/, 'wasm');
+        return instantiateFaustModuleFromFile(
+            jsURL,
+            dataURL,
+            wasmURL
+        ).then((module) => new FaustCompiler(new LibFaust(module)));
+    }
+
+    private static getCompiler(): Promise<IFaustCompiler> {
+        if (!FaustDspGenerator.compilerPromise) {
+            const loader =
+                FaustDspGenerator.compilerLoader ??
+                FaustDspGenerator.instantiateBundledCompiler;
+            FaustDspGenerator.compilerPromise = loader();
+        }
+        return FaustDspGenerator.compilerPromise;
+    }
     
     // Analyze the metadata of a Faust JSON file and extract the [midi:on] and [nvoices:n] options
     private extractMidiAndNvoices(
@@ -1146,42 +1210,10 @@ export class FaustDspGenerator implements IFaustDspGenerator {
         sp?: boolean,
         bufferSize?: number,
     ): Promise<IFaustMonoWebAudioNode | IFaustPolyWebAudioNode | null> {
-        const getCompiler = async () => {
-            if (!FaustDspGenerator.compilerPromise) {
-                // Resolve libfaust-wasm assets relative to current script/page location (works in browser and bundlers).
-                // Falling back to document/baseURI keeps things working when import.meta.url is unavailable (es2019 target).
-                const baseURL =
-                    (typeof document !== 'undefined'
-                        ? ('src' in (document.currentScript || {})
-                              ? (document.currentScript as HTMLScriptElement)
-                                    .src
-                              : document.baseURI)
-                        : undefined) ||
-                    (typeof window !== 'undefined'
-                        ? window.location.href
-                        : undefined);
-                if (!baseURL)
-                    throw new Error('Cannot resolve libfaust-wasm location.');
-                const jsURL = new URL(
-                    '../libfaust-wasm/libfaust-wasm.js',
-                    baseURL
-                    ).href;
-                const dataURL = jsURL.replace(/c?js$/, 'data');
-                const wasmURL = jsURL.replace(/c?js$/, 'wasm');
-                FaustDspGenerator.compilerPromise =
-                    instantiateFaustModuleFromFile(
-                        jsURL,
-                        dataURL,
-                        wasmURL
-                    ).then((module) => new FaustCompiler(new LibFaust(module)));
-            }
-            return FaustDspGenerator.compilerPromise;
-        };
-
         const args = '-ftz 2';
 
         try {
-            const compiler = await getCompiler();
+            const compiler = await FaustDspGenerator.getCompiler();
             // First compile as mono to inspect metadata for nvoices/midi tags; if nvoices > 0 we recompile as poly.
             const monoGenerator = new FaustMonoDspGenerator();
             const compiledMono = await monoGenerator.compile(
