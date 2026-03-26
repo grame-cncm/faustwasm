@@ -1,4 +1,6 @@
 export { default as instantiateFaustModuleFromFile } from './instantiateFaustModuleFromFile';
+export { default as instantiateRustFaustModule } from './instantiateRustFaustModule';
+export { default as instantiateRustFaustModuleFromFile } from './instantiateRustFaustModuleFromFile';
 export { default as getFaustAudioWorkletProcessor } from './FaustAudioWorkletProcessor';
 export { default as getFaustFFTAudioWorkletProcessor } from './FaustFFTAudioWorkletProcessor';
 export { default as FaustCompiler } from './FaustCompiler';
@@ -22,5 +24,7 @@ export * from './FaustScriptProcessorNode';
 export * from './FaustWebAudioDsp';
 export * from './FaustDspGenerator';
 export * from './LibFaust';
+export * from './instantiateRustFaustModule';
+export * from './instantiateRustFaustModuleFromFile';
 
 export * from './types';
