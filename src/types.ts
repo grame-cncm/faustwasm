@@ -28,6 +28,33 @@ export interface FaustModule extends EmscriptenModule {
     libFaustWasm: new () => LibFaustWasm;
 }
 
+export interface RustFaustModule {
+    memory: WebAssembly.Memory;
+    faust_wasm_alloc(len: number): number;
+    faust_wasm_dealloc(ptr: number, len: number): void;
+    faust_wasm_version_ptr(): number;
+    faust_wasm_version_len(): number;
+    faust_wasm_compile_dsp(
+        namePtr: number,
+        nameLen: number,
+        sourcePtr: number,
+        sourceLen: number,
+        argsPtr: number,
+        argsLen: number,
+        internalMemory: number
+    ): number;
+    faust_wasm_result_is_ok(handle: number): number;
+    faust_wasm_result_wasm_ptr(handle: number): number;
+    faust_wasm_result_wasm_len(handle: number): number;
+    faust_wasm_result_json_ptr(handle: number): number;
+    faust_wasm_result_json_len(handle: number): number;
+    faust_wasm_result_error_ptr(handle: number): number;
+    faust_wasm_result_error_len(handle: number): number;
+    faust_wasm_result_free(handle: number): void;
+}
+
+export type FaustCompilerModule = FaustModule | RustFaustModule;
+
 export type FaustInfoType =
     | 'help'
     | 'version'

@@ -1,19 +1,54 @@
-import type { FaustModule, LibFaustWasm, FaustInfoType } from './types';
+import RustLibFaust from './RustLibFaust';
+import type {
+    FaustCompilerModule,
+    FaustInfoType,
+    FaustModule,
+    LibFaustWasm,
+    RustFaustModule
+} from './types';
+
+const isLegacyFaustModule = (
+    module: FaustCompilerModule
+): module is FaustModule => typeof (module as FaustModule).libFaustWasm === 'function';
+
+const isRustFaustModule = (
+    module: FaustCompilerModule
+): module is RustFaustModule =>
+    typeof (module as RustFaustModule).faust_wasm_compile_dsp === 'function';
+
+const unsupportedFs = () =>
+    new Proxy(
+        {},
+        {
+            get() {
+                throw new Error(
+                    'FS is not available on the Rust raw faustwasm backend'
+                );
+            }
+        }
+    ) as typeof FS;
 
 export interface ILibFaust extends LibFaustWasm {
-    module(): FaustModule;
+    module(): FaustCompilerModule;
     fs(): typeof FS;
 }
 
 class LibFaust implements ILibFaust {
-    private fModule: FaustModule;
+    private fModule: FaustCompilerModule;
     private fCompiler: LibFaustWasm;
     private fFileSystem: typeof FS;
 
-    constructor(module: FaustModule) {
+    constructor(module: FaustCompilerModule) {
         this.fModule = module;
-        this.fCompiler = new module.libFaustWasm();
-        this.fFileSystem = this.fModule.FS;
+        if (isLegacyFaustModule(module)) {
+            this.fCompiler = new module.libFaustWasm();
+            this.fFileSystem = module.FS;
+        } else if (isRustFaustModule(module)) {
+            this.fCompiler = new RustLibFaust(module);
+            this.fFileSystem = unsupportedFs();
+        } else {
+            throw new Error('Unsupported Faust compiler module shape');
+        }
     }
     module() {
         return this.fModule;
