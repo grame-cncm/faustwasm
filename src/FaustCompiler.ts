@@ -1,7 +1,6 @@
 import { Sha256 } from '@aws-crypto/sha256-js';
 import type { ILibFaust } from './LibFaust';
 import type { FaustDspFactory, IntVector } from './types';
-import { fileURLToPath, pathToFileURL } from 'url';
 
 export const ab2str = (buf: Uint8Array) =>
     String.fromCharCode.apply(null, Array.from(buf));
@@ -136,7 +135,7 @@ class FaustCompiler implements IFaustCompiler {
                           ? (document.currentScript as HTMLScriptElement).src
                           : document.baseURI)
                     : undefined) || window.location.href;
-            return new URL(`../libfaust-wasm/${fileName}`, baseURL);
+            return new URL(`../libfaust-wasm/${fileName}`, baseURL).href;
         }
         const rootDir =
             typeof process !== 'undefined'
@@ -145,7 +144,7 @@ class FaustCompiler implements IFaustCompiler {
         if (!rootDir) {
             throw new Error('Cannot resolve packaged mixer assets location');
         }
-        return new URL(`libfaust-wasm/${fileName}`, pathToFileURL(`${rootDir}/`));
+        return `${rootDir.replace(/\/$/, '')}/libfaust-wasm/${fileName}`;
     }
 
     /**
@@ -161,7 +160,7 @@ class FaustCompiler implements IFaustCompiler {
             return new Uint8Array(await (await fetch(url)).arrayBuffer());
         }
         const { promises: fs } = await import('fs');
-        return new Uint8Array(await fs.readFile(fileURLToPath(url)));
+        return new Uint8Array(await fs.readFile(url));
     }
 
     /**
