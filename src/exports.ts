@@ -1,4 +1,7 @@
 export { default as instantiateFaustModuleFromFile } from './instantiateFaustModuleFromFile';
+// Raw Rust compiler-module loaders. These complement the historical
+// `instantiateFaustModuleFromFile(...)` path and return the direct export
+// surface of the `faust-rs` `wasm-ffi` compiler module.
 export { default as instantiateRustFaustModule } from './instantiateRustFaustModule';
 export { default as instantiateRustFaustModuleFromFile } from './instantiateRustFaustModuleFromFile';
 export { default as getFaustAudioWorkletProcessor } from './FaustAudioWorkletProcessor';

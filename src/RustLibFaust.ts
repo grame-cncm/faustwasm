@@ -9,6 +9,14 @@ import type {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+/**
+ * Minimal `IntVector` implementation backed by copied WASM bytes.
+ *
+ * The historical C++ path returns a vector-like object. The raw Rust compiler
+ * path copies the compiled module bytes out of linear memory and re-exposes
+ * them through the same small interface expected by the higher-level factory
+ * code.
+ */
 class RustIntVector implements IntVector {
     private fData: Uint8Array;
 
@@ -26,6 +34,16 @@ class RustIntVector implements IntVector {
     }
 }
 
+/**
+ * Adapter from the raw Rust `wasm-ffi` ABI to the historical `LibFaustWasm`
+ * method surface used internally by `faustwasm`.
+ *
+ * This class is intentionally compatibility-oriented:
+ * - host strings are encoded to UTF-8 and copied into linear memory
+ * - results are read back through handle-based pointer/length accessors
+ * - helper failures are surfaced through `getErrorAfterException()` so the
+ *   surrounding `FaustCompiler` code can keep its existing control flow
+ */
 class RustLibFaust implements LibFaustWasm {
     private fModule: RustFaustModule;
     private fLastError = '';
@@ -34,6 +52,13 @@ class RustLibFaust implements LibFaustWasm {
         this.fModule = module;
     }
 
+    /**
+     * Allocate and populate one UTF-8 string inside the raw Rust compiler
+     * module's linear memory.
+     *
+     * The caller is responsible for releasing the returned region with
+     * `faust_wasm_dealloc`.
+     */
     private allocUtf8(str: string) {
         const data = encoder.encode(str);
         const ptr = this.fModule.faust_wasm_alloc(data.length);
@@ -41,23 +66,42 @@ class RustLibFaust implements LibFaustWasm {
         return { ptr, len: data.length };
     }
 
+    /**
+     * Decode one UTF-8 slice borrowed from the compiler module memory.
+     */
     private readUtf8(ptr: number, len: number) {
         return decoder.decode(
             new Uint8Array(this.fModule.memory.buffer, ptr, len)
         );
     }
 
+    /**
+     * Copy one byte payload out of the compiler module memory.
+     *
+     * Compile-result payloads must be copied before the associated handle is
+     * freed.
+     */
     private copyBytes(ptr: number, len: number) {
         return new Uint8Array(
             new Uint8Array(this.fModule.memory.buffer, ptr, len)
         );
     }
 
+    /**
+     * Record the last helper/compiler error and throw a JS exception carrying
+     * the same message.
+     */
     private fail(message: string): never {
         this.fLastError = message;
         throw new Error(message);
     }
 
+    /**
+     * Resolve a stored text-result handle returned by the raw Rust helper ABI.
+     *
+     * The payload is copied to JS immediately and the handle is freed before
+     * returning.
+     */
     private readTextResult(handle: number) {
         const ok = this.fModule.faust_wasm_text_result_is_ok(handle) !== 0;
         const text = this.readUtf8(
@@ -122,12 +166,20 @@ class RustLibFaust implements LibFaustWasm {
                 json
             };
         } finally {
+            // Request buffers are always released on the host side after the
+            // compiler call completes, regardless of success or failure.
             this.fModule.faust_wasm_dealloc(nameBuf.ptr, nameBuf.len);
             this.fModule.faust_wasm_dealloc(codeBuf.ptr, codeBuf.len);
             this.fModule.faust_wasm_dealloc(argsBuf.ptr, argsBuf.len);
         }
     }
 
+    /**
+     * No-op compatibility shim.
+     *
+     * The raw Rust compiler path does not expose factory pointers with a
+     * separate lifetime; `faustwasm` caches the returned artifact directly.
+     */
     deleteDSPFactory(_cFactory: number) {}
 
     expandDSP(name: string, code: string, args: string) {
@@ -166,6 +218,8 @@ class RustLibFaust implements LibFaustWasm {
                     argsBuf.len
                 ) !== 0;
             if (!ok) {
+                // Keep a stable compatibility message until the richer aux-file
+                // API is fully surfaced through `faustwasm`.
                 this.fLastError =
                     'generateAuxFiles is not implemented yet in the Rust faustwasm service';
             } else {
@@ -179,6 +233,12 @@ class RustLibFaust implements LibFaustWasm {
         }
     }
 
+    /**
+     * No-op compatibility shim.
+     *
+     * The Rust embedded compiler currently keeps no JS-visible factory cache on
+     * the compiler side.
+     */
     deleteAllDSPFactories() {}
 
     getErrorAfterException() {

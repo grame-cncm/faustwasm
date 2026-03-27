@@ -28,6 +28,14 @@ export interface FaustModule extends EmscriptenModule {
     libFaustWasm: new () => LibFaustWasm;
 }
 
+/**
+ * Raw Rust compiler-module export surface.
+ *
+ * This is the direct `WebAssembly.Instance.exports` shape produced by the
+ * `faust-rs` `wasm-ffi` crate. Unlike the historical `FaustModule`, it does
+ * not expose Emscripten glue, `FS`, or C-string helpers: the host interacts
+ * with it through raw pointer/length pairs and explicit result handles.
+ */
 export interface RustFaustModule {
     memory: WebAssembly.Memory;
     faust_wasm_alloc(len: number): number;
@@ -74,6 +82,13 @@ export interface RustFaustModule {
     faust_wasm_text_result_free(handle: number): void;
 }
 
+/**
+ * Supported embedded compiler-module shapes.
+ *
+ * `faustwasm` can now work with either:
+ * - the historical Emscripten-based Faust compiler package, or
+ * - the raw Rust `wasm-ffi` compiler module.
+ */
 export type FaustCompilerModule = FaustModule | RustFaustModule;
 
 export type FaustInfoType =

@@ -29,10 +29,32 @@ const unsupportedFs = () =>
     ) as typeof FS;
 
 export interface ILibFaust extends LibFaustWasm {
+    /**
+     * Return the underlying embedded compiler-module object.
+     *
+     * This may be either the historical Emscripten module or the raw Rust
+     * compiler module.
+     */
     module(): FaustCompilerModule;
+
+    /**
+     * Return the compiler filesystem facade.
+     *
+     * Historical Emscripten modules expose a real `FS`; the raw Rust compiler
+     * path returns a proxy that throws, because no compiler-side filesystem is
+     * available there.
+     */
     fs(): typeof FS;
 }
 
+/**
+ * Small compatibility adapter that normalizes compiler-module differences for
+ * the rest of `faustwasm`.
+ *
+ * Downstream code keeps calling the historical `LibFaustWasm`-style methods,
+ * while this wrapper dispatches either to the Emscripten-backed compiler or to
+ * the raw Rust service adapter.
+ */
 class LibFaust implements ILibFaust {
     private fModule: FaustCompilerModule;
     private fCompiler: LibFaustWasm;
@@ -45,6 +67,8 @@ class LibFaust implements ILibFaust {
             this.fFileSystem = module.FS;
         } else if (isRustFaustModule(module)) {
             this.fCompiler = new RustLibFaust(module);
+            // The Rust compiler path intentionally does not emulate an
+            // Emscripten filesystem. Callers must not assume `FS` exists there.
             this.fFileSystem = unsupportedFs();
         } else {
             throw new Error('Unsupported Faust compiler module shape');

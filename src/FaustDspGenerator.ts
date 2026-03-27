@@ -1114,8 +1114,17 @@ interface JSONData {
 export type FaustCompilerLoader = () => Promise<IFaustCompiler>;
 
 export class FaustDspGenerator implements IFaustDspGenerator {
-    
+    /**
+     * Shared lazy compiler promise used by the static helper path.
+     *
+     * This caches either the historical bundled compiler or a caller-supplied
+     * alternative such as the raw Rust compiler module.
+     */
     private static compilerPromise: Promise<IFaustCompiler> | null = null;
+
+    /**
+     * Optional override used to instantiate a custom embedded compiler.
+     */
     private static compilerLoader: FaustCompilerLoader | null = null;
 
     /**
@@ -1169,6 +1178,12 @@ export class FaustDspGenerator implements IFaustDspGenerator {
         ).then((module) => new FaustCompiler(new LibFaust(module)));
     }
 
+    /**
+     * Resolve the compiler instance used by the static helper APIs.
+     *
+     * When no custom loader has been installed, this falls back to the bundled
+     * historical `libfaust-wasm` loader.
+     */
     private static getCompiler(): Promise<IFaustCompiler> {
         if (!FaustDspGenerator.compilerPromise) {
             const loader =
@@ -1178,7 +1193,7 @@ export class FaustDspGenerator implements IFaustDspGenerator {
         }
         return FaustDspGenerator.compilerPromise;
     }
-    
+
     // Analyze the metadata of a Faust JSON file and extract the [midi:on] and [nvoices:n] options
     private extractMidiAndNvoices(
         jsonData: JSONData

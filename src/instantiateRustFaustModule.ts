@@ -19,6 +19,9 @@ const toArrayBuffer = (binary: BufferSource) => {
  * Unlike the historical `libfaust-wasm` path, this loader does not require any
  * Emscripten JS glue: the returned value is the typed raw export surface
  * produced directly by the Rust `wasm-ffi` crate.
+ *
+ * The returned object is meant to be wrapped in `new LibFaust(...)`, which
+ * will route calls through `RustLibFaust`.
  */
 const instantiateRustFaustModule = async (
     wasmBinary: BufferSource,

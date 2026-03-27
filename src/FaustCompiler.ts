@@ -121,6 +121,13 @@ class FaustCompiler implements IFaustCompiler {
     private mixer32Module!: WebAssembly.Module;
     private mixer64Module!: WebAssembly.Module;
 
+    /**
+     * Resolve the packaged mixer asset location used when no compiler `FS`
+     * exists.
+     *
+     * This fallback is mainly for the raw Rust compiler path, which does not
+     * emulate the historical Emscripten `/usr/rsrc/mixer*.wasm` files.
+     */
     private resolveMixerAssetURL(fileName: string) {
         if (typeof window === 'object') {
             const baseURL =
@@ -141,6 +148,12 @@ class FaustCompiler implements IFaustCompiler {
         return new URL(`libfaust-wasm/${fileName}`, pathToFileURL(`${rootDir}/`));
     }
 
+    /**
+     * Load a packaged mixer asset asynchronously.
+     *
+     * Used by the polyphonic Rust path when the compiler module cannot provide
+     * `mixer32.wasm` / `mixer64.wasm` through `FS`.
+     */
     private async loadPackagedMixerBuffer(isDouble = false): Promise<Uint8Array> {
         const fileName = isDouble ? 'mixer64.wasm' : 'mixer32.wasm';
         const url = this.resolveMixerAssetURL(fileName);
@@ -151,6 +164,12 @@ class FaustCompiler implements IFaustCompiler {
         return new Uint8Array(await fs.readFile(fileURLToPath(url)));
     }
 
+    /**
+     * Load a packaged mixer asset synchronously.
+     *
+     * This sync fallback is only available in browser-style environments where
+     * the historical sync API shape is still expected.
+     */
     private loadPackagedMixerBufferSync(isDouble = false): Uint8Array {
         if (typeof window !== 'object') {
             throw new Error(
@@ -350,6 +369,8 @@ class FaustCompiler implements IFaustCompiler {
         try {
             mixerBuffer = this.fs().readFile(path, { encoding: 'binary' });
         } catch {
+            // Raw Rust compiler modules do not expose `FS`, so polyphonic flows
+            // fall back to the packaged mixer assets shipped with `faustwasm`.
             mixerBuffer = await this.loadPackagedMixerBuffer(isDouble);
         }
         this[bufferKey] = mixerBuffer;

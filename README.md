@@ -109,6 +109,25 @@ will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `i
 
 #### Using the Rust raw compiler module
 
+The project now supports two embedded compiler shapes:
+
+- the historical Emscripten-based `libfaust-wasm` package
+- a raw Rust compiler module produced by `faust-rs` (`faust_wasm_ffi.wasm`)
+
+Public additions in this area:
+
+- new loader exports:
+  - `instantiateRustFaustModule(...)`
+  - `instantiateRustFaustModuleFromFile(...)`
+- `LibFaust` now accepts either compiler-module shape
+- `FaustDspGenerator` now exposes a generic compiler hook:
+  - `FaustDspGenerator.setCompilerLoader(...)`
+  - `FaustDspGenerator.resetCompilerLoader()`
+- `faust2wasm.js` now accepts `-rust-compiler <compiler.wasm>`
+
+The raw Rust compiler path does not require any Emscripten JS glue. It loads a
+plain `.wasm` module exposing the compile-service ABI directly.
+
 The CLI can also use a raw Rust compiler module instead of the bundled
 historical `libfaust-wasm` package:
 
@@ -120,12 +139,31 @@ node scripts/faust2wasm.js test/rev.dsp test/rev-rust -pwa \
 This switches the embedded compiler used by the script while keeping the same
 output layout (`dsp-module.wasm`, `dsp-meta.json`, templates/assets).
 
-Current limitation:
+Validated examples:
+
+```bash
+node scripts/faust2wasm.js test/rev.dsp test/rev-rust -pwa \
+  -rust-compiler /Users/letz/Developpements/RUST/faust-rs/target/wasm32-unknown-unknown/release/faust_wasm_ffi.wasm
+```
+
+```bash
+node scripts/faust2wasm.js test/organ.dsp test/organ-rust -pwa -poly \
+  -rust-compiler /Users/letz/Developpements/RUST/faust-rs/target/wasm32-unknown-unknown/release/faust_wasm_ffi.wasm
+```
+
+The polyphonic Rust path now includes a packaged internal mixer fallback, so it
+no longer depends on the historical compiler in-memory filesystem for
+`mixer32.wasm` / `mixer64.wasm`.
+
+Current limitations:
 
 - when `-rust-compiler` is used, host `-I <dir>` mirroring through the
   in-memory compiler filesystem is not available yet
 - the Rust path currently relies on the standard Faust libraries embedded in
-  the compiler-module itself
+  the compiler-module itself for source-string imports like
+  `import("stdfaust.lib")`
+- helper parity with the historical compiler package is still incomplete
+  (`expandDSP`, `generateAuxFiles`, and some `getInfos(...)` values)
 
 #### Creating a standalone version of a Faust DSP, with audio and MIDI devices selector
 
@@ -246,6 +284,66 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
     fs.writeFileSync(`${__dirname}/out.wav`, new Uint8Array(wav));
 })();
 ```
+
+#### Using the Rust compiler module programmatically
+
+The new Rust path can be used directly from JavaScript without the historical
+`libfaust-wasm.js` glue:
+
+```JavaScript
+const FaustWasm = require("@grame/faustwasm");
+
+const {
+    instantiateRustFaustModuleFromFile,
+    LibFaust,
+    FaustCompiler,
+    FaustMonoDspGenerator,
+    FaustDspGenerator
+} = FaustWasm;
+
+(async () => {
+    const rustModule = await instantiateRustFaustModuleFromFile(
+        "/path/to/faust_wasm_ffi.wasm"
+    );
+
+    // LibFaust accepts either the historical Emscripten module or the raw Rust module.
+    const compiler = new FaustCompiler(new LibFaust(rustModule));
+    const generator = new FaustMonoDspGenerator();
+
+    await generator.compile(
+        compiler,
+        "Gain",
+        `import("stdfaust.lib");
+process = _ * hslider("gain", 0.5, 0, 1, 0.01);`,
+        ""
+    );
+})();
+```
+
+If you want the higher-level node helpers to use a custom embedded compiler by
+default, install a generic loader hook once:
+
+```JavaScript
+FaustDspGenerator.setCompilerLoader(async () => {
+    const rustModule = await instantiateRustFaustModuleFromFile(
+        "/path/to/faust_wasm_ffi.wasm"
+    );
+    return new FaustCompiler(new LibFaust(rustModule));
+});
+```
+
+Call `FaustDspGenerator.resetCompilerLoader()` to fall back to the bundled
+historical `libfaust-wasm` loader.
+
+Current differences on the Rust embedded-compiler path:
+
+- no compiler `FS()` is exposed, unlike the historical Emscripten module
+- standard Faust libraries should come from the embedded bundle in the Rust
+  compiler module itself
+- helper parity is still incomplete for `expandDSP`, `generateAuxFiles`, and
+  some `getInfos(...)` values
+- the polyphonic path uses packaged `mixer32.wasm` / `mixer64.wasm` fallbacks
+  instead of `/usr/rsrc/...` from the historical compiler FS
 
 ### Use in a web browser
 
