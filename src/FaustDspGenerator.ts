@@ -40,7 +40,8 @@ import type {
     FaustDspMeta,
     FFTUtils,
     LooseFaustDspFactory,
-    AudioData
+    AudioData,
+    FaustForeignFunction
 } from './types';
 import {
     FaustAudioWorkletCommunicator,
@@ -284,6 +285,21 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
     private static gWorkletProcessors: Map<BaseAudioContext, Set<string>> =
         new Map();
 
+    static registerForeignFunction(
+        functionName: string,
+        fn: FaustForeignFunction
+    ) {
+        FaustWasmInstantiator.registerForeignFunction(functionName, fn);
+    }
+
+    static unregisterForeignFunction(functionName: string) {
+        FaustWasmInstantiator.unregisterForeignFunction(functionName);
+    }
+
+    static clearForeignFunctions() {
+        FaustWasmInstantiator.clearForeignFunctions();
+    }
+
     name: string;
     factory!: FaustDspFactory | null;
 
@@ -411,6 +427,7 @@ var ${FaustAudioWorkletCommunicator.name} = ${FaustAudioWorkletCommunicator.toSt
 var FaustAudioWorkletCommunicator = ${FaustAudioWorkletCommunicator.name};
 var ${FaustAudioWorkletProcessorCommunicator.name} = ${FaustAudioWorkletProcessorCommunicator.toString()}
 var FaustAudioWorkletProcessorCommunicator = ${FaustAudioWorkletProcessorCommunicator.name};
+${FaustDspGenerator.getForeignFunctionRegistrationCode()}
 // Put them in dependencies
 const dependencies = {
     FaustBaseWebAudioDsp,
@@ -509,6 +526,7 @@ var FaustAudioWorkletCommunicator = ${FaustAudioWorkletCommunicator.name};
 var ${FaustAudioWorkletProcessorCommunicator.name} = ${FaustAudioWorkletProcessorCommunicator.toString()}
 var FaustAudioWorkletProcessorCommunicator = ${FaustAudioWorkletProcessorCommunicator.name};
 var FFTUtils = ${fftUtils.toString()}
+${FaustDspGenerator.getForeignFunctionRegistrationCode()}
 // Put them in dependencies
 const dependencies = {
     FaustBaseWebAudioDsp,
@@ -652,6 +670,21 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
     // Set of all created WorkletProcessors, each of them has to be unique
     private static gWorkletProcessors: Map<BaseAudioContext, Set<string>> =
         new Map();
+
+    static registerForeignFunction(
+        functionName: string,
+        fn: FaustForeignFunction
+    ) {
+        FaustWasmInstantiator.registerForeignFunction(functionName, fn);
+    }
+
+    static unregisterForeignFunction(functionName: string) {
+        FaustWasmInstantiator.unregisterForeignFunction(functionName);
+    }
+
+    static clearForeignFunctions() {
+        FaustWasmInstantiator.clearForeignFunctions();
+    }
 
     name: string;
     voiceFactory!: FaustDspFactory | null;
@@ -907,6 +940,7 @@ var ${FaustAudioWorkletCommunicator.name} = ${FaustAudioWorkletCommunicator.toSt
 var FaustAudioWorkletCommunicator = ${FaustAudioWorkletCommunicator.name};
 var ${FaustAudioWorkletProcessorCommunicator.name} = ${FaustAudioWorkletProcessorCommunicator.toString()}
 var FaustAudioWorkletProcessorCommunicator = ${FaustAudioWorkletProcessorCommunicator.name};
+${FaustDspGenerator.getForeignFunctionRegistrationCode()}
 // Put them in dependencies
 const dependencies = {
     FaustBaseWebAudioDsp,
@@ -1127,6 +1161,21 @@ export class FaustDspGenerator implements IFaustDspGenerator {
      */
     private static compilerLoader: FaustCompilerLoader | null = null;
 
+    static registerForeignFunction(
+        functionName: string,
+        fn: FaustForeignFunction
+    ) {
+        FaustWasmInstantiator.registerForeignFunction(functionName, fn);
+    }
+
+    static unregisterForeignFunction(functionName: string) {
+        FaustWasmInstantiator.unregisterForeignFunction(functionName);
+    }
+
+    static clearForeignFunctions() {
+        FaustWasmInstantiator.clearForeignFunctions();
+    }
+
     /**
      * Override the lazy compiler creation hook used by `createFaustNode`.
      *
@@ -1192,6 +1241,26 @@ export class FaustDspGenerator implements IFaustDspGenerator {
             FaustDspGenerator.compilerPromise = loader();
         }
         return FaustDspGenerator.compilerPromise;
+    }
+
+    static getForeignFunctionRegistrationCode(): string {
+        const foreignFunctions =
+            FaustWasmInstantiator.getRegisteredForeignFunctions();
+        if (foreignFunctions.length === 0) return '';
+        const entries = foreignFunctions
+            .map(
+                ([name, fn]) =>
+                    `${JSON.stringify(name)}: (${fn.toString()})`
+            )
+            .join(',\n');
+        return `
+const faustForeignFunctions = {
+${entries}
+};
+for (const [name, fn] of Object.entries(faustForeignFunctions)) {
+    FaustWasmInstantiator.registerForeignFunction(name, fn);
+}
+`;
     }
 
     // Analyze the metadata of a Faust JSON file and extract the [midi:on] and [nvoices:n] options

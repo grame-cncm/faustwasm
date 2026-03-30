@@ -91,6 +91,8 @@ export interface RustFaustModule {
  */
 export type FaustCompilerModule = FaustModule | RustFaustModule;
 
+export type FaustForeignFunction = (...args: number[]) => number;
+
 export type FaustInfoType =
     | 'help'
     | 'version'

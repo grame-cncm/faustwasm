@@ -8,10 +8,55 @@ import {
 import type {
     FaustDspFactory,
     FaustDspMeta,
+    FaustForeignFunction,
     LooseFaustDspFactory
 } from './types';
 
 class FaustWasmInstantiator {
+    private static gForeignFunctions: Map<string, FaustForeignFunction> =
+        new Map();
+
+    /**
+     * Register a custom foreign function that will be exposed through the
+     * standard wasm `env` import object for Faust DSP instantiation.
+     *
+     * Registered names are available to DSP modules using the `ffunction`
+     * primitive, as long as the generated wasm imports use the same symbol
+     * name. The registry is scoped to the current JavaScript execution
+     * context.
+     */
+    static registerForeignFunction(
+        functionName: string,
+        fn: FaustForeignFunction
+    ) {
+        this.gForeignFunctions.set(functionName, fn);
+    }
+
+    /**
+     * Remove one previously registered custom foreign function.
+     */
+    static unregisterForeignFunction(functionName: string) {
+        this.gForeignFunctions.delete(functionName);
+    }
+
+    /**
+     * Clear all previously registered custom foreign functions.
+     */
+    static clearForeignFunctions() {
+        this.gForeignFunctions.clear();
+    }
+
+    /**
+     * Snapshot registered foreign functions so higher-level helpers can
+     * rehydrate them in other JavaScript execution contexts such as
+     * AudioWorklets.
+     */
+    static getRegisteredForeignFunctions(): Array<
+        [string, FaustForeignFunction]
+    > {
+        return Array.from(this.gForeignFunctions.entries());
+    }
+
     private static createWasmImport(memory?: WebAssembly.Memory) {
         return {
             env: {
@@ -83,7 +128,8 @@ class FaustWasmInstantiator {
                 _copysign: (x: number, y: number) =>
                     Math.sign(x) === Math.sign(y) ? x : -x,
 
-                table: new WebAssembly.Table({ initial: 0, element: 'anyfunc' })
+                table: new WebAssembly.Table({ initial: 0, element: 'anyfunc' }),
+                ...Object.fromEntries(this.gForeignFunctions)
             }
         };
     }
