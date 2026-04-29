@@ -13,8 +13,15 @@ import type {
 } from './types';
 
 class FaustWasmInstantiator {
-    private static gForeignFunctions: Map<string, FaustForeignFunction> =
+    private static gForeignFunctions?: Map<string, FaustForeignFunction> =
         new Map();
+
+    private static foreignFunctions(): Map<string, FaustForeignFunction> {
+        if (!this.gForeignFunctions) {
+            this.gForeignFunctions = new Map();
+        }
+        return this.gForeignFunctions;
+    }
 
     /**
      * Register a custom foreign function that will be exposed through the
@@ -29,21 +36,21 @@ class FaustWasmInstantiator {
         functionName: string,
         fn: FaustForeignFunction
     ) {
-        this.gForeignFunctions.set(functionName, fn);
+        this.foreignFunctions().set(functionName, fn);
     }
 
     /**
      * Remove one previously registered custom foreign function.
      */
     static unregisterForeignFunction(functionName: string) {
-        this.gForeignFunctions.delete(functionName);
+        this.foreignFunctions().delete(functionName);
     }
 
     /**
      * Clear all previously registered custom foreign functions.
      */
     static clearForeignFunctions() {
-        this.gForeignFunctions.clear();
+        this.foreignFunctions().clear();
     }
 
     /**
@@ -54,7 +61,7 @@ class FaustWasmInstantiator {
     static getRegisteredForeignFunctions(): Array<
         [string, FaustForeignFunction]
     > {
-        return Array.from(this.gForeignFunctions.entries());
+        return Array.from(this.foreignFunctions().entries());
     }
 
     private static createWasmImport(memory?: WebAssembly.Memory) {
@@ -128,8 +135,11 @@ class FaustWasmInstantiator {
                 _copysign: (x: number, y: number) =>
                     Math.sign(x) === Math.sign(y) ? x : -x,
 
-                table: new WebAssembly.Table({ initial: 0, element: 'anyfunc' }),
-                ...Object.fromEntries(this.gForeignFunctions)
+                table: new WebAssembly.Table({
+                    initial: 0,
+                    element: 'anyfunc'
+                }),
+                ...Object.fromEntries(this.foreignFunctions())
             }
         };
     }
