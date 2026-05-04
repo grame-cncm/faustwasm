@@ -7,12 +7,30 @@ const argv = process.argv.slice(2);
 
 if (argv[0] === "-help" || argv[0] === "-h") {
     console.log(`
-faust2svg.js <file.dsp> <outputDir>
-Generates Diagram SVGs of a given Faust DSP.
+faust2svg.js <file.dsp> <outputDir> [faust args...]
+Generates diagram SVGs of a given Faust DSP.
+
+Options:
+  --rust              Use the raw Rust compiler module instead of Emscripten.
+  --rust-wasm <file>  Path to faust_wasm_ffi.wasm (default: libfaust-wasm/faust_wasm_ffi.wasm).
+  -help | -h          Show this help.
 `);
     process.exit();
 }
 
-const [inputFile, outputDir, ...argvFaust] = argv;
+let rust = false;
+let rustWasm;
+const filtered = [];
+for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--rust") {
+        rust = true;
+    } else if (argv[i] === "--rust-wasm" && argv[i + 1]) {
+        rustWasm = argv[++i];
+    } else {
+        filtered.push(argv[i]);
+    }
+}
 
-faust2svgFiles(inputFile, outputDir, argvFaust);
+const [inputFile, outputDir, ...argvFaust] = filtered;
+
+faust2svgFiles(inputFile, outputDir, argvFaust, { rust, rustWasm });
