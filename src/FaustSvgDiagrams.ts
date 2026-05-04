@@ -12,6 +12,36 @@ interface IFaustSvgDiagrams {
     from(name: string, code: string, args: string): Record<string, string>;
 }
 
+/**
+ * Helper that compiles a Faust DSP to SVG block diagrams and returns the
+ * complete file hierarchy as an in-memory map.
+ *
+ * The returned `Record<string, string>` is keyed by relative SVG path (e.g.
+ * `"process.svg"`, `"process_0x1234.svg"`).  `process.svg` is always the
+ * first key: it is the hierarchy entry point and contains `href` links to
+ * the sub-diagram files.
+ *
+ * ## Navigation model
+ *
+ * SVG `href` attributes use relative paths that match the map keys, so
+ * drill-down navigation can be implemented with a simple path stack:
+ *
+ * 1. Initialise stack to `["process.svg"]`; render the top entry.
+ * 2. On `<a>` click: push the clicked `href` value onto the stack and render
+ *    the new top.
+ * 3. On background click (outside any block): pop the stack and render the
+ *    new top (go up one level).
+ *
+ * This matches the classic Faust IDE block-diagram browser behaviour.
+ *
+ * ## Backend transparency
+ *
+ * `from(...)` calls `FaustCompiler.generateAuxFilesJson(...)`, which works
+ * with both the Emscripten and raw Rust compiler backends:
+ * - **Rust**: retrieves all SVG files in-memory through the JSON ABI, no
+ *   filesystem required.
+ * - **Emscripten**: reads the SVG files from the in-memory `FS` directory.
+ */
 class FaustSvgDiagrams implements IFaustSvgDiagrams {
     private compiler: FaustCompiler;
 
@@ -20,29 +50,19 @@ class FaustSvgDiagrams implements IFaustSvgDiagrams {
     }
 
     from(name: string, code: string, args: string) {
-        const fs = this.compiler.fs();
-        try {
-            const files: string[] = fs.readdir(`/${name}-svg/`);
-            files
-                .filter((file) => file !== '.' && file !== '..')
-                .forEach((file) => fs.unlink(`/${name}-svg/${file}`));
-        } catch {}
-        const success = this.compiler.generateAuxFiles(
+        const allFiles = this.compiler.generateAuxFilesJson(
             name,
             code,
             `-lang wasm -o binary -svg ${args}`
         );
-        if (!success) throw new Error(this.compiler.getErrorMessage());
+        // Return only the SVG files (generateAuxFilesJson may include other
+        // artifact types such as .json or .wasm when additional flags are passed).
         const svgs: Record<string, string> = {};
-        const files: string[] = fs.readdir(`/${name}-svg/`);
-        files
-            .filter((file) => file !== '.' && file !== '..')
-            .forEach(
-                (file) =>
-                    (svgs[file] = fs.readFile(`/${name}-svg/${file}`, {
-                        encoding: 'utf8'
-                    }) as string)
-            );
+        for (const [path, content] of Object.entries(allFiles)) {
+            if (path.endsWith('.svg')) {
+                svgs[path] = content;
+            }
+        }
         return svgs;
     }
 }
