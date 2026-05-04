@@ -29,6 +29,21 @@ export interface FaustModule extends EmscriptenModule {
 }
 
 /**
+ * One entry in the JSON array returned by `faust_wasm_generate_aux_files_json`.
+ *
+ * All payloads are base64-encoded regardless of the `binary` flag so the
+ * outer JSON remains valid for arbitrary byte sequences.
+ */
+export interface WasmAuxFileDto {
+    /** Relative path within the output hierarchy, e.g. `"process.svg"`. */
+    path: string;
+    /** `true` for opaque binary payloads (`.wasm`); `false` for text (SVG, C, JSON). */
+    binary: boolean;
+    /** Base64-encoded file content (RFC 4648 standard alphabet). */
+    content_base64: string;
+}
+
+/**
  * Raw Rust compiler-module export surface.
  *
  * This is the direct `WebAssembly.Instance.exports` shape produced by the
@@ -61,6 +76,23 @@ export interface RustFaustModule {
         argsLen: number
     ): number;
     faust_wasm_generate_aux_files(
+        namePtr: number,
+        nameLen: number,
+        sourcePtr: number,
+        sourceLen: number,
+        argsPtr: number,
+        argsLen: number
+    ): number;
+    /**
+     * Rich variant of `faust_wasm_generate_aux_files` that returns a
+     * text-result handle containing a UTF-8 JSON array of
+     * {@link WasmAuxFileDto} objects, one per generated file.
+     *
+     * `process.svg` is always the first element when SVG output is requested.
+     * Each `path` value is relative and matches the `href` attributes embedded
+     * in sibling SVG files so cross-file links can be resolved by a map lookup.
+     */
+    faust_wasm_generate_aux_files_json(
         namePtr: number,
         nameLen: number,
         sourcePtr: number,
