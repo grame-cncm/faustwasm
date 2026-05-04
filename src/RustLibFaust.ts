@@ -76,23 +76,17 @@ class RustLibFaust implements LibFaustWasm {
 
     private static base64FromString(str: string): string {
         const bytes = encoder.encode(str);
-        return RustLibFaust.bytesToBase64(bytes);
-    }
-
-    private static bytesToBase64(bytes: Uint8Array): string {
-        const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-        let out = '';
-        let i = 0;
-        while (i < bytes.length) {
-            const a = bytes[i++];
-            const b = i < bytes.length ? bytes[i++] : 0;
-            const c = i < bytes.length ? bytes[i++] : 0;
-            const n = (a << 16) | (b << 8) | c;
-            out += CHARS[(n >> 18) & 63] + CHARS[(n >> 12) & 63] +
-                   (i - 2 < bytes.length ? CHARS[(n >> 6) & 63] : '=') +
-                   (i - 1 < bytes.length ? CHARS[n & 63] : '=');
+        if (typeof Buffer !== 'undefined') {
+            return Buffer.from(bytes).toString('base64');
         }
-        return out;
+        // Browser: build binary string in chunks to avoid call-stack overflow,
+        // then encode with the native btoa (same approach as the ab2str fix).
+        const CHUNK = 0x8000;
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+            binary += String.fromCharCode(...(bytes.subarray(i, i + CHUNK) as unknown as number[]));
+        }
+        return btoa(binary);
     }
 
     /**
