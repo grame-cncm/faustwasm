@@ -3,7 +3,8 @@ import type {
     FaustInfoType,
     IntVector,
     LibFaustWasm,
-    RustFaustModule
+    RustFaustModule,
+    WasmAuxFileDto
 } from './types';
 
 const encoder = new TextEncoder();
@@ -196,6 +197,65 @@ class RustLibFaust implements LibFaustWasm {
                 argsBuf.len
             );
             return this.readTextResult(handle);
+        } finally {
+            this.fModule.faust_wasm_dealloc(nameBuf.ptr, nameBuf.len);
+            this.fModule.faust_wasm_dealloc(codeBuf.ptr, codeBuf.len);
+            this.fModule.faust_wasm_dealloc(argsBuf.ptr, argsBuf.len);
+        }
+    }
+
+    /**
+     * Decode a standard base64 string to a `Uint8Array`.
+     *
+     * Works in both browser (`atob`) and Node.js (`Buffer`) environments.
+     */
+    private static base64ToBytes(b64: string): Uint8Array {
+        if (typeof Buffer !== 'undefined') {
+            return new Uint8Array(Buffer.from(b64, 'base64'));
+        }
+        return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    }
+
+    /**
+     * Call `faust_wasm_generate_aux_files_json` and return the complete
+     * auxiliary-file map keyed by relative path.
+     *
+     * All artifacts are returned, not only SVG files.  Callers that want only
+     * SVG can filter by `.endsWith('.svg')`.  `process.svg` is always the
+     * first key in the returned map, matching the hierarchy entry-point
+     * convention.
+     *
+     * @param name - logical DSP source name
+     * @param code - Faust DSP source text
+     * @param args - compiler argument string (e.g. `-lang wasm -o binary -svg`)
+     * @returns map from relative path to decoded UTF-8 content (for text
+     *   artifacts) or an opaque byte string (for binary artifacts)
+     */
+    generateAuxFilesJson(
+        name: string,
+        code: string,
+        args: string
+    ): Record<string, string> {
+        const nameBuf = this.allocUtf8(name);
+        const codeBuf = this.allocUtf8(code);
+        const argsBuf = this.allocUtf8(args);
+        try {
+            const handle = this.fModule.faust_wasm_generate_aux_files_json(
+                nameBuf.ptr,
+                nameBuf.len,
+                codeBuf.ptr,
+                codeBuf.len,
+                argsBuf.ptr,
+                argsBuf.len
+            );
+            const json = this.readTextResult(handle);
+            const dtos: WasmAuxFileDto[] = JSON.parse(json);
+            const result: Record<string, string> = {};
+            for (const dto of dtos) {
+                const bytes = RustLibFaust.base64ToBytes(dto.content_base64);
+                result[dto.path] = new TextDecoder().decode(bytes);
+            }
+            return result;
         } finally {
             this.fModule.faust_wasm_dealloc(nameBuf.ptr, nameBuf.len);
             this.fModule.faust_wasm_dealloc(codeBuf.ptr, codeBuf.len);
