@@ -48,9 +48,51 @@ class RustIntVector implements IntVector {
 class RustLibFaust implements LibFaustWasm {
     private fModule: RustFaustModule;
     private fLastError = '';
+    /** Extra user-supplied virtual sources, synced from the host (e.g. in-memory FS). */
+    private fExtraVirtualSources: Map<string, string> = new Map();
 
     constructor(module: RustFaustModule) {
         this.fModule = module;
+    }
+
+    /**
+     * Register or update a named virtual source available to the compiler.
+     * Pass `null` as content to remove the entry.
+     */
+    setVirtualSource(name: string, content: string | null) {
+        if (content === null) this.fExtraVirtualSources.delete(name);
+        else this.fExtraVirtualSources.set(name, content);
+    }
+
+    /** Encode all registered extra virtual sources as `--virtual-source name=base64` flags. */
+    private virtualSourceFlags(): string {
+        if (this.fExtraVirtualSources.size === 0) return '';
+        const parts: string[] = [];
+        for (const [name, content] of this.fExtraVirtualSources) {
+            parts.push(`--virtual-source ${name}=${RustLibFaust.base64FromString(content)}`);
+        }
+        return ' ' + parts.join(' ');
+    }
+
+    private static base64FromString(str: string): string {
+        const bytes = encoder.encode(str);
+        return RustLibFaust.bytesToBase64(bytes);
+    }
+
+    private static bytesToBase64(bytes: Uint8Array): string {
+        const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        let out = '';
+        let i = 0;
+        while (i < bytes.length) {
+            const a = bytes[i++];
+            const b = i < bytes.length ? bytes[i++] : 0;
+            const c = i < bytes.length ? bytes[i++] : 0;
+            const n = (a << 16) | (b << 8) | c;
+            out += CHARS[(n >> 18) & 63] + CHARS[(n >> 12) & 63] +
+                   (i - 2 < bytes.length ? CHARS[(n >> 6) & 63] : '=') +
+                   (i - 1 < bytes.length ? CHARS[n & 63] : '=');
+        }
+        return out;
     }
 
     /**
@@ -132,7 +174,7 @@ class RustLibFaust implements LibFaustWasm {
     ): FaustDspWasm {
         const nameBuf = this.allocUtf8(name);
         const codeBuf = this.allocUtf8(code);
-        const argsBuf = this.allocUtf8(args);
+        const argsBuf = this.allocUtf8(args + this.virtualSourceFlags());
         try {
             const handle = this.fModule.faust_wasm_compile_dsp(
                 nameBuf.ptr,
@@ -186,7 +228,7 @@ class RustLibFaust implements LibFaustWasm {
     expandDSP(name: string, code: string, args: string) {
         const nameBuf = this.allocUtf8(name);
         const codeBuf = this.allocUtf8(code);
-        const argsBuf = this.allocUtf8(args);
+        const argsBuf = this.allocUtf8(args + this.virtualSourceFlags());
         try {
             const handle = this.fModule.faust_wasm_expand_dsp(
                 nameBuf.ptr,
@@ -238,7 +280,7 @@ class RustLibFaust implements LibFaustWasm {
     ): Record<string, string> {
         const nameBuf = this.allocUtf8(name);
         const codeBuf = this.allocUtf8(code);
-        const argsBuf = this.allocUtf8(args);
+        const argsBuf = this.allocUtf8(args + this.virtualSourceFlags());
         try {
             const handle = this.fModule.faust_wasm_generate_aux_files_json(
                 nameBuf.ptr,

@@ -72,6 +72,21 @@ export interface ILibFaust extends LibFaustWasm {
         code: string,
         args: string
     ): Record<string, string>;
+
+    /**
+     * Register or remove a named virtual source available to the Rust compiler.
+     *
+     * On the **Rust** backend, the source is encoded and injected as a
+     * `--virtual-source name=base64` flag on every subsequent compile call,
+     * so that `import("name")` resolves without a host filesystem.
+     *
+     * On the **Emscripten** backend this is a no-op: callers should write files
+     * directly into `fs()` instead.
+     *
+     * @param name    - logical import name (e.g. `"ad.lib"`)
+     * @param content - source text, or `null` to remove the entry
+     */
+    setVirtualSource(name: string, content: string | null): void;
 }
 
 /**
@@ -172,6 +187,12 @@ class LibFaust implements ILibFaust {
             }) as string;
         }
         return result;
+    }
+    setVirtualSource(name: string, content: string | null) {
+        if (this.fCompiler instanceof RustLibFaust) {
+            this.fCompiler.setVirtualSource(name, content);
+        }
+        // Emscripten: no-op — callers write directly into fs() instead.
     }
     deleteAllDSPFactories() {
         return this.fCompiler.deleteAllDSPFactories();
