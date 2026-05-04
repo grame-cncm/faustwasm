@@ -2,8 +2,16 @@ import { Sha256 } from '@aws-crypto/sha256-js';
 import type { ILibFaust } from './LibFaust';
 import type { FaustDspFactory, IntVector } from './types';
 
-export const ab2str = (buf: Uint8Array) =>
-    String.fromCharCode.apply(null, Array.from(buf));
+export const ab2str = (buf: Uint8Array) => {
+    // String.fromCharCode.apply with a large spread overflows the call stack for
+    // multi-MB WASM binaries; process in chunks instead.
+    const CHUNK = 0x8000;
+    let out = "";
+    for (let i = 0; i < buf.length; i += CHUNK) {
+        out += String.fromCharCode.apply(null, buf.subarray(i, i + CHUNK) as unknown as number[]);
+    }
+    return out;
+};
 
 export const str2ab = (str: string) => {
     const buf = new ArrayBuffer(str.length);
