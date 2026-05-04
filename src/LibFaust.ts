@@ -7,6 +7,8 @@ import type {
     RustFaustModule
 } from './types';
 
+const decoder = new TextDecoder();
+
 const isLegacyFaustModule = (
     module: FaustCompilerModule
 ): module is FaustModule => typeof (module as FaustModule).libFaustWasm === 'function';
@@ -45,6 +47,31 @@ export interface ILibFaust extends LibFaustWasm {
      * available there.
      */
     fs(): typeof FS;
+
+    /**
+     * Generate auxiliary files and return every produced file as a
+     * `Record<string, string>` map keyed by relative path.
+     *
+     * For the **Rust** backend this calls `faust_wasm_generate_aux_files_json`
+     * and decodes the base64 payloads in memory — no filesystem is required.
+     *
+     * For the **Emscripten** backend this calls the boolean
+     * `generateAuxFiles(...)` and reads the produced files from the in-memory
+     * `FS` directory `/<name>-svg/`.
+     *
+     * `process.svg` is always the first key when SVG output is requested,
+     * matching the hierarchy entry-point convention used by the Rust renderer.
+     *
+     * @param name - logical DSP source name
+     * @param code - Faust DSP source text
+     * @param args - full compiler argument string including any required
+     *   `-lang`, `-o`, and `-svg` flags
+     */
+    generateAuxFilesJson(
+        name: string,
+        code: string,
+        args: string
+    ): Record<string, string>;
 }
 
 /**
@@ -104,6 +131,47 @@ class LibFaust implements ILibFaust {
     }
     generateAuxFiles(name: string, code: string, args: string) {
         return this.fCompiler.generateAuxFiles(name, code, args);
+    }
+
+    generateAuxFilesJson(
+        name: string,
+        code: string,
+        args: string
+    ): Record<string, string> {
+        if (this.fCompiler instanceof RustLibFaust) {
+            return this.fCompiler.generateAuxFilesJson(name, code, args);
+        }
+        // Emscripten path: call the boolean helper and read results from FS.
+        const fs = this.fFileSystem;
+        const dir = `/${name}-svg`;
+        try {
+            const existing: string[] = fs.readdir(dir);
+            existing
+                .filter((f) => f !== '.' && f !== '..')
+                .forEach((f) => fs.unlink(`${dir}/${f}`));
+        } catch {
+            // Directory may not exist yet — that is fine.
+        }
+        const ok = this.fCompiler.generateAuxFiles(name, code, args);
+        if (!ok) {
+            throw new Error(this.fCompiler.getErrorAfterException());
+        }
+        const files: string[] = fs.readdir(dir);
+        const result: Record<string, string> = {};
+        // Ensure process.svg comes first, then alphabetical order.
+        const sorted = files
+            .filter((f) => f !== '.' && f !== '..')
+            .sort((a, b) => {
+                if (a === 'process.svg') return -1;
+                if (b === 'process.svg') return 1;
+                return a.localeCompare(b);
+            });
+        for (const file of sorted) {
+            result[file] = fs.readFile(`${dir}/${file}`, {
+                encoding: 'utf8'
+            }) as string;
+        }
+        return result;
     }
     deleteAllDSPFactories() {
         return this.fCompiler.deleteAllDSPFactories();

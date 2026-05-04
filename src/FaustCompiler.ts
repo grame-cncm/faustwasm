@@ -93,6 +93,29 @@ export interface IFaustCompiler {
     generateAuxFiles(name: string, code: string, args: string): boolean;
 
     /**
+     * Generates auxiliary files and returns them as an in-memory map.
+     *
+     * Works with both the Emscripten and raw Rust compiler backends:
+     * - **Rust**: calls `faust_wasm_generate_aux_files_json` and decodes the
+     *   base64 payloads — no filesystem required.
+     * - **Emscripten**: calls `generateAuxFiles(...)` and reads the results
+     *   from the in-memory `FS` directory.
+     *
+     * `process.svg` is always first when SVG output is requested, so callers
+     * can use the map directly to resolve cross-file SVG `href` links.
+     *
+     * @param name - an arbitrary name for the Faust module
+     * @param code - Faust dsp code
+     * @param args - full compiler argument string (e.g. `-lang wasm -o binary -svg`)
+     * @returns map from relative file path to UTF-8 file content
+     */
+    generateAuxFilesJson(
+        name: string,
+        code: string,
+        args: string
+    ): Record<string, string>;
+
+    /**
      * Delete all factories.
      */
     deleteAllDSPFactories(): void;
@@ -343,6 +366,16 @@ class FaustCompiler implements IFaustCompiler {
         } catch (e) {
             this.fErrorMessage = this.fLibFaust.getErrorAfterException();
             // console.error(`=> exception raised while running generateAuxFiles: ${this.fErrorMessage}`);
+            this.fLibFaust.cleanupAfterException();
+            throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
+        }
+    }
+
+    generateAuxFilesJson(name: string, code: string, args: string) {
+        try {
+            return this.fLibFaust.generateAuxFilesJson(name, code, args);
+        } catch (e) {
+            this.fErrorMessage = this.fLibFaust.getErrorAfterException();
             this.fLibFaust.cleanupAfterException();
             throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
         }
