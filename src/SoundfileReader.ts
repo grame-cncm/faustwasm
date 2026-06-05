@@ -1,4 +1,5 @@
 import { FaustBaseWebAudioDsp } from './FaustWebAudioDsp';
+import WavDecoder from './WavDecoder';
 import type {
     AudioData,
     FaustDspMeta,
@@ -21,7 +22,8 @@ class SoundfileReader {
         const origin = loc?.origin;
         const parent = href ? this.getParentUrl(href) : null;
         return [href, parent, origin].filter(
-            (value): value is string => typeof value === 'string' && value.length > 0
+            (value): value is string =>
+                typeof value === 'string' && value.length > 0
         );
     }
 
@@ -50,6 +52,30 @@ class SoundfileReader {
         } as AudioData;
     }
 
+    private static isWaveFile(buffer: ArrayBuffer) {
+        if (buffer.byteLength < 12) return false;
+        const reader = new DataView(buffer);
+        const riff =
+            reader.getUint8(0) === 0x52 &&
+            reader.getUint8(1) === 0x49 &&
+            reader.getUint8(2) === 0x46 &&
+            reader.getUint8(3) === 0x46;
+        const wave =
+            reader.getUint8(8) === 0x57 &&
+            reader.getUint8(9) === 0x41 &&
+            reader.getUint8(10) === 0x56 &&
+            reader.getUint8(11) === 0x45;
+        return riff && wave;
+    }
+
+    private static decodeWaveFile(buffer: ArrayBuffer): AudioData {
+        const decoded = WavDecoder.decode(buffer);
+        return {
+            sampleRate: decoded.sampleRate,
+            audioBuffer: decoded.channelData
+        };
+    }
+
     /**
      * Extract the URLs from the metadata.
      *
@@ -64,8 +90,9 @@ class SoundfileReader {
             if (item.type === 'soundfile') {
                 const urls = FaustBaseWebAudioDsp.splitSoundfileNames(item.url);
                 // soundfiles.map[item.label] = urls;
-                urls.filter((url) => url.trim().length > 0)
-                    .forEach((url) => (soundfiles[url] = null));
+                urls.filter((url) => url.trim().length > 0).forEach(
+                    (url) => (soundfiles[url] = null)
+                );
             }
         };
         FaustBaseWebAudioDsp.parseUI(dspMeta.ui, callback);
@@ -90,6 +117,13 @@ class SoundfileReader {
             );
         // Decode the audio data
         const arrayBuffer = await response.arrayBuffer();
+        if (this.isWaveFile(arrayBuffer)) {
+            try {
+                return this.decodeWaveFile(arrayBuffer);
+            } catch (error) {
+                console.error(error);
+            }
+        }
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
         return this.toAudioData(audioBuffer);
     }
