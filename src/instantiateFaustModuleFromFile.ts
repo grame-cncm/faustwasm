@@ -14,7 +14,8 @@ const instantiateFaustModuleFromFile = async (
     let FaustModule: FaustModuleFactory;
     let dataBinary: ArrayBuffer;
     let wasmBinary: ArrayBuffer;
-    const jsCodeHead = /var (.+) = \(/;
+    // Match both `var FaustModule = (` (older emcc) and `var FaustModule=(` (emcc 5.x)
+    const jsCodeHead = /var (\w+)\s*=\s*\(/;
     if (typeof window === 'object') {
         let jsCode = await (await fetch(jsFile)).text();
         jsCode = `${jsCode}
