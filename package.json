@@ -1,6 +1,6 @@
 {
     "name": "@grame/faustwasm",
-    "version": "0.16.3",
+    "version": "0.16.4",
     "description": "WebAssembly version of Faust Compiler",
     "main": "dist/cjs/index.js",
     "types": "dist/esm/index.d.ts",
@@ -47,13 +47,16 @@
         "@webaudiomodules/api": "^2.0.0-alpha.6",
         "@webaudiomodules/sdk-parammgr": "^0.0.13",
         "dts-bundle-generator": "^9.5.1",
-        "esbuild": "^0.27.0",
+        "esbuild": "^0.28.1",
         "eslint": "^9.39.1",
         "prettier": "^3.6.2",
         "typescript": "^5.4.5",
-        "typescript-eslint": "^8.46.3"
+        "typescript-eslint": "8.46.3"
     },
     "dependencies": {
         "@types/emscripten": "^1.39.10"
+    },
+    "allowScripts": {
+        "esbuild@0.28.1": true
     }
 }
