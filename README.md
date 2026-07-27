@@ -112,7 +112,7 @@ will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `i
 The project now supports two embedded compiler shapes:
 
 - the historical Emscripten-based `libfaust-wasm` package
-- a raw Rust compiler module produced by `faust-rs` (`faust_wasm_ffi.wasm`)
+- a raw Rust compiler module produced by `faust-rs` (`libfaust-rs.wasm`)
 
 Public additions in this area:
 
@@ -133,7 +133,7 @@ historical `libfaust-wasm` package:
 
 ```bash
 node scripts/faust2wasm.js test/rev.dsp test/rev-rust -pwa \
-  -rust-compiler /path/to/faust_wasm_ffi.wasm
+  -rust-compiler /path/to/libfaust-rs.wasm
 ```
 
 This switches the embedded compiler used by the script while keeping the same
@@ -143,12 +143,12 @@ Validated examples:
 
 ```bash
 node scripts/faust2wasm.js test/rev.dsp test/rev-rust -pwa \
-  -rust-compiler /Users/letz/Developpements/RUST/faust-rs/target/wasm32-unknown-unknown/release/faust_wasm_ffi.wasm
+  -rust-compiler /Users/letz/Developpements/RUST/faust-rs/target/wasm32-unknown-unknown/release/libfaust-rs.wasm
 ```
 
 ```bash
 node scripts/faust2wasm.js test/organ.dsp test/organ-rust -pwa -poly \
-  -rust-compiler /Users/letz/Developpements/RUST/faust-rs/target/wasm32-unknown-unknown/release/faust_wasm_ffi.wasm
+  -rust-compiler /Users/letz/Developpements/RUST/faust-rs/target/wasm32-unknown-unknown/release/libfaust-rs.wasm
 ```
 
 The polyphonic Rust path now includes a packaged internal mixer fallback, so it
@@ -303,7 +303,7 @@ const {
 
 (async () => {
     const rustModule = await instantiateRustFaustModuleFromFile(
-        "/path/to/faust_wasm_ffi.wasm"
+        "/path/to/libfaust-rs.wasm"
     );
 
     // LibFaust accepts either the historical Emscripten module or the raw Rust module.
@@ -326,7 +326,7 @@ default, install a generic loader hook once:
 ```JavaScript
 FaustDspGenerator.setCompilerLoader(async () => {
     const rustModule = await instantiateRustFaustModuleFromFile(
-        "/path/to/faust_wasm_ffi.wasm"
+        "/path/to/libfaust-rs.wasm"
     );
     return new FaustCompiler(new LibFaust(rustModule));
 });

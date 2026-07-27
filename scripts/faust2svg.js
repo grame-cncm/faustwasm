@@ -12,7 +12,7 @@ Generates diagram SVGs of a given Faust DSP.
 
 Options:
   --rust              Use the raw Rust compiler module instead of Emscripten.
-  --rust-wasm <file>  Path to faust_wasm_ffi.wasm (default: libfaust-wasm/faust_wasm_ffi.wasm).
+  --rust-wasm <file>  Path to libfaust-rs.wasm (default: /Users/letz/Developpements/RUST/faust-rs/target/wasm32-unknown-unknown/release/libfaust-rs.wasm).
   -help | -h          Show this help.
 `);
     process.exit();

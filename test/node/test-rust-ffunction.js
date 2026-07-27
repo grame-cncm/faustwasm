@@ -23,7 +23,7 @@ const compilerWasm =
     process.env.FAUST_RUST_COMPILER_WASM ||
     path.resolve(
         __dirname,
-        "../../../../RUST/faust-rs/target/wasm32-unknown-unknown/release/faust_wasm_ffi.wasm"
+        "../../../../RUST/faust-rs/target/wasm32-unknown-unknown/release/libfaust-rs.wasm"
     );
 
 const dspCode = `

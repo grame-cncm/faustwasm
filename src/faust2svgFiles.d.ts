@@ -5,7 +5,7 @@ declare const faust2svgFiles: (
     options?: {
         /** Use the raw Rust compiler module instead of the Emscripten module. */
         rust?: boolean;
-        /** Path to `faust_wasm_ffi.wasm` when `rust` is true. */
+        /** Path to `libfaust-rs.wasm` when `rust` is true. */
         rustWasm?: string;
     }
 ) => Promise<Record<string, string>>;

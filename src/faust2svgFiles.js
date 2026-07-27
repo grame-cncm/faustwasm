@@ -24,7 +24,10 @@ const faust2svgFiles = async (inputFile, outputDir, argv = [], options = {}) => 
         // Raw Rust compiler path — no Emscripten FS required.
         const wasmFile =
             options.rustWasm ||
-            path.join(__dirname, '../libfaust-wasm/faust_wasm_ffi.wasm');
+            path.join(
+                __dirname,
+                '../../../RUST/faust-rs/target/wasm32-unknown-unknown/release/libfaust-rs.wasm'
+            );
         faustModule = await instantiateRustFaustModuleFromFile(wasmFile);
     } else {
         faustModule = await instantiateFaustModuleFromFile(
