@@ -7,6 +7,7 @@ export { default as instantiateRustFaustModuleFromFile } from './instantiateRust
 export { default as getFaustAudioWorkletProcessor } from './FaustAudioWorkletProcessor';
 export { default as getFaustFFTAudioWorkletProcessor } from './FaustFFTAudioWorkletProcessor';
 export { default as FaustCompiler } from './FaustCompiler';
+export * from './FaustDiagnostics';
 export { FaustDspInstance } from './FaustDspInstance';
 export { default as FaustWasmInstantiator } from './FaustWasmInstantiator';
 export { default as FaustOfflineProcessor } from './FaustOfflineProcessor';

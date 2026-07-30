@@ -1,14 +1,21 @@
 import { Sha256 } from '@aws-crypto/sha256-js';
 import type { ILibFaust } from './LibFaust';
 import type { FaustDspFactory, IntVector } from './types';
+import {
+    FaustCompilerError,
+    type FaustDiagnosticReport
+} from './FaustDiagnostics';
 
 export const ab2str = (buf: Uint8Array) => {
     // String.fromCharCode.apply with a large spread overflows the call stack for
     // multi-MB WASM binaries; process in chunks instead.
     const CHUNK = 0x8000;
-    let out = "";
+    let out = '';
     for (let i = 0; i < buf.length; i += CHUNK) {
-        out += String.fromCharCode.apply(null, buf.subarray(i, i + CHUNK) as unknown as number[]);
+        out += String.fromCharCode.apply(
+            null,
+            buf.subarray(i, i + CHUNK) as unknown as number[]
+        );
     }
     return out;
 };
@@ -43,6 +50,19 @@ export interface IFaustCompiler {
      * @return an error string
      */
     getErrorMessage(): string;
+
+    /**
+     * Gives the complete structured report for the last compilation failure.
+     *
+     * The rejected {@link FaustCompilerError} remains authoritative when
+     * several compilations run concurrently.
+     */
+    getErrorDiagnostics(): FaustDiagnosticReport | null;
+
+    /**
+     * Gives warnings/remarks retained by the last successful compilation.
+     */
+    getDiagnostics(): FaustDiagnosticReport | null;
 
     /**
      * Create a wasm factory from Faust code i.e. wasm compiled code, to be used to create monophonic instances.
@@ -142,6 +162,8 @@ export interface IFaustCompiler {
 class FaustCompiler implements IFaustCompiler {
     private fLibFaust: ILibFaust;
     private fErrorMessage: string;
+    private fErrorDiagnostics: FaustDiagnosticReport | null;
+    private fDiagnostics: FaustDiagnosticReport | null;
     private static gFactories: Map<string, FaustDspFactory> = new Map<
         string,
         FaustDspFactory
@@ -162,9 +184,9 @@ class FaustCompiler implements IFaustCompiler {
         if (typeof window === 'object') {
             const baseURL =
                 (typeof document !== 'undefined'
-                    ? ('src' in (document.currentScript || {})
-                          ? (document.currentScript as HTMLScriptElement).src
-                          : document.baseURI)
+                    ? 'src' in (document.currentScript || {})
+                        ? (document.currentScript as HTMLScriptElement).src
+                        : document.baseURI
                     : undefined) || window.location.href;
             return new URL(`../libfaust-wasm/${fileName}`, baseURL).href;
         }
@@ -184,7 +206,9 @@ class FaustCompiler implements IFaustCompiler {
      * Used by the polyphonic Rust path when the compiler module cannot provide
      * `mixer32.wasm` / `mixer64.wasm` through `FS`.
      */
-    private async loadPackagedMixerBuffer(isDouble = false): Promise<Uint8Array> {
+    private async loadPackagedMixerBuffer(
+        isDouble = false
+    ): Promise<Uint8Array> {
         const fileName = isDouble ? 'mixer64.wasm' : 'mixer32.wasm';
         const url = this.resolveMixerAssetURL(fileName);
         if (typeof window === 'object') {
@@ -282,6 +306,8 @@ class FaustCompiler implements IFaustCompiler {
     constructor(libFaust: ILibFaust) {
         this.fLibFaust = libFaust;
         this.fErrorMessage = '';
+        this.fErrorDiagnostics = null;
+        this.fDiagnostics = null;
     }
     private intVec2intArray(vec: IntVector) {
         const size = vec.size();
@@ -307,6 +333,9 @@ class FaustCompiler implements IFaustCompiler {
             name + code + args + (poly ? 'poly' : 'mono')
         );
         if (FaustCompiler.gFactories.has(shaKey)) {
+            this.fErrorMessage = '';
+            this.fErrorDiagnostics = null;
+            this.fDiagnostics = null;
             return FaustCompiler.gFactories.get(shaKey) || null;
         } else {
             try {
@@ -317,6 +346,9 @@ class FaustCompiler implements IFaustCompiler {
                     args,
                     !poly
                 );
+                this.fDiagnostics = this.fLibFaust.getDiagnostics();
+                this.fErrorMessage = '';
+                this.fErrorDiagnostics = null;
                 const ui8Code = this.intVec2intArray(faustDspWasm.data);
                 faustDspWasm.data.delete();
                 const module = await WebAssembly.compile(ui8Code);
@@ -336,9 +368,21 @@ class FaustCompiler implements IFaustCompiler {
                 return factory;
             } catch (e) {
                 this.fErrorMessage = this.fLibFaust.getErrorAfterException();
+                this.fErrorDiagnostics =
+                    e instanceof FaustCompilerError
+                        ? e.getErrorDiagnostics()
+                        : this.fLibFaust.getErrorDiagnosticsAfterException();
+                this.fDiagnostics = null;
                 // console.error(`=> exception raised while running createDSPFactory: ${this.fErrorMessage}`, e);
                 this.fLibFaust.cleanupAfterException();
-                throw this.fErrorMessage ? new Error(this.fErrorMessage) : e;
+                if (e instanceof FaustCompilerError) throw e;
+                throw this.fErrorMessage
+                    ? new FaustCompilerError(
+                          this.fErrorMessage,
+                          this.fErrorDiagnostics,
+                          e
+                      )
+                    : e;
             }
         }
     }
@@ -347,6 +391,12 @@ class FaustCompiler implements IFaustCompiler {
     }
     getErrorMessage() {
         return this.fErrorMessage;
+    }
+    getErrorDiagnostics() {
+        return this.fErrorDiagnostics;
+    }
+    getDiagnostics() {
+        return this.fDiagnostics;
     }
     async createMonoDSPFactory(name: string, code: string, args: string) {
         return this.createDSPFactory(name, code, args, false);

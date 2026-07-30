@@ -6,6 +6,11 @@ import type {
     RustFaustModule,
     WasmAuxFileDto
 } from './types';
+import {
+    FaustCompilerError,
+    parseFaustDiagnosticReport
+} from './FaustDiagnostics';
+import type { FaustDiagnosticReport } from './FaustDiagnostics';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -48,6 +53,8 @@ class RustIntVector implements IntVector {
 class RustLibFaust implements LibFaustWasm {
     private fModule: RustFaustModule;
     private fLastError = '';
+    private fLastErrorDiagnostics: FaustDiagnosticReport | null = null;
+    private fLastDiagnostics: FaustDiagnosticReport | null = null;
     /** Extra user-supplied virtual sources, synced from the host (e.g. in-memory FS). */
     private fExtraVirtualSources: Map<string, string> = new Map();
 
@@ -69,7 +76,9 @@ class RustLibFaust implements LibFaustWasm {
         if (this.fExtraVirtualSources.size === 0) return '';
         const parts: string[] = [];
         for (const [name, content] of this.fExtraVirtualSources) {
-            parts.push(`--virtual-source ${name}=${RustLibFaust.base64FromString(content)}`);
+            parts.push(
+                `--virtual-source ${name}=${RustLibFaust.base64FromString(content)}`
+            );
         }
         return ' ' + parts.join(' ');
     }
@@ -84,7 +93,9 @@ class RustLibFaust implements LibFaustWasm {
         const CHUNK = 0x8000;
         let binary = '';
         for (let i = 0; i < bytes.length; i += CHUNK) {
-            binary += String.fromCharCode(...(bytes.subarray(i, i + CHUNK) as unknown as number[]));
+            binary += String.fromCharCode(
+                ...(bytes.subarray(i, i + CHUNK) as unknown as number[])
+            );
         }
         return btoa(binary);
     }
@@ -128,9 +139,46 @@ class RustLibFaust implements LibFaustWasm {
      * Record the last helper/compiler error and throw a JS exception carrying
      * the same message.
      */
-    private fail(message: string): never {
+    private fail(
+        message: string,
+        diagnostics: FaustDiagnosticReport | null = null,
+        cause?: unknown
+    ): never {
         this.fLastError = message;
-        throw new Error(message);
+        this.fLastErrorDiagnostics = diagnostics;
+        throw new FaustCompilerError(message, diagnostics, cause);
+    }
+
+    /**
+     * Query and copy one optional diagnostics-v2 report before its compile
+     * result is freed.
+     *
+     * Invalid/malformed payloads degrade to `null`; they never replace the
+     * human compatibility message that explains the original failure.
+     */
+    private readDiagnostics(
+        query: ((handle: number) => number) | undefined,
+        compileHandle: number
+    ): FaustDiagnosticReport | null {
+        if (typeof query !== 'function') return null;
+        let textHandle: number | null = null;
+        try {
+            textHandle = query(compileHandle);
+            if (this.fModule.faust_wasm_text_result_is_ok(textHandle) === 0) {
+                return null;
+            }
+            const text = this.readUtf8(
+                this.fModule.faust_wasm_text_result_ptr(textHandle),
+                this.fModule.faust_wasm_text_result_len(textHandle)
+            );
+            return parseFaustDiagnosticReport(text);
+        } catch {
+            return null;
+        } finally {
+            if (textHandle !== null) {
+                this.fModule.faust_wasm_text_result_free(textHandle);
+            }
+        }
     }
 
     /**
@@ -184,8 +232,16 @@ class RustLibFaust implements LibFaustWasm {
                     this.fModule.faust_wasm_result_error_ptr(handle),
                     this.fModule.faust_wasm_result_error_len(handle)
                 );
+                const diagnostics = this.readDiagnostics(
+                    this.fModule.faust_wasm_result_get_error_diagnostics,
+                    handle
+                );
                 this.fModule.faust_wasm_result_free(handle);
-                return this.fail(error || 'Rust Faust compilation failed');
+                this.fLastDiagnostics = null;
+                return this.fail(
+                    error || 'Rust Faust compilation failed',
+                    diagnostics
+                );
             }
             const wasmBytes = this.copyBytes(
                 this.fModule.faust_wasm_result_wasm_ptr(handle),
@@ -195,8 +251,13 @@ class RustLibFaust implements LibFaustWasm {
                 this.fModule.faust_wasm_result_json_ptr(handle),
                 this.fModule.faust_wasm_result_json_len(handle)
             );
+            this.fLastDiagnostics = this.readDiagnostics(
+                this.fModule.faust_wasm_result_get_diagnostics,
+                handle
+            );
             this.fModule.faust_wasm_result_free(handle);
             this.fLastError = '';
+            this.fLastErrorDiagnostics = null;
             return {
                 cfactory: 0,
                 data: new RustIntVector(wasmBytes),
@@ -341,8 +402,17 @@ class RustLibFaust implements LibFaustWasm {
         return this.fLastError;
     }
 
+    getErrorDiagnosticsAfterException() {
+        return this.fLastErrorDiagnostics;
+    }
+
+    getDiagnostics() {
+        return this.fLastDiagnostics;
+    }
+
     cleanupAfterException() {
         this.fLastError = '';
+        this.fLastErrorDiagnostics = null;
     }
 
     getInfos(what: FaustInfoType) {

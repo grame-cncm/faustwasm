@@ -6,12 +6,14 @@ import type {
     LibFaustWasm,
     RustFaustModule
 } from './types';
+import type { FaustDiagnosticReport } from './FaustDiagnostics';
 
 const decoder = new TextDecoder();
 
 const isLegacyFaustModule = (
     module: FaustCompilerModule
-): module is FaustModule => typeof (module as FaustModule).libFaustWasm === 'function';
+): module is FaustModule =>
+    typeof (module as FaustModule).libFaustWasm === 'function';
 
 const isRustFaustModule = (
     module: FaustCompilerModule
@@ -87,6 +89,20 @@ export interface ILibFaust extends LibFaustWasm {
      * @param content - source text, or `null` to remove the entry
      */
     setVirtualSource(name: string, content: string | null): void;
+
+    /**
+     * Complete structured report for the most recent failed compiler request.
+     *
+     * Returns `null` for historical modules or failures without compiler
+     * diagnostics.
+     */
+    getErrorDiagnosticsAfterException(): FaustDiagnosticReport | null;
+
+    /**
+     * Complete warnings/remarks report from the most recent successful
+     * compilation, when supported.
+     */
+    getDiagnostics(): FaustDiagnosticReport | null;
 }
 
 /**
@@ -199,6 +215,12 @@ class LibFaust implements ILibFaust {
     }
     getErrorAfterException() {
         return this.fCompiler.getErrorAfterException();
+    }
+    getErrorDiagnosticsAfterException() {
+        return this.fCompiler.getErrorDiagnosticsAfterException?.() ?? null;
+    }
+    getDiagnostics() {
+        return this.fCompiler.getDiagnostics?.() ?? null;
     }
     cleanupAfterException() {
         return this.fCompiler.cleanupAfterException();
