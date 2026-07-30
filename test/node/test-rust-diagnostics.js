@@ -5,6 +5,7 @@ import {
     FaustCompiler,
     FaustCompilerError,
     LibFaust,
+    instantiateFaustModuleFromFile,
     instantiateRustFaustModule
 } from '../../dist/esm/index.js';
 
@@ -28,7 +29,8 @@ const compileFailure = async (compiler, name, source) => {
     }
 };
 
-const compiler = new FaustCompiler(new LibFaust(rawModule));
+const libFaust = new LibFaust(rawModule);
+const compiler = new FaustCompiler(libFaust);
 const [parseError, evalError] = await Promise.all([
     compileFailure(compiler, 'diagnostics-parse.dsp', 'process = ;'),
     compileFailure(compiler, 'diagnostics-eval.dsp', 'process = missing;')
@@ -46,10 +48,78 @@ assert.ok(parseReport?.sources.every(({ text }) => text === null));
 assert.ok(
     evalReport?.diagnostics.some(({ code }) => code.startsWith('FRS-EVAL-'))
 );
+const parsePrimary = parseReport?.diagnostics
+    .flatMap(({ labels }) => labels)
+    .find(({ style }) => style === 'primary');
+assert.ok(parsePrimary?.range);
+assert.ok(parsePrimary.range.start <= parsePrimary.range.end);
+assert.ok(
+    parsePrimary.range.end <= new TextEncoder().encode('process = ;').length
+);
 assert.notDeepEqual(
     parseReport?.diagnostics.map(({ code }) => code),
     evalReport?.diagnostics.map(({ code }) => code),
     'each rejected error must own the report for its own request'
+);
+await compileFailure(compiler, 'diagnostics-parse.dsp', 'process = ;');
+
+const fixError = await compileFailure(
+    compiler,
+    'diagnostics-fix.dsp',
+    'filter(x) = x * 0.5;\nprocess = filtre;'
+);
+assert.ok(
+    fixError
+        .getErrorDiagnostics()
+        ?.diagnostics.some(({ fixes }) => fixes.length > 0)
+);
+
+const traceError = await compileFailure(
+    compiler,
+    'diagnostics-trace.dsp',
+    'foo = case { (0) => 1; };\nprocess = foo(2);'
+);
+assert.ok(
+    traceError
+        .getErrorDiagnostics()
+        ?.diagnostics.some(({ traces }) => traces.length > 0)
+);
+
+libFaust.setVirtualSource(
+    'diagnostics-virtual.lib',
+    'foo = missing_from_virtual;'
+);
+const virtualError = await compileFailure(
+    compiler,
+    'diagnostics-import.dsp',
+    'import("diagnostics-virtual.lib");\nprocess = foo;'
+);
+const virtualReport = virtualError.getErrorDiagnostics();
+const virtualSource = virtualReport?.sources.find(
+    ({ name }) => name === 'diagnostics-virtual.lib'
+);
+assert.ok(virtualSource);
+assert.ok(
+    virtualReport?.diagnostics.some(({ labels }) =>
+        labels.some(({ range }) => range?.source_id === virtualSource.id)
+    )
+);
+
+const backendError = await compileFailure(
+    compiler,
+    'diagnostics-codegen.dsp',
+    'ext = fvariable(float extvar, <math.h>);\nprocess = ext;'
+);
+assert.ok(
+    backendError
+        .getErrorDiagnostics()
+        ?.diagnostics.some(
+            ({ stage, detail_code, facts }) =>
+                stage === 'codegen' &&
+                detail_code !== null &&
+                facts.codegen_code?.type === 'string' &&
+                facts.codegen_code.value === detail_code
+        )
 );
 
 const lastReport = compiler.getErrorDiagnostics();
@@ -88,6 +158,18 @@ const oldModuleError = await compileFailure(
 );
 assert.equal(oldModuleError.getErrorDiagnostics(), null);
 assert.ok(oldCompiler.getErrorMessage().length > 0);
+
+const cppModule = await instantiateFaustModuleFromFile(
+    new URL('../../libfaust-wasm/libfaust-wasm.js', import.meta.url).pathname
+);
+const cppCompiler = new FaustCompiler(new LibFaust(cppModule));
+const cppError = await compileFailure(
+    cppCompiler,
+    'diagnostics-cpp.dsp',
+    'process = ;'
+);
+assert.equal(cppError.getErrorDiagnostics(), null);
+assert.ok(cppError.message.length > 0);
 
 const malformedJson = new TextEncoder().encode('{"schema_version":2');
 const malformedPtr = rawModule.faust_wasm_alloc(malformedJson.length);
