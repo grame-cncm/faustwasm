@@ -345,6 +345,11 @@ Current differences on the Rust embedded-compiler path:
 - the polyphonic path uses packaged `mixer32.wasm` / `mixer64.wasm` fallbacks
   instead of `/usr/rsrc/...` from the historical compiler FS
 
+The Rust path also exposes complete, machine-readable compilation reports.
+See [Structured compiler diagnostics](docs/structured-diagnostics.md) for the
+typed error API, successful-compilation warnings, compatibility behavior, and
+an LLM-oriented example.
+
 ### Use in a web browser
 
 ```JavaScript
