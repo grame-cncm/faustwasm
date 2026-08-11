@@ -329,8 +329,9 @@ class FaustCompiler implements IFaustCompiler {
         }
 
         // If code is already compiled, return the cached factory
+        const compilationContext = this.fLibFaust.getCompilationContextKey();
         const shaKey = await sha256(
-            name + code + args + (poly ? 'poly' : 'mono')
+            name + code + args + compilationContext + (poly ? 'poly' : 'mono')
         );
         if (FaustCompiler.gFactories.has(shaKey)) {
             this.fErrorMessage = '';

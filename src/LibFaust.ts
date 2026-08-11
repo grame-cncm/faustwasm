@@ -91,6 +91,33 @@ export interface ILibFaust extends LibFaustWasm {
     setVirtualSource(name: string, content: string | null): void;
 
     /**
+     * Register or remove a host-prefetched HTTP(S) source for the Rust compiler.
+     *
+     * The URL must be absolute and should be the final URL used by the import
+     * graph. The module performs no networking. Relative imports from a
+     * URL-named root are resolved against these entries.
+     *
+     * On the Emscripten backend this is a no-op.
+     *
+     * @param url     - absolute HTTP(S) source URL
+     * @param content - source text, or `null` to remove the entry
+     */
+    setRemoteSource(url: string, content: string | null): void;
+
+    /**
+     * Replace all host-prefetched remote sources with one URL/source bundle.
+     *
+     * A `ReadonlyMap` preserves arbitrary URL keys; a plain object is useful
+     * when the graph was deserialized from JSON.
+     */
+    setRemoteSourceBundle(
+        sources: ReadonlyMap<string, string> | Readonly<Record<string, string>>
+    ): void;
+
+    /** Stable hidden-input description included in the factory cache key. */
+    getCompilationContextKey(): string;
+
+    /**
      * Complete structured report for the most recent failed compiler request.
      *
      * Returns `null` for historical modules or failures without compiler
@@ -209,6 +236,30 @@ class LibFaust implements ILibFaust {
             this.fCompiler.setVirtualSource(name, content);
         }
         // Emscripten: no-op — callers write directly into fs() instead.
+    }
+    setRemoteSource(url: string, content: string | null) {
+        if (this.fCompiler instanceof RustLibFaust) {
+            this.fCompiler.setRemoteSource(url, content);
+        }
+        // Emscripten has no URL-keyed prefetched-source transport.
+    }
+    setRemoteSourceBundle(
+        sources: ReadonlyMap<string, string> | Readonly<Record<string, string>>
+    ) {
+        if (!(this.fCompiler instanceof RustLibFaust)) return;
+        this.fCompiler.clearRemoteSources();
+        const entries =
+            Symbol.iterator in sources
+                ? (sources as ReadonlyMap<string, string>).entries()
+                : Object.entries(sources);
+        for (const [url, content] of entries) {
+            this.fCompiler.setRemoteSource(url, content);
+        }
+    }
+    getCompilationContextKey() {
+        return this.fCompiler instanceof RustLibFaust
+            ? this.fCompiler.getCompilationContextKey()
+            : '';
     }
     deleteAllDSPFactories() {
         return this.fCompiler.deleteAllDSPFactories();

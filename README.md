@@ -335,6 +335,45 @@ FaustDspGenerator.setCompilerLoader(async () => {
 Call `FaustDspGenerator.resetCompilerLoader()` to fall back to the bundled
 historical `libfaust-wasm` loader.
 
+##### Prefetched HTTP(S) imports with the Rust compiler
+
+The raw Rust compiler module remains network-free. Fetch the complete source
+graph in the browser or Node.js first, register every imported response on
+`LibFaust`, and use the absolute URL of the root DSP as its compilation name:
+
+```JavaScript
+const rootUrl = "https://example.test/dsp/main.dsp";
+const childUrl = new URL("lib/gain.lib", rootUrl).href;
+
+const [rootSource, childSource] = await Promise.all([
+    fetch(rootUrl).then((response) => response.text()),
+    fetch(childUrl).then((response) => response.text())
+]);
+
+const libFaust = new LibFaust(rustModule);
+libFaust.setRemoteSourceBundle(new Map([[childUrl, childSource]]));
+
+const compiler = new FaustCompiler(libFaust);
+const factory = await compiler.createMonoDSPFactory(
+    rootUrl,
+    rootSource,
+    ""
+);
+```
+
+`setRemoteSource(url, content)` updates one entry; passing `null` removes it.
+`setRemoteSourceBundle(...)` replaces the entire bundle and accepts either a
+`ReadonlyMap<string, string>` or a plain URL-to-source object. Registered
+sources are passed only to the Rust backend. Their URLs and contents are part
+of the factory cache identity, so updating a dependency cannot reuse stale
+generated code.
+
+The host is responsible for asynchronous fetching, CORS and authentication,
+redirect handling, URL authorization, and aggregate graph-size limits. Store
+redirected responses under the final URL used by the import graph. The graph
+must be complete before compilation; a missing nested import is reported with
+its resolved URL and can be fetched before retrying.
+
 Current differences on the Rust embedded-compiler path:
 
 - no compiler `FS()` is exposed, unlike the historical Emscripten module

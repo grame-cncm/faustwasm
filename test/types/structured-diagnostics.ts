@@ -1,8 +1,16 @@
 import {
     FaustCompilerError,
     type FaustDiagnosticReport,
-    type IFaustCompiler
+    type IFaustCompiler,
+    type ILibFaust
 } from '../../src/index.js';
+
+export function installRemoteSources(libFaust: ILibFaust) {
+    libFaust.setRemoteSource('https://example.test/lib/one.lib', 'one(x) = x;');
+    libFaust.setRemoteSourceBundle({
+        'https://example.test/lib/two.lib': 'two(x) = x;'
+    });
+}
 
 export async function compileWithDiagnostics(
     compiler: IFaustCompiler,

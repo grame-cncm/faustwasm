@@ -57,6 +57,8 @@ class RustLibFaust implements LibFaustWasm {
     private fLastDiagnostics: FaustDiagnosticReport | null = null;
     /** Extra user-supplied virtual sources, synced from the host (e.g. in-memory FS). */
     private fExtraVirtualSources: Map<string, string> = new Map();
+    /** Host-prefetched HTTP(S) sources, keyed by their absolute URL. */
+    private fRemoteSources: Map<string, string> = new Map();
 
     constructor(module: RustFaustModule) {
         this.fModule = module;
@@ -71,16 +73,41 @@ class RustLibFaust implements LibFaustWasm {
         else this.fExtraVirtualSources.set(name, content);
     }
 
-    /** Encode all registered extra virtual sources as `--virtual-source name=base64` flags. */
-    private virtualSourceFlags(): string {
-        if (this.fExtraVirtualSources.size === 0) return '';
+    /** Register, update, or remove one host-prefetched HTTP(S) source. */
+    setRemoteSource(url: string, content: string | null) {
+        if (content === null) this.fRemoteSources.delete(url);
+        else this.fRemoteSources.set(url, content);
+    }
+
+    /** Remove every registered host-prefetched remote source. */
+    clearRemoteSources() {
+        this.fRemoteSources.clear();
+    }
+
+    /** Encode registered virtual and remote sources as transport-only flags. */
+    private sourceFlags(): string {
         const parts: string[] = [];
-        for (const [name, content] of this.fExtraVirtualSources) {
+        for (const [name, content] of [...this.fExtraVirtualSources].sort(
+            ([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)
+        )) {
             parts.push(
                 `--virtual-source ${name}=${RustLibFaust.base64FromString(content)}`
             );
         }
+        for (const [url, content] of [...this.fRemoteSources].sort(
+            ([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)
+        )) {
+            parts.push(
+                `--remote-source ${url} ${RustLibFaust.base64FromString(content)}`
+            );
+        }
+        if (parts.length === 0) return '';
         return ' ' + parts.join(' ');
+    }
+
+    /** Stable description of hidden compiler inputs used by factory caching. */
+    getCompilationContextKey(): string {
+        return this.sourceFlags();
     }
 
     private static base64FromString(str: string): string {
@@ -216,7 +243,7 @@ class RustLibFaust implements LibFaustWasm {
     ): FaustDspWasm {
         const nameBuf = this.allocUtf8(name);
         const codeBuf = this.allocUtf8(code);
-        const argsBuf = this.allocUtf8(args + this.virtualSourceFlags());
+        const argsBuf = this.allocUtf8(args + this.sourceFlags());
         try {
             const handle = this.fModule.faust_wasm_compile_dsp(
                 nameBuf.ptr,
@@ -283,7 +310,7 @@ class RustLibFaust implements LibFaustWasm {
     expandDSP(name: string, code: string, args: string) {
         const nameBuf = this.allocUtf8(name);
         const codeBuf = this.allocUtf8(code);
-        const argsBuf = this.allocUtf8(args + this.virtualSourceFlags());
+        const argsBuf = this.allocUtf8(args + this.sourceFlags());
         try {
             const handle = this.fModule.faust_wasm_expand_dsp(
                 nameBuf.ptr,
@@ -335,7 +362,7 @@ class RustLibFaust implements LibFaustWasm {
     ): Record<string, string> {
         const nameBuf = this.allocUtf8(name);
         const codeBuf = this.allocUtf8(code);
-        const argsBuf = this.allocUtf8(args + this.virtualSourceFlags());
+        const argsBuf = this.allocUtf8(args + this.sourceFlags());
         try {
             const handle = this.fModule.faust_wasm_generate_aux_files_json(
                 nameBuf.ptr,
@@ -363,7 +390,7 @@ class RustLibFaust implements LibFaustWasm {
     generateAuxFiles(name: string, code: string, args: string) {
         const nameBuf = this.allocUtf8(name);
         const codeBuf = this.allocUtf8(code);
-        const argsBuf = this.allocUtf8(args);
+        const argsBuf = this.allocUtf8(args + this.sourceFlags());
         try {
             const ok =
                 this.fModule.faust_wasm_generate_aux_files(

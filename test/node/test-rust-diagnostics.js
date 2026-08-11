@@ -105,6 +105,40 @@ assert.ok(
     )
 );
 
+const remoteRootUrl = 'https://example.test/dsp/main.dsp';
+const remoteChildUrl = 'https://example.test/dsp/lib/gain.lib';
+const remoteRootSource = 'import("lib/gain.lib");\nprocess = remoteGain;';
+libFaust.setRemoteSourceBundle(
+    new Map([[remoteChildUrl, 'remoteGain(x) = x;']])
+);
+const firstRemoteFactory = await compiler.createMonoDSPFactory(
+    remoteRootUrl,
+    remoteRootSource,
+    ''
+);
+assert.ok(firstRemoteFactory);
+
+libFaust.setRemoteSource(remoteChildUrl, 'remoteGain(x) = x * 0.5;');
+const changedRemoteFactory = await compiler.createMonoDSPFactory(
+    remoteRootUrl,
+    remoteRootSource,
+    ''
+);
+assert.ok(changedRemoteFactory);
+assert.notEqual(
+    changedRemoteFactory.shaKey,
+    firstRemoteFactory.shaKey,
+    'changing a prefetched dependency must invalidate the factory cache'
+);
+
+libFaust.setRemoteSource(remoteChildUrl, null);
+const missingRemoteError = await compileFailure(
+    compiler,
+    remoteRootUrl,
+    remoteRootSource
+);
+assert.match(missingRemoteError.message, /lib\/gain\.lib/);
+
 const backendError = await compileFailure(
     compiler,
     'diagnostics-codegen.dsp',
