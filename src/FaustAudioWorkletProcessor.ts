@@ -166,15 +166,46 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
 
         static get parameterDescriptors() {
             const params = [] as AudioParamDescriptor[];
-            // Analyse voice JSON to generate AudioParam parameters
-            const callback = (item: FaustUIItem) => {
+            // A path may appear once across the voice and the effect together.
+            // `AudioWorkletGlobalScope.registerProcessor` rejects a duplicate
+            // descriptor name, and its own message names neither the side the
+            // path came from nor the fact that the two DSPs are what collided,
+            // so the duplicate is caught here and reported with both.
+            //
+            // Deduplicating instead would compile but not work:
+            // `FaustPolyWebAudioDsp.setParamValue` routes a path to the effect
+            // *or* to the voices, never both, so a shared control would drive
+            // one side and silently leave the other at its default. A DSP that
+            // needs one value on both sides has to declare it twice, under two
+            // paths, and the host must write both.
+            const origin = new Map<string, string>();
+            const collect = (side: string) => (item: FaustUIItem) => {
                 const param = analysePolyParameters(item);
-                if (param) params.push(param);
+                if (!param) return;
+                const previous = origin.get(param.name);
+                if (previous === side) {
+                    throw new Error(
+                        `Faust: control "${param.name}" is declared twice in the ${side}. ` +
+                            `Two widgets resolved to the same path, so one of them would be ` +
+                            `unreachable. Give them distinct labels or groups.`
+                    );
+                }
+                if (previous !== undefined) {
+                    throw new Error(
+                        `Faust: control "${param.name}" is declared both in the ${previous} and in the ${side}. ` +
+                            `A polyphonic DSP cannot share a control path between \`process\` and \`effect\`: ` +
+                            `setParamValue routes a path to one side only, so the other would keep its default. ` +
+                            `Declare it under a distinct path on each side and have the host write both.`
+                    );
+                }
+                origin.set(param.name, side);
+                params.push(param);
             };
-            FaustBaseWebAudioDsp.parseUI(dspMeta.ui, callback);
+            // Analyse voice JSON to generate AudioParam parameters
+            FaustBaseWebAudioDsp.parseUI(dspMeta.ui, collect('voice'));
             // Analyse effect JSON to generate AudioParam parameters
             if (effectMeta)
-                FaustBaseWebAudioDsp.parseUI(effectMeta.ui, callback);
+                FaustBaseWebAudioDsp.parseUI(effectMeta.ui, collect('effect'));
             return params;
         }
 
@@ -499,13 +530,29 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         ? FaustPolyAudioWorkletProcessor
         : FaustMonoAudioWorkletProcessor;
     if (register) {
-        try {
-            registerProcessor(
-                processorName || dspName || (poly ? 'mydsp_poly' : 'mydsp'),
-                Processor
-            );
-        } catch (error) {
-            console.warn(error);
+        const name = processorName || dspName || (poly ? 'mydsp_poly' : 'mydsp');
+        // Registering the same processor twice in one AudioWorkletGlobalScope
+        // is benign — a host may add the module more than once for a given
+        // context — so that case stays tolerated, tracked on the scope itself
+        // rather than by matching a browser-specific error message.
+        //
+        // Anything else must propagate. `registerProcessor` is what gives the
+        // processor its name: swallowing a failure leaves `addModule` resolving
+        // successfully and the caller believing registration worked, so the
+        // problem only resurfaces later as
+        // "the node name '<name>' is not defined in AudioWorkletGlobalScope"
+        // from the AudioWorkletNode constructor — a symptom several steps
+        // removed from the cause, pointing at the name rather than at whatever
+        // actually made registration fail.
+        const scope = globalThis as unknown as {
+            __faustRegisteredProcessors?: Set<string>;
+        };
+        if (!scope.__faustRegisteredProcessors) {
+            scope.__faustRegisteredProcessors = new Set<string>();
+        }
+        if (!scope.__faustRegisteredProcessors.has(name)) {
+            registerProcessor(name, Processor);
+            scope.__faustRegisteredProcessors.add(name);
         }
     }
 

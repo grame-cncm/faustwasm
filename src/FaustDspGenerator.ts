@@ -928,17 +928,36 @@ const dependencies = {
                 }
             }
             // Create the AWN
-            const node = new FaustPolyAudioWorkletNode(context, {
-                processorOptions: {
-                    name: processorName,
-                    voiceFactory,
-                    mixerModule,
-                    voices,
-                    sampleSize,
-                    effectFactory: effectFactory || undefined,
-                    ...processorOptions
-                }
-            });
+            // `addModule` above resolves even when the module's top-level code
+            // throws — the browser reports that as an unhandled error inside
+            // the AudioWorkletGlobalScope rather than as a load failure. So a
+            // processor that failed to register only shows up here, as
+            // "the node name '<name>' is not defined", which reads as a naming
+            // or loading problem and says nothing about the real cause. Point
+            // the caller at the worklet console, where the actual error is.
+            let node: FaustPolyAudioWorkletNode;
+            try {
+                node = new FaustPolyAudioWorkletNode(context, {
+                    processorOptions: {
+                        name: processorName,
+                        voiceFactory,
+                        mixerModule,
+                        voices,
+                        sampleSize,
+                        effectFactory: effectFactory || undefined,
+                        ...processorOptions
+                    }
+                });
+            } catch (error) {
+                throw new Error(
+                    `Faust: the AudioWorkletProcessor "${processorName}" did not register. ` +
+                        `The module loaded, so the failure happened inside registerProcessor — ` +
+                        `its error is reported in the AudioWorklet scope and appears in the ` +
+                        `browser console above this one. A duplicate control path shared ` +
+                        `between \`process\` and \`effect\` is the usual cause. ` +
+                        `Original error: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
 
             return node as SP extends true
                 ? FaustPolyScriptProcessorNode

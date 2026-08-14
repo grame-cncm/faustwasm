@@ -809,13 +809,29 @@ const getFaustFFTAudioWorkletProcessor = (
 
     const Processor = FaustFFTAudioWorkletProcessor;
     if (register) {
-        try {
-            registerProcessor(
-                processorName || dspName || 'myfftdsp',
-                Processor
-            );
-        } catch (error) {
-            console.warn(error);
+        const name = processorName || dspName || 'myfftdsp';
+        // Registering the same processor twice in one AudioWorkletGlobalScope
+        // is benign — a host may add the module more than once for a given
+        // context — so that case stays tolerated, tracked on the scope itself
+        // rather than by matching a browser-specific error message.
+        //
+        // Anything else must propagate. `registerProcessor` is what gives the
+        // processor its name: swallowing a failure leaves `addModule` resolving
+        // successfully and the caller believing registration worked, so the
+        // problem only resurfaces later as
+        // "the node name '<name>' is not defined in AudioWorkletGlobalScope"
+        // from the AudioWorkletNode constructor — a symptom several steps
+        // removed from the cause, pointing at the name rather than at whatever
+        // actually made registration fail.
+        const scope = globalThis as unknown as {
+            __faustRegisteredProcessors?: Set<string>;
+        };
+        if (!scope.__faustRegisteredProcessors) {
+            scope.__faustRegisteredProcessors = new Set<string>();
+        }
+        if (!scope.__faustRegisteredProcessors.has(name)) {
+            registerProcessor(name, Processor);
+            scope.__faustRegisteredProcessors.add(name);
         }
     }
 
