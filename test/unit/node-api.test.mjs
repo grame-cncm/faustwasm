@@ -1,0 +1,167 @@
+/**
+ * What the node puts on the wire.
+ *
+ * The node's side of this is small -- a `time` argument carried through to the
+ * message -- but it is the half a host actually calls, and a dropped field
+ * turns a sample-accurate schedule back into "whenever the message lands"
+ * without any error to notice.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+const JSON_DSP = JSON.stringify({
+    name: 'probe',
+    inputs: 0,
+    outputs: 1,
+    ui: [
+        {
+            type: 'vgroup',
+            label: 'probe',
+            items: [
+                {
+                    type: 'button',
+                    address: '/probe/gate',
+                    label: 'gate',
+                    shortname: 'gate',
+                    init: 0
+                }
+            ]
+        }
+    ]
+});
+
+/** A MessagePort that keeps what was posted to it. */
+class FakePort {
+    constructor() {
+        this.posted = [];
+    }
+    addEventListener() {}
+    start() {}
+    close() {}
+    postMessage(data) {
+        this.posted.push(data);
+    }
+}
+
+/**
+ * `FaustAudioWorkletNode` extends `globalThis.AudioWorkletNode`, which is read
+ * when the module is evaluated -- so the stand-in has to be in place before the
+ * import, and the import has to be dynamic for that to be possible.
+ */
+globalThis.AudioWorkletNode = class {
+    constructor(context) {
+        this.context = context;
+        this.port = new FakePort();
+        this.parameters = new Map();
+    }
+};
+
+const { FaustMonoAudioWorkletNode, FaustPolyAudioWorkletNode } =
+    await import('../../dist/esm/index.js');
+
+const context = { sampleRate: 48000, currentTime: 1.5 };
+
+function monoNode() {
+    return new FaustMonoAudioWorkletNode(context, {
+        processorOptions: {
+            name: 'probe',
+            sampleSize: 4,
+            factory: { json: JSON_DSP }
+        }
+    });
+}
+
+function polyNode() {
+    return new FaustPolyAudioWorkletNode(context, {
+        processorOptions: {
+            name: 'probe',
+            sampleSize: 4,
+            voices: 8,
+            voiceFactory: { json: JSON_DSP },
+            mixerModule: {}
+        }
+    });
+}
+
+/** The messages a call posted, ignoring anything the constructor sent. */
+function posted(node, run) {
+    node.port.posted.length = 0;
+    run();
+    return node.port.posted;
+}
+
+test('keyOn carries the time it was given', () => {
+    const node = monoNode();
+    const [message] = posted(node, () => node.keyOn(0, 60, 100, 2.25));
+    assert.deepEqual(message, {
+        type: 'keyOn',
+        data: [0, 60, 100],
+        time: 2.25
+    });
+});
+
+test('keyOn without a time carries none', () => {
+    const node = monoNode();
+    const [message] = posted(node, () => node.keyOn(0, 60, 100));
+    assert.equal(message.type, 'keyOn');
+    assert.equal(message.time, undefined);
+});
+
+test('keyOff, ctrlChange and pitchWheel carry a time too', () => {
+    const node = monoNode();
+    assert.equal(posted(node, () => node.keyOff(0, 60, 0, 3))[0].time, 3);
+    assert.equal(posted(node, () => node.ctrlChange(0, 7, 64, 4))[0].time, 4);
+    assert.equal(posted(node, () => node.pitchWheel(0, 8192, 5))[0].time, 5);
+});
+
+test('a polyphonic node carries a time on keyOn and keyOff', () => {
+    const node = polyNode();
+    assert.equal(posted(node, () => node.keyOn(0, 60, 100, 6))[0].time, 6);
+    assert.equal(posted(node, () => node.keyOff(0, 60, 0, 7))[0].time, 7);
+});
+
+test('midiMessage passes its time down to the note it decodes', () => {
+    const node = monoNode();
+    const [message] = posted(node, () =>
+        node.midiMessage([0x90, 60, 100], 8.5)
+    );
+    assert.equal(message.type, 'keyOn');
+    assert.equal(message.time, 8.5);
+});
+
+test('a MIDI message with no typed form keeps its time', () => {
+    const node = monoNode();
+    // Program change: nothing else handles it, so it goes over as raw bytes.
+    const [message] = posted(node, () => node.midiMessage([0xc0, 5, 0], 9.5));
+    assert.equal(message.type, 'midi');
+    assert.equal(message.time, 9.5);
+});
+
+test('setParamValue carries the time, and schedules the AudioParam for it', () => {
+    const node = monoNode();
+    const scheduled = [];
+    node.parameters.set('/probe/gate', {
+        value: 0,
+        setValueAtTime: (value, time) => scheduled.push({ value, time })
+    });
+    const [message] = posted(node, () =>
+        node.setParamValue('/probe/gate', 1, 10.25)
+    );
+    assert.deepEqual(message, {
+        type: 'param',
+        data: { path: '/probe/gate', value: 1 },
+        time: 10.25
+    });
+    assert.deepEqual(scheduled, [{ value: 1, time: 10.25 }]);
+});
+
+test('setParamValue without a time still schedules at the context clock', () => {
+    const node = monoNode();
+    const scheduled = [];
+    node.parameters.set('/probe/gate', {
+        value: 0,
+        setValueAtTime: (value, time) => scheduled.push({ value, time })
+    });
+    node.setParamValue('/probe/gate', 1);
+    assert.deepEqual(scheduled, [{ value: 1, time: context.currentTime }]);
+});

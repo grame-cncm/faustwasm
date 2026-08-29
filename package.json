@@ -16,6 +16,7 @@
         "build-types-bundle": "dts-bundle-generator -o dist/cjs-bundle/index.d.ts src/index-bundle.ts --external-imports",
         "format": "prettier --write src",
         "lint": " prettier --check src && eslint src",
+        "test": "npm run build-esm && node --test \"test/unit/*.test.mjs\"",
         "postbuild": "node postbuild.js"
     },
     "repository": {
