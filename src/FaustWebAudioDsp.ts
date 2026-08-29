@@ -2604,8 +2604,19 @@ export class FaustPolyWebAudioDsp
         this.fAudioMixingHalf: ${this.fAudioMixingHalf}`;
     }
 
+    /**
+     * When each voice was last allocated, as one global monotonic date.
+     *
+     * Incrementing the voice's own `fDate` instead, as this used to, made the
+     * date a per-slot reuse counter: notes played and released before a chord
+     * kept reusing slot 0 and inflating only its date, and when the chord
+     * then overflowed the pool, the allocator considered a younger note
+     * "oldest" and stole the wrong voice.
+     */
+    private fDate = 0;
+
     private allocVoice(voice: number, type: number) {
-        this.fVoiceTable[voice].fDate++;
+        this.fVoiceTable[voice].fDate = this.fDate++;
         this.fVoiceTable[voice].fCurNote = type;
         return voice;
     }
