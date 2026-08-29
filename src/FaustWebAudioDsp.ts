@@ -29,6 +29,30 @@ export type PlotHandler = (
 ) => void;
 export type MetadataHandler = (key: string, value: string) => void;
 
+/**
+ * A control write due at a known frame inside the block about to be rendered.
+ *
+ * `compute` renders the block in slices when it is given events: up to the
+ * frame of the next one, apply it, carry on. That is what
+ * `architecture/faust/dsp/timed-dsp.h` does for a native host, and it is the
+ * only way a web host can place a note on a sample rather than on the
+ * 128-frame boundary that follows it.
+ *
+ * `apply` is a closure rather than a `{ path, value }` pair so that the same
+ * queue can carry a parameter write, a `keyOn` and a MIDI message -- the
+ * caller already knows how to perform each of them, and the DSP only has to
+ * know when.
+ *
+ * The array must be sorted by frame, and every frame must fall inside the
+ * block.
+ */
+export interface FaustTimedEvent {
+    /** Frame offset from the start of the block, 0 <= frame < bufferSize */
+    frame: number;
+    /** Performed just before the slice starting at `frame` is rendered */
+    apply: () => void;
+}
+
 // Implementation API
 export type UIHandler = (item: FaustUIItem) => void;
 
@@ -540,8 +564,15 @@ export interface IFaustBaseWebAudioDsp {
      *
      * @param inputs - the input audio buffers
      * @param outputs - the output audio buffers
+     * @param events - control writes due inside this block, sorted by frame.
+     * The block is rendered in slices around them, so each one takes effect on
+     * the frame it was timestamped for instead of at the start of the block.
      */
-    compute(inputs: Float32Array[], outputs: Float32Array[]): boolean;
+    compute(
+        inputs: Float32Array[],
+        outputs: Float32Array[],
+        events?: FaustTimedEvent[]
+    ): boolean;
 
     /**
      * Give a handler to be called on 'declare key value' kind of metadata.
@@ -786,6 +817,20 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fAudioInputs!: number;
     protected fAudioOutputs!: number;
 
+    /**
+     * Block-start address of every wasm audio channel, and the heap view that
+     * holds the tables pointing at them.
+     *
+     * A block rendered in slices has to hand wasm a channel pointer that
+     * starts at the first frame of the slice, so `setBufferOffset` rewrites
+     * the tables between slices and needs the unmoved address to offset from.
+     * Only the tables move: the `fInChannels` / `fOutChannels` views built in
+     * `initMemory` describe the whole block and stay valid throughout.
+     */
+    protected fInBase: number[] = [];
+    protected fOutBase: number[] = [];
+    protected fHEAP32!: Int32Array;
+
     protected fBufferSize: number;
     protected fPtrSize: number;
     protected fSampleSize: number;
@@ -1006,6 +1051,62 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         this.fSoundfileBuffers = soundfiles;
         this.fAcc = { x: [], y: [], z: [] };
         this.fGyr = { x: [], y: [], z: [] };
+    }
+
+    /**
+     * Render a whole block through `render`, pausing on each event.
+     *
+     * This is the JS shape of what `timed-dsp.h` does natively: walk to the
+     * frame of the next control write, render what came before it, apply it,
+     * carry on. Doing it here rather than in each `compute` keeps the two DSPs
+     * responsible only for the thing they actually differ on -- what rendering
+     * a slice means. With no events the block is a single slice, which is the
+     * path every existing caller takes.
+     */
+    protected renderBlock(
+        events: FaustTimedEvent[] | undefined,
+        render: (offset: number, count: number) => void
+    ) {
+        if (!events || events.length === 0) {
+            render(0, this.fBufferSize);
+            return;
+        }
+        let frame = 0;
+        for (let i = 0; i < events.length; i++) {
+            const event = events[i];
+            // Clamped rather than trusted. A frame past the end of the block
+            // would hand wasm a count that runs off the end of the channel,
+            // and this is the audio thread: the cost is two comparisons.
+            const at = Math.min(Math.max(event.frame, 0), this.fBufferSize);
+            // Two events on the same frame leave an empty slice between them,
+            // and wasm has nothing to do with a count of zero.
+            if (at > frame) {
+                render(frame, at - frame);
+                frame = at;
+            }
+            event.apply();
+        }
+        if (frame < this.fBufferSize) {
+            render(frame, this.fBufferSize - frame);
+        }
+    }
+
+    /**
+     * Point the wasm channel tables at frame `offset` of the block.
+     *
+     * Called by each slice rather than left set afterwards, so nothing outside
+     * a `compute` has to care where the last one left them.
+     */
+    protected setBufferOffset(offset: number) {
+        const bytes = offset * this.fSampleSize;
+        for (let chan = 0; chan < this.fInBase.length; chan++) {
+            this.fHEAP32[(this.fAudioInputs >> 2) + chan] =
+                this.fInBase[chan] + bytes;
+        }
+        for (let chan = 0; chan < this.fOutBase.length; chan++) {
+            this.fHEAP32[(this.fAudioOutputs >> 2) + chan] =
+                this.fOutBase[chan] + bytes;
+        }
     }
 
     // Tools
@@ -1634,6 +1735,22 @@ export class FaustMonoWebAudioDsp
     private fDSP!: number;
     private fSampleRate: number;
 
+    /**
+     * One slice of a block, for `renderBlock`.
+     *
+     * Built once rather than per call: `compute` runs on the audio thread and
+     * has no business allocating a closure every 128 frames.
+     */
+    private fRenderSlice = (offset: number, count: number) => {
+        this.setBufferOffset(offset);
+        this.fInstance.api.compute(
+            this.fDSP,
+            count,
+            this.fAudioInputs,
+            this.fAudioOutputs
+        );
+    };
+
     constructor(
         instance: FaustMonoDspInstance,
         sampleRate: number,
@@ -1760,6 +1877,19 @@ export class FaustMonoWebAudioDsp
             }
         }
 
+        // Remember where each channel starts. `setBufferOffset` moves the
+        // tables between slices, so after the first slice the tables no longer
+        // say where the block began.
+        this.fHEAP32 = HEAP32;
+        this.fInBase = [];
+        for (let chan = 0; chan < this.getNumInputs(); chan++) {
+            this.fInBase[chan] = HEAP32[(this.fAudioInputs >> 2) + chan];
+        }
+        this.fOutBase = [];
+        for (let chan = 0; chan < this.getNumOutputs(); chan++) {
+            this.fOutBase[chan] = HEAP32[(this.fAudioOutputs >> 2) + chan];
+        }
+
         return endMemory;
     }
 
@@ -1779,7 +1909,8 @@ export class FaustMonoWebAudioDsp
             | ((input: Float32Array[] | Float64Array[]) => any),
         output:
             | Float32Array[]
-            | ((output: Float32Array[] | Float64Array[]) => any)
+            | ((output: Float32Array[] | Float64Array[]) => any),
+        events?: FaustTimedEvent[]
     ) {
         // Check DSP state
         if (this.fDestroyed) return false;
@@ -1831,13 +1962,8 @@ export class FaustMonoWebAudioDsp
         // Possibly call an externally given callback (for instance to synchronize playing a MIDIFile...)
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
 
-        // Compute
-        this.fInstance.api.compute(
-            this.fDSP,
-            this.fBufferSize,
-            this.fAudioInputs,
-            this.fAudioOutputs
-        );
+        // Compute, in slices around the timed events if there are any
+        this.renderBlock(events, this.fRenderSlice);
 
         // Update bargraph
         this.updateOutputs();
@@ -2063,7 +2189,10 @@ export class FaustWebAudioDspVoice {
         $outputZero: number,
         $outputsHalf: number
     ) {
-        const size = bufferSize / 2;
+        // `>> 1` rather than `/ 2`: a block rendered in slices hands this
+        // whatever the slice is long, odd counts included, and wasm counts
+        // whole frames. The second half takes the remainder so the two add up.
+        const size = bufferSize >> 1;
 
         // Reset envelops
         this.fGateLabel.forEach((index) =>
@@ -2077,7 +2206,7 @@ export class FaustWebAudioDspVoice {
         this.keyOn(this.fNextNote, this.fNextVel);
 
         // Compute on second half buffer
-        this.fAPI.compute(this.fDSP, size, $inputs, $outputsHalf);
+        this.fAPI.compute(this.fDSP, bufferSize - size, $inputs, $outputsHalf);
     }
 
     compute(bufferSize: number, $inputs: number, $outputs: number) {
@@ -2101,8 +2230,95 @@ export class FaustPolyWebAudioDsp
     private fJSONEffect: FaustDspMeta | null;
     private fAudioMixing!: number;
     private fAudioMixingHalf!: number;
+    private fMixingBase: number[] = [];
     private fVoiceTable: FaustWebAudioDspVoice[];
     private fSampleRate: number;
+
+    /**
+     * One slice of a block: clear the sum, render every live voice into it,
+     * then run the effect over it.
+     *
+     * Built once rather than per call, since `compute` runs on the audio
+     * thread. Everything it touches -- the mixer, the voice table, the effect
+     * -- takes a frame count already, so a slice is the same work over fewer
+     * frames rather than a different code path.
+     */
+    private fRenderSlice = (offset: number, count: number) => {
+        this.setBufferOffset(offset);
+        this.setMixingOffset(offset, count);
+        this.fInstance.mixerAPI.clearOutput(
+            count,
+            this.getNumOutputs(),
+            this.fAudioOutputs
+        );
+        this.fVoiceTable.forEach((voice) => {
+            if (voice.fCurNote === FaustWebAudioDspVoice.kLegatoVoice) {
+                // Play from current note and next note
+                voice.computeLegato(
+                    count,
+                    this.fAudioInputs,
+                    this.fAudioMixing,
+                    this.fAudioMixingHalf
+                );
+                // FadeOut on first half buffer
+                this.fInstance.mixerAPI.fadeOut(
+                    count >> 1,
+                    this.getNumOutputs(),
+                    this.fAudioMixing
+                );
+                // Mix it in result
+                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
+                    count,
+                    this.getNumOutputs(),
+                    this.fAudioMixing,
+                    this.fAudioOutputs
+                );
+            } else if (voice.fCurNote !== FaustWebAudioDspVoice.kFreeVoice) {
+                // Compute current note
+                voice.compute(count, this.fAudioInputs, this.fAudioMixing);
+                // Mix it in result
+                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
+                    count,
+                    this.getNumOutputs(),
+                    this.fAudioMixing,
+                    this.fAudioOutputs
+                );
+                // Check the level to possibly set the voice in kFreeVoice again
+                if (
+                    voice.fCurNote == FaustWebAudioDspVoice.kReleaseVoice &&
+                    voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL
+                ) {
+                    voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
+                }
+            }
+        });
+        if (this.fInstance.effectAPI)
+            this.fInstance.effectAPI.compute(
+                this.fEffect,
+                count,
+                this.fAudioOutputs,
+                this.fAudioOutputs
+            );
+    };
+
+    /**
+     * Move the mixing tables along with the input and output ones.
+     *
+     * `fAudioMixing` is where a voice renders before it is summed into the
+     * output, so it has to follow the slice. `fAudioMixingHalf` is the legato
+     * split point: inside the slice rather than at a fixed half of the block,
+     * on the same `count >> 1` that `computeLegato` uses.
+     */
+    private setMixingOffset(offset: number, count: number) {
+        const bytes = offset * this.fSampleSize;
+        const half = (offset + (count >> 1)) * this.fSampleSize;
+        for (let chan = 0; chan < this.fMixingBase.length; chan++) {
+            this.fHEAP32[(this.fAudioMixing >> 2) + chan] =
+                this.fMixingBase[chan] + bytes;
+            this.fHEAP32[(this.fAudioMixingHalf >> 2) + chan] =
+                this.fMixingBase[chan] + half;
+        }
+    }
 
     constructor(
         instance: FaustPolyDspInstance,
@@ -2285,6 +2501,21 @@ export class FaustPolyWebAudioDsp
             }
         }
 
+        // Remember where each channel starts. `setBufferOffset` moves the
+        // tables between slices, so after the first slice the tables no longer
+        // say where the block began.
+        this.fHEAP32 = HEAP32;
+        this.fInBase = [];
+        for (let chan = 0; chan < this.getNumInputs(); chan++) {
+            this.fInBase[chan] = HEAP32[(this.fAudioInputs >> 2) + chan];
+        }
+        this.fOutBase = [];
+        this.fMixingBase = [];
+        for (let chan = 0; chan < this.getNumOutputs(); chan++) {
+            this.fOutBase[chan] = HEAP32[(this.fAudioOutputs >> 2) + chan];
+            this.fMixingBase[chan] = HEAP32[(this.fAudioMixing >> 2) + chan];
+        }
+
         return endMemory;
     }
 
@@ -2385,7 +2616,11 @@ export class FaustPolyWebAudioDsp
     }
 
     // Public API
-    compute(input: Float32Array[], output: Float32Array[]) {
+    compute(
+        input: Float32Array[],
+        output: Float32Array[],
+        events?: FaustTimedEvent[]
+    ) {
         // Check DSP state
         if (this.fDestroyed) return false;
 
@@ -2431,64 +2666,8 @@ export class FaustPolyWebAudioDsp
         // Possibly call an externally given callback (for instance to synchronize playing a MIDIFile...)
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
 
-        // Compute
-        this.fInstance.mixerAPI.clearOutput(
-            this.fBufferSize,
-            this.getNumOutputs(),
-            this.fAudioOutputs
-        );
-        this.fVoiceTable.forEach((voice) => {
-            if (voice.fCurNote === FaustWebAudioDspVoice.kLegatoVoice) {
-                // Play from current note and next note
-                voice.computeLegato(
-                    this.fBufferSize,
-                    this.fAudioInputs,
-                    this.fAudioMixing,
-                    this.fAudioMixingHalf
-                );
-                // FadeOut on first half buffer
-                this.fInstance.mixerAPI.fadeOut(
-                    this.fBufferSize / 2,
-                    this.getNumOutputs(),
-                    this.fAudioMixing
-                );
-                // Mix it in result
-                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
-                    this.fBufferSize,
-                    this.getNumOutputs(),
-                    this.fAudioMixing,
-                    this.fAudioOutputs
-                );
-            } else if (voice.fCurNote !== FaustWebAudioDspVoice.kFreeVoice) {
-                // Compute current note
-                voice.compute(
-                    this.fBufferSize,
-                    this.fAudioInputs,
-                    this.fAudioMixing
-                );
-                // Mix it in result
-                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
-                    this.fBufferSize,
-                    this.getNumOutputs(),
-                    this.fAudioMixing,
-                    this.fAudioOutputs
-                );
-                // Check the level to possibly set the voice in kFreeVoice again
-                if (
-                    voice.fCurNote == FaustWebAudioDspVoice.kReleaseVoice &&
-                    voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL
-                ) {
-                    voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
-                }
-            }
-        });
-        if (this.fInstance.effectAPI)
-            this.fInstance.effectAPI.compute(
-                this.fEffect,
-                this.fBufferSize,
-                this.fAudioOutputs,
-                this.fAudioOutputs
-            );
+        // Compute, in slices around the timed events if there are any
+        this.renderBlock(events, this.fRenderSlice);
 
         // Update bargraph
         this.updateOutputs();

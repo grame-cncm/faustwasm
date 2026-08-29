@@ -251,33 +251,42 @@ export class FaustAudioWorkletNode<
         }
     }
 
-    midiMessage(data: number[] | Uint8Array): void {
+    /**
+     * `time` is AudioContext seconds, the clock `AudioParam` methods take.
+     *
+     * Given one, the processor holds the message until the block that contains
+     * that instant and applies it on the sample rather than at the top of
+     * whichever block the message happened to arrive in. Left out, the message
+     * is applied on arrival, as it always was.
+     */
+    midiMessage(data: number[] | Uint8Array, time?: number): void {
         const cmd = data[0] >> 4;
         const channel = data[0] & 0xf;
         const data1 = data[1];
         const data2 = data[2];
-        if (cmd === 11) this.ctrlChange(channel, data1, data2);
-        else if (cmd === 14) this.pitchWheel(channel, data2 * 128.0 + data1);
+        if (cmd === 11) this.ctrlChange(channel, data1, data2, time);
+        else if (cmd === 14)
+            this.pitchWheel(channel, data2 * 128.0 + data1, time);
         if (cmd === 8 || (cmd === 9 && data2 === 0))
-            this.keyOff(channel, data1, data2);
-        else if (cmd === 9) this.keyOn(channel, data1, data2);
-        else this.port.postMessage({ type: 'midi', data: data });
+            this.keyOff(channel, data1, data2, time);
+        else if (cmd === 9) this.keyOn(channel, data1, data2, time);
+        else this.port.postMessage({ type: 'midi', data: data, time });
     }
 
-    ctrlChange(channel: number, ctrl: number, value: number) {
-        const e = { type: 'ctrlChange', data: [channel, ctrl, value] };
+    ctrlChange(channel: number, ctrl: number, value: number, time?: number) {
+        const e = { type: 'ctrlChange', data: [channel, ctrl, value], time };
         this.port.postMessage(e);
     }
-    pitchWheel(channel: number, wheel: number) {
-        const e = { type: 'pitchWheel', data: [channel, wheel] };
+    pitchWheel(channel: number, wheel: number, time?: number) {
+        const e = { type: 'pitchWheel', data: [channel, wheel], time };
         this.port.postMessage(e);
     }
-    keyOn(channel: number, pitch: number, velocity: number) {
-        const e = { type: 'keyOn', data: [channel, pitch, velocity] };
+    keyOn(channel: number, pitch: number, velocity: number, time?: number) {
+        const e = { type: 'keyOn', data: [channel, pitch, velocity], time };
         this.port.postMessage(e);
     }
-    keyOff(channel: number, pitch: number, velocity: number) {
-        const e = { type: 'keyOff', data: [channel, pitch, velocity] };
+    keyOff(channel: number, pitch: number, velocity: number, time?: number) {
+        const e = { type: 'keyOff', data: [channel, pitch, velocity], time };
         this.port.postMessage(e);
     }
 
@@ -312,15 +321,22 @@ export class FaustAudioWorkletNode<
         });
     }
 
-    setParamValue(path: string, value: number) {
+    /** `time` is AudioContext seconds; see `midiMessage`. */
+    setParamValue(path: string, value: number, time?: number) {
         const resolved = this.fParamAliases[path] || path;
         this.port.postMessage({
             type: 'param',
-            data: { path: resolved, value }
+            data: { path: resolved, value },
+            time
         });
-        // Set value on AudioParam (but this is not used on Processor side for now)
+        // Keep the AudioParam in step, so that `getParamValue` and any
+        // automation scheduled afterwards start from what was just written.
+        // The processor now reads that automation per sample, so the two
+        // routes agree on both the value and the frame; whichever the DSP sees
+        // second is a write of the value it already holds.
         const param = this.parameters.get(resolved);
-        if (param) param.setValueAtTime(value, this.context.currentTime);
+        if (param)
+            param.setValueAtTime(value, time ?? this.context.currentTime);
     }
     getParamValue(path: string) {
         // Get value of AudioParam
@@ -441,13 +457,13 @@ export class FaustPolyAudioWorkletNode
     }
 
     // Public API
-    keyOn(channel: number, pitch: number, velocity: number) {
-        const e = { type: 'keyOn', data: [channel, pitch, velocity] };
+    keyOn(channel: number, pitch: number, velocity: number, time?: number) {
+        const e = { type: 'keyOn', data: [channel, pitch, velocity], time };
         this.port.postMessage(e);
     }
 
-    keyOff(channel: number, pitch: number, velocity: number) {
-        const e = { type: 'keyOff', data: [channel, pitch, velocity] };
+    keyOff(channel: number, pitch: number, velocity: number, time?: number) {
+        const e = { type: 'keyOff', data: [channel, pitch, velocity], time };
         this.port.postMessage(e);
     }
 
