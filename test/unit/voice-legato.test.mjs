@@ -1,11 +1,10 @@
 /**
- * The legato split, once a block can be rendered in pieces.
+ * The legato split.
  *
- * `computeLegato` used to be handed 128 and split it in two with `/ 2`. A block
- * rendered in slices hands it whatever the slice is long, odd counts included,
- * and a fractional count reaching wasm is not a rounding error but a different
- * number of frames than the mixer is about to read. The two halves have to add
- * up to what was asked for, whatever it was.
+ * `computeLegato` used to be handed 128 and split it with `/ 2`. It can now be
+ * handed any count, odd ones included, and a fractional count reaching wasm is
+ * not a rounding error -- it is a different number of frames from what the
+ * mixer is about to read. The two halves must add up to what was asked for.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,10 +13,10 @@ import { FaustWebAudioDspVoice } from '../../dist/esm/index.js';
 const GATE = '/probe/gate';
 
 /**
- * A voice whose wasm only writes down what it was asked to do.
+ * A voice whose wasm only records what it was asked to do.
  *
- * One log for both control writes and renders, so the order between them is
- * part of what a test can assert on.
+ * Control writes and renders share one log, so tests can assert on the order
+ * between them.
  */
 function voice() {
     const log = [];
@@ -77,11 +76,11 @@ test('the note being replaced ends before the new one starts', () => {
     const { voice: v, log } = voice();
     v.computeLegato(128, 0, 100, 200);
     assert.deepEqual(log, [
-        // The gate drops, so the first half renders the release of the note
-        // that is going away...
+        // The gate drops, so the first half renders the release of the
+        // outgoing note...
         'gate=0',
         'render:64->100',
-        // ...and the new note is keyed on for the second half.
+        // ...and the new note is keyed on for the second half
         'gate=1',
         'render:64->200'
     ]);

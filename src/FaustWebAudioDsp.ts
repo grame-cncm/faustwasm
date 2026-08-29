@@ -30,21 +30,18 @@ export type PlotHandler = (
 export type MetadataHandler = (key: string, value: string) => void;
 
 /**
- * A control write due at a known frame inside the block about to be rendered.
+ * A control write due at a known frame inside the next block.
  *
- * `compute` renders the block in slices when it is given events: up to the
- * frame of the next one, apply it, carry on. That is what
- * `architecture/faust/dsp/timed-dsp.h` does for a native host, and it is the
- * only way a web host can place a note on a sample rather than on the
- * 128-frame boundary that follows it.
+ * Given a list of these, `compute` renders the block in slices: up to the
+ * frame of the next event, apply it, carry on. The same approach as
+ * `architecture/faust/dsp/timed-dsp.h`, which is how a native host gets
+ * sample-accurate MIDI.
  *
- * `apply` is a closure rather than a `{ path, value }` pair so that the same
- * queue can carry a parameter write, a `keyOn` and a MIDI message -- the
- * caller already knows how to perform each of them, and the DSP only has to
- * know when.
+ * `apply` is a closure rather than a `{ path, value }` pair so one list can
+ * carry parameter writes, `keyOn`s and MIDI messages together. The caller
+ * knows how to perform each; the DSP only needs to know when.
  *
- * The array must be sorted by frame, and every frame must fall inside the
- * block.
+ * The list must be sorted by frame. Frames outside the block are clamped.
  */
 export interface FaustTimedEvent {
     /** Frame offset from the start of the block, 0 <= frame < bufferSize */
@@ -753,19 +750,19 @@ export interface IFaustBaseWebAudioDsp {
 export type IFaustMonoWebAudioDsp = IFaustBaseWebAudioDsp;
 
 /**
- * A node's controls, each with the instant it takes effect.
+ * A node's controls, each taking an optional time.
  *
- * `time` is AudioContext seconds -- the clock `AudioParam.setValueAtTime`
- * takes -- so a note and a parameter ramp can be scheduled against one
- * another. It is declared here, on the node, rather than on
- * `IFaustBaseWebAudioDsp`, because it is a node's to offer: a node reaches
- * its DSP across a message port and can hold a control write until the block
- * that contains the instant, where a DSP is already inside the block by the
- * time anyone asks it for anything.
+ * `time` is in AudioContext seconds, the same clock as
+ * `AudioParam.setValueAtTime`, so notes and parameter automation can be
+ * scheduled against each other.
  *
- * An AudioWorklet node lands the control on the sample it named. A
- * ScriptProcessor node (`sp: true`) has no such queue and applies it on
- * arrival, as it always did: the argument is accepted and ignored there.
+ * It is declared on the node rather than on `IFaustBaseWebAudioDsp` because
+ * only a node can honour it: it reaches its DSP over a message port and can
+ * hold the write until the right block. A DSP is called from inside the block
+ * and has nowhere to put a future event.
+ *
+ * An AudioWorklet node applies the control on the exact sample. A
+ * ScriptProcessor node (`sp: true`) accepts `time` and ignores it.
  */
 export interface IFaustMonoWebAudioNode
     extends IFaustMonoWebAudioDsp, AudioNode {
@@ -857,14 +854,14 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fAudioOutputs!: number;
 
     /**
-     * Block-start address of every wasm audio channel, and the heap view that
-     * holds the tables pointing at them.
+     * Block-start address of every wasm audio channel, plus the heap view
+     * holding the pointer tables.
      *
-     * A block rendered in slices has to hand wasm a channel pointer that
-     * starts at the first frame of the slice, so `setBufferOffset` rewrites
-     * the tables between slices and needs the unmoved address to offset from.
-     * Only the tables move: the `fInChannels` / `fOutChannels` views built in
-     * `initMemory` describe the whole block and stay valid throughout.
+     * Rendering a slice means giving wasm a channel pointer to the slice's
+     * first frame, so `setBufferOffset` rewrites the tables and needs these
+     * unmoved addresses to offset from. Only the tables move; the
+     * `fInChannels` / `fOutChannels` views from `initMemory` still span the
+     * whole block and stay valid.
      */
     protected fInBase: number[] = [];
     protected fOutBase: number[] = [];
@@ -1093,14 +1090,14 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
 
     /**
-     * Render a whole block through `render`, pausing on each event.
+     * Render a whole block through `render`, stopping at each event.
      *
-     * This is the JS shape of what `timed-dsp.h` does natively: walk to the
-     * frame of the next control write, render what came before it, apply it,
-     * carry on. Doing it here rather than in each `compute` keeps the two DSPs
-     * responsible only for the thing they actually differ on -- what rendering
-     * a slice means. With no events the block is a single slice, which is the
-     * path every existing caller takes.
+     * Render up to the next event's frame, apply it, continue. Living in the
+     * base class means mono and poly only have to supply what rendering a
+     * slice means.
+     *
+     * With no events the block is one slice, which is what every caller that
+     * passes no events gets.
      */
     protected renderBlock(
         events: FaustTimedEvent[] | undefined,
@@ -1113,12 +1110,11 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         let frame = 0;
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
-            // Clamped rather than trusted. A frame past the end of the block
-            // would hand wasm a count that runs off the end of the channel,
-            // and this is the audio thread: the cost is two comparisons.
+            // Clamped, not trusted: a frame past the end of the block would
+            // give wasm a count that runs off the end of the channel.
             const at = Math.min(Math.max(event.frame, 0), this.fBufferSize);
-            // Two events on the same frame leave an empty slice between them,
-            // and wasm has nothing to do with a count of zero.
+            // Two events on one frame leave an empty slice between them,
+            // which is not worth a wasm call.
             if (at > frame) {
                 render(frame, at - frame);
                 frame = at;
@@ -1131,14 +1127,15 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
 
     /**
-     * Perform every event without rendering anything.
+     * Apply every event without rendering.
      *
-     * A block the DSP declines to render still has to take its control
-     * writes. They were taken off the queue to be applied here, so a `keyOn`
-     * dropped because the node was stopped, or because an input was not
-     * connected yet, is a note that never sounds and never will -- and the
-     * DSP's cached parameter values would go on disagreeing with the host's.
-     * Only a destroyed DSP drops them, which is the point of destroying it.
+     * For the blocks `compute` returns early from: stopped, or an input or
+     * output not connected yet. The events have already left the processor's
+     * queue, so dropping them here loses them permanently -- a `keyOn` that
+     * never sounds, or a parameter the DSP and the host disagree about from
+     * then on.
+     *
+     * A destroyed DSP is the exception, and does drop them.
      */
     protected applyEvents(events?: FaustTimedEvent[]) {
         if (!events) return;
@@ -1148,8 +1145,8 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     /**
      * Point the wasm channel tables at frame `offset` of the block.
      *
-     * Called by each slice rather than left set afterwards, so nothing outside
-     * a `compute` has to care where the last one left them.
+     * Each slice sets this before rendering, so nothing outside `compute`
+     * depends on where the previous slice left the tables.
      */
     protected setBufferOffset(offset: number) {
         const bytes = offset * this.fSampleSize;
@@ -1790,10 +1787,10 @@ export class FaustMonoWebAudioDsp
     private fSampleRate: number;
 
     /**
-     * One slice of a block, for `renderBlock`.
+     * Render one slice, for `renderBlock`.
      *
-     * Built once rather than per call: `compute` runs on the audio thread and
-     * has no business allocating a closure every 128 frames.
+     * A field rather than an inline closure so it is allocated once instead of
+     * on every `compute` call.
      */
     private fRenderSlice = (offset: number, count: number) => {
         this.setBufferOffset(offset);
@@ -1931,9 +1928,8 @@ export class FaustMonoWebAudioDsp
             }
         }
 
-        // Remember where each channel starts. `setBufferOffset` moves the
-        // tables between slices, so after the first slice the tables no longer
-        // say where the block began.
+        // Record where each channel starts: `setBufferOffset` overwrites the
+        // tables between slices, so they stop being a record of that.
         this.fHEAP32 = HEAP32;
         this.fInBase = [];
         for (let chan = 0; chan < this.getNumInputs(); chan++) {
@@ -2021,7 +2017,7 @@ export class FaustMonoWebAudioDsp
         // Possibly call an externally given callback (for instance to synchronize playing a MIDIFile...)
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
 
-        // Compute, in slices around the timed events if there are any
+        // Compute -- in slices around the events, if there are any
         this.renderBlock(events, this.fRenderSlice);
 
         // Update bargraph
@@ -2248,9 +2244,8 @@ export class FaustWebAudioDspVoice {
         $outputZero: number,
         $outputsHalf: number
     ) {
-        // `>> 1` rather than `/ 2`: a block rendered in slices hands this
-        // whatever the slice is long, odd counts included, and wasm counts
-        // whole frames. The second half takes the remainder so the two add up.
+        // `>> 1` rather than `/ 2` because `bufferSize` need not be even, and
+        // wasm counts whole frames. The second half takes the remainder.
         const size = bufferSize >> 1;
 
         // Reset envelops
@@ -2293,30 +2288,24 @@ export class FaustPolyWebAudioDsp
     private fVoiceTable: FaustWebAudioDspVoice[];
     private fSampleRate: number;
 
-    /**
-     * The voices whose crossfade this block already rendered whole.
-     *
-     * Reused rather than rebuilt: `compute` runs on the audio thread, and a
-     * steal is rare enough that this is almost always empty.
-     */
+    /** Voices whose crossfade this block already rendered in full. */
     private fStolen: FaustWebAudioDspVoice[] = [];
 
     /**
-     * One slice of a block: render every live voice into the sum, then run
-     * the effect over it.
+     * Render one slice: every live voice into the sum, then the effect.
      *
-     * Built once rather than per call, since `compute` runs on the audio
-     * thread. Everything it touches -- the mixer, the voice table, the effect
-     * -- takes a frame count already, so a slice is the same work over fewer
-     * frames rather than a different code path.
+     * The mixer, the voices and the effect all take a frame count, so a slice
+     * is the same work over fewer frames. A field rather than an inline
+     * closure so it is allocated once instead of on every `compute` call.
      *
-     * The sum is cleared once for the block rather than once per slice, and
-     * the voices whose note was stolen were rendered across the whole block
-     * before the first slice, so this leaves them alone. A voice that becomes
-     * `kLegatoVoice` partway through the block is not one of them: it keeps
-     * playing the note it is losing for the rest of the block and takes its
-     * crossfade at the top of the next one, exactly as it did when a `keyOn`
-     * could only ever arrive between two blocks.
+     * Two things `compute` does around this. The sum is cleared once for the
+     * block, not per slice, because `renderStolenVoices` has already written
+     * across the whole of it. And those stolen voices are skipped here.
+     *
+     * A voice that becomes `kLegatoVoice` partway through the block is not one
+     * of them: it plays out the note it is losing and crossfades at the top of
+     * the next block, as it did when a `keyOn` could only arrive between
+     * blocks.
      */
     private fRenderSlice = (offset: number, count: number) => {
         this.setBufferOffset(offset);
@@ -2334,12 +2323,10 @@ export class FaustPolyWebAudioDsp
                 this.fAudioMixing,
                 this.fAudioOutputs
             );
-            // The loudest the voice got anywhere in the block. Whether a
-            // release has died away is a question about the block: a slice of
-            // a few frames landing on a zero crossing reads nothing from a
-            // voice that is still plainly sounding, and freeing it there cuts
-            // the tail off. The check itself waits until `compute` has the
-            // whole block, below.
+            // Keep the loudest level from any slice. A few frames landing on
+            // a zero crossing read near silence from a voice that is still
+            // sounding, so `compute` decides whether a release has finished
+            // once the whole block is done.
             if (level > voice.fLevel) voice.fLevel = level;
         });
         if (this.fInstance.effectAPI)
@@ -2352,15 +2339,14 @@ export class FaustPolyWebAudioDsp
     };
 
     /**
-     * Render the voices whose note was stolen, across the whole block.
+     * Render the stolen voices, each across the whole block.
      *
-     * A steal is a crossfade: the voice renders the note it is losing over the
-     * first half of the buffer, that half is faded out, and the note it is
-     * taking renders the second half. Half of a *block* -- 64 frames -- and
-     * not half of whatever slice the voice happens to fall in, which late in a
-     * sliced block is a fade of one or two frames, or of none at all, which is
-     * a click. So this runs before the slicing, over the full block, and the
-     * slices skip these voices.
+     * A steal is a crossfade: the voice plays the note it is losing over the
+     * first half of the buffer, that half fades out, and the new note plays
+     * the second half. The fade has to be half a block -- 64 frames -- rather
+     * than half a slice, which late in the block would be a frame or two, or
+     * nothing at all. So this runs before the slicing, and `fRenderSlice`
+     * skips these voices.
      */
     private renderStolenVoices() {
         const stolen = this.fStolen;
@@ -2394,10 +2380,10 @@ export class FaustPolyWebAudioDsp
     /**
      * Move the mixing tables along with the input and output ones.
      *
-     * `fAudioMixing` is where a voice renders before it is summed into the
-     * output, so it has to follow the slice. `fAudioMixingHalf` is the legato
-     * split point: inside the slice rather than at a fixed half of the block,
-     * on the same `count >> 1` that `computeLegato` uses.
+     * `fAudioMixing` is where a voice renders before being summed into the
+     * output, so it follows the slice. `fAudioMixingHalf` is the crossfade
+     * split point, `count >> 1` frames in, matching `computeLegato`. Only
+     * `renderStolenVoices` uses it, and always with the whole block.
      */
     private setMixingOffset(offset: number, count: number) {
         const bytes = offset * this.fSampleSize;
@@ -2591,9 +2577,8 @@ export class FaustPolyWebAudioDsp
             }
         }
 
-        // Remember where each channel starts. `setBufferOffset` moves the
-        // tables between slices, so after the first slice the tables no longer
-        // say where the block began.
+        // Record where each channel starts: `setBufferOffset` overwrites the
+        // tables between slices, so they stop being a record of that.
         this.fHEAP32 = HEAP32;
         this.fInBase = [];
         for (let chan = 0; chan < this.getNumInputs(); chan++) {
@@ -2761,9 +2746,9 @@ export class FaustPolyWebAudioDsp
         // Possibly call an externally given callback (for instance to synchronize playing a MIDIFile...)
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
 
-        // Clear the sum once for the block, not once per slice: a stolen
-        // voice writes its whole crossfade into it before the slices start,
-        // and a slice clearing its own range would wipe part of that.
+        // Clear the sum once for the block, not per slice: the stolen voices
+        // below write across the whole of it, and a slice clearing its own
+        // range afterwards would erase part of that.
         this.setBufferOffset(0);
         this.setMixingOffset(0, this.fBufferSize);
         this.fInstance.mixerAPI.clearOutput(
@@ -2774,11 +2759,11 @@ export class FaustPolyWebAudioDsp
         this.fVoiceTable.forEach((voice) => (voice.fLevel = 0));
         this.renderStolenVoices();
 
-        // Compute, in slices around the timed events if there are any
+        // Compute -- in slices around the events, if there are any
         this.renderBlock(events, this.fRenderSlice);
 
-        // A voice in release whose level never rose above the threshold
-        // anywhere in the block has died away, and its slot goes back.
+        // A releasing voice that stayed below the threshold for every slice
+        // has died away, and its slot is free again.
         this.fVoiceTable.forEach((voice) => {
             if (
                 voice.fCurNote === FaustWebAudioDspVoice.kReleaseVoice &&

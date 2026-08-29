@@ -1,10 +1,9 @@
 /**
  * What the node puts on the wire.
  *
- * The node's side of this is small -- a `time` argument carried through to the
- * message -- but it is the half a host actually calls, and a dropped field
- * turns a sample-accurate schedule back into "whenever the message lands"
- * without any error to notice.
+ * The node's side is small -- a `time` argument carried into the message --
+ * but it is the half a host calls, and dropping the field silently turns a
+ * sample-accurate schedule back into "whenever the message lands".
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -45,8 +44,8 @@ class FakePort {
 
 /**
  * `FaustAudioWorkletNode` extends `globalThis.AudioWorkletNode`, which is read
- * when the module is evaluated -- so the stand-in has to be in place before the
- * import, and the import has to be dynamic for that to be possible.
+ * when the module is evaluated. So the stand-in has to exist before the
+ * import, which means the import has to be dynamic.
  */
 globalThis.AudioWorkletNode = class {
     constructor(context) {
@@ -131,7 +130,7 @@ test('midiMessage passes its time down to the note it decodes', () => {
 
 test('a MIDI message with no typed form keeps its time', () => {
     const node = monoNode();
-    // Program change: nothing else handles it, so it goes over as raw bytes.
+    // Program change: nothing else handles it, so it crosses as raw bytes.
     const [message] = posted(node, () => node.midiMessage([0xc0, 5, 0], 9.5));
     assert.equal(message.type, 'midi');
     assert.equal(message.time, 9.5);
@@ -171,7 +170,7 @@ test('a rejected time leaves nothing on the wire', () => {
     node.parameters.set('/probe/gate', {
         value: 0,
         setValueAtTime: (value, time) => {
-            // What a real AudioParam does with a negative time.
+            // What a real AudioParam does with a negative time
             if (!(time >= 0)) throw new RangeError('time must be non-negative');
         }
     });

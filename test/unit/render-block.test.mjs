@@ -1,11 +1,11 @@
 /**
- * The block slicing itself.
+ * The block slicing.
  *
- * `renderBlock` is the whole of what makes a control land on a sample: walk to
- * the frame of the next event, render what came before it, apply it, carry on.
- * It touches no wasm, so the arithmetic is checked here against a `render` that
- * only writes down what it was asked for -- the slices must tile the block
- * exactly, in order, with the events falling between the right ones.
+ * `renderBlock` is what makes a control land on a sample: render up to the
+ * next event's frame, apply it, carry on. It touches no wasm, so it is checked
+ * here against a `render` that only records what it was asked for. The slices
+ * must tile the block exactly, in order, with each event between the right
+ * two.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,14 +21,14 @@ const BLOCK = 128;
  * A DSP that renders nothing.
  *
  * `renderBlock` is `protected` in TypeScript and an ordinary method at
- * runtime; the base class is constructible on its own, and nothing below
+ * runtime. The base class is constructible on its own, and nothing below
  * reaches past it.
  */
 function dsp() {
     return new FaustBaseWebAudioDsp(4, BLOCK, {});
 }
 
-/** Run a block and return what happened, in order. */
+/** Render a block and return what happened, in order. */
 function run(events) {
     const log = [];
     const stamped = events.map((e) => ({
@@ -154,14 +154,15 @@ test('applyEvents performs everything, in order, without rendering', () => {
 });
 
 /**
- * A block the DSP declines to render still has to take its control writes.
+ * A block the DSP declines to render still has to apply its control writes.
  *
- * They have already been taken off the processor's queue by the time `compute`
- * sees them, so a `keyOn` dropped here is a note that never sounds and never
- * will -- and the DSP's cached values would go on disagreeing with the host's.
- * The receiver is a bare base DSP, which is all these branches touch --
- * `fFirstCall` aside, since the polyphonic `compute` lays out its wasm memory
- * before it asks whether it is running.
+ * By the time `compute` sees them they have already left the processor's
+ * queue, so dropping a `keyOn` here loses it for good, and the DSP's cached
+ * values would disagree with the host's from then on.
+ *
+ * The receiver is a bare base DSP, which is all these branches touch, apart
+ * from `fFirstCall`: the polyphonic `compute` lays out its wasm memory before
+ * checking whether it is running.
  */
 for (const [name, compute] of [
     ['mono', FaustMonoWebAudioDsp.prototype.compute],

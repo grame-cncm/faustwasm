@@ -1,11 +1,11 @@
 /**
  * What the processor hands `compute` for a block.
  *
- * Two sources meet in `collectEvents`: the automation an `AudioParam` hands
- * `process` for the block, and the port messages that were timestamped for a
- * frame inside it. These tests are about the frames -- that a step at 40 is an
- * event at 40 and not at 0, that a `1 -> 0 -> 1` inside one block is two edges
- * and not none, that a message for a later block waits for it.
+ * `collectEvents` merges two sources: the automation an `AudioParam` gives
+ * `process`, and the port messages timestamped for a frame inside the block.
+ * These tests are about the frames -- a step at 40 becoming an event at 40
+ * rather than 0, a `1 -> 0 -> 1` inside one block becoming two edges rather
+ * than none, a message for a later block waiting for it.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,10 +14,10 @@ import { monoProcessor, BLOCK, SAMPLE_RATE } from './harness.mjs';
 const GATE = '/probe/gate';
 const VOL = '/probe/vol';
 
-/** The frames a block's events landed on, which is what these tests are about. */
+/** The frames a block's events landed on. */
 const frames = (events) => events.map((e) => e.frame);
 
-/** A block of automation: `value` from `at` onwards, `from` before it. */
+/** A block of automation: `from` up to frame `at`, `value` from there on. */
 function step(from, value, at) {
     return Array.from({ length: BLOCK }, (_, i) => (i < at ? from : value));
 }
@@ -51,9 +51,9 @@ test('a step inside the block is an event on the frame it happens', () => {
 
 test('1 -> 0 -> 1 inside one block is two edges, not none', () => {
     const p = monoProcessor();
-    // The gate is already up when the block starts, drops at 60 and comes back
-    // at 70. Reading only frame 0 sees 1, compares it to a cached 1, and lets
-    // the whole thing through unnoticed: the hit that never retriggers.
+    // The gate is up when the block starts, drops at 60, returns at 70.
+    // Reading only frame 0 sees 1, matches the cached 1, and misses the drop
+    // entirely -- the hit that never retriggers.
     p.render({ [GATE]: 1 });
     const automation = Array.from({ length: BLOCK }, (_, i) =>
         i >= 60 && i < 70 ? 0 : 1
@@ -68,7 +68,7 @@ test('1 -> 0 -> 1 inside one block is two edges, not none', () => {
 test('a handful of steps in one block are all kept', () => {
     const p = monoProcessor();
     const at = [3, 17, 40, 41, 90, 127];
-    // Starting from 0.5, the control's own default, so frame 0 is not a change.
+    // Starting at 0.5, the control's default, so frame 0 is not a change.
     const automation = Array.from(
         { length: BLOCK },
         (_, i) => 0.5 + at.filter((f) => f <= i).length / 16
@@ -78,9 +78,9 @@ test('a handful of steps in one block are all kept', () => {
 
 test('a ramp is followed coarsely rather than sample by sample', () => {
     const p = monoProcessor();
-    // A `linearRampToValueAtTime` across the block: 128 different values, none
-    // of which is an edge. Writing each one would mean 128 one-frame compute
-    // calls and 128 messages to the main thread, for a slider.
+    // A `linearRampToValueAtTime` across the block: 128 distinct values, no
+    // edges. Honouring each would mean 128 one-frame compute calls and 128
+    // messages to the main thread, for a slider.
     const events = p.render({
         [VOL]: Array.from({ length: BLOCK }, (_, i) => i / BLOCK)
     });
@@ -97,8 +97,8 @@ test('a ramp still leaves the DSP holding the value the block ended on', () => {
     const ramp = Array.from({ length: BLOCK }, (_, i) => i / BLOCK);
     p.render({ [VOL]: ramp });
     assert.equal(p.dsp.writes.at(-1).value, ramp[BLOCK - 1]);
-    // Which is what the next block compares against, so a block that holds
-    // the value the ramp reached has nothing to say.
+    // That is what the next block compares against, so a block holding the
+    // value the ramp reached produces no events.
     assert.deepEqual(p.render({ [VOL]: ramp[BLOCK - 1] }), []);
 });
 
@@ -154,8 +154,8 @@ test('a frame is on the audio clock, not on the block', () => {
     const p = monoProcessor();
     p.render();
     p.render();
-    // Two blocks in, so an absolute frame and a block-relative one are
-    // different numbers and the test says which this is.
+    // Two blocks in, so absolute and block-relative readings differ and this
+    // pins down which one `frame` means.
     assert.equal(p.frame, 2 * BLOCK);
     p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 2 * BLOCK + 77 });
     assert.equal(p.render()[0].frame, 77);
@@ -172,8 +172,8 @@ test('a time that is not a number is refused rather than queued', () => {
     for (const time of [NaN, Infinity, -Infinity, '40', null]) {
         p.port.send({ type: 'keyOn', data: [0, 99, 100], time });
     }
-    // A NaN compares false against every frame, so a queued one would sit at
-    // the head of the queue for ever and hold everything behind it.
+    // A NaN compares false against every frame, so a queued one would stay at
+    // the head of the queue and block everything behind it.
     p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 20 });
     const events = p.render();
     assert.equal(events.length, 1);
@@ -189,9 +189,9 @@ test('two overdue messages are applied in time order, not post order', () => {
     const p = monoProcessor();
     p.render();
     p.render();
-    // Both belong to a block that has gone by, and are posted late and out of
-    // order. They collapse onto frame 0, where only the tie-break can tell
-    // them apart.
+    // Both belong to a block that has passed, and are posted late and out of
+    // order. They collapse onto frame 0, where only the tie-break separates
+    // them.
     p.port.send({ type: 'keyOn', data: [0, 62, 100], frame: 100 });
     p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 10 });
     p.render();
@@ -224,9 +224,9 @@ test('a stop clears what was scheduled for the stretch it stopped', () => {
 
 test('a message that throws costs that message and nothing else', () => {
     const p = monoProcessor();
-    // Per the Web Audio spec, a `process` that throws fires processorerror and
-    // is never called again -- one bad message would silence the node for
-    // good.
+    // Per the Web Audio spec, a `process` that throws fires processorerror
+    // and is never called again, so one bad message would silence the node
+    // permanently.
     p.dsp.keyOn = (channel, pitch) => {
         if (pitch === 99) throw new Error('no such voice');
         p.dsp.notes.push({ type: 'keyOn', channel, pitch });
@@ -315,8 +315,8 @@ test('the events of a block always tile it exactly', () => {
     p.port.send({ type: 'keyOff', data: [0, 60, 0], frame: 60 });
     p.port.send({ type: 'keyOff', data: [0, 62, 0], frame: BLOCK - 1 });
     p.render({ [GATE]: step(0, 1, 60) });
-    // The fake DSP renders through the real `renderBlock`, so this is what the
-    // wasm calls would have been.
+    // The fake DSP goes through the real `renderBlock`, so these are the wasm
+    // calls that would have been made.
     const parts = p.dsp.slices[0];
     assert.deepEqual(parts, [
         [0, 60],
@@ -369,9 +369,9 @@ test('a panic does not cancel the automation around it', () => {
 });
 
 test('only the controllers that silence the instrument flush', () => {
-    // 120 all sound off and 123 all notes off are the two the polyphonic DSP
-    // itself treats as all-notes-off. 121 resets controllers without ending a
-    // note; 122 is local control, which is about a keyboard's own wiring.
+    // 120 (all sound off) and 123 (all notes off) are the two the polyphonic
+    // DSP itself treats as all-notes-off. 121 resets controllers without
+    // ending a note; 122 is a keyboard's local control.
     for (const [ctrl, expected] of [
         [120, []],
         [121, [60]],

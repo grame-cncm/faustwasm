@@ -3,10 +3,9 @@
  *
  * `getFaustAudioWorkletProcessor` reads `AudioWorkletProcessor`,
  * `registerProcessor`, `sampleRate` and `currentFrame` off the global scope,
- * and nothing else about the browser reaches the code these tests are about:
- * the event queue, the automation walk and the block slicing are arithmetic.
- * So they run in plain Node against a fake scope and a fake DSP, and a failure
- * points at a line rather than at a browser.
+ * and needs nothing else from the browser. The event queue, the automation
+ * walk and the block slicing are arithmetic, so they run here in plain Node
+ * against a fake scope and a fake DSP.
  */
 import {
     FaustBaseWebAudioDsp,
@@ -37,12 +36,12 @@ export class FakePort {
 }
 
 /**
- * A DSP that records rather than computes.
+ * A DSP that records instead of computing.
  *
- * It extends the real base class and renders through the real `renderBlock`,
- * with a `render` that only writes down the slice it was asked for. So a test
- * of the processor is also a test that the events it produced tile the block,
- * and the writes below are the ones the slicing loop actually performed.
+ * It extends the real base class and goes through the real `renderBlock`, with
+ * a `render` that just notes the slice it was given. So a processor test also
+ * checks that the events it produced tile the block, and the writes below are
+ * the ones the slicing loop really performed.
  */
 export class FakeDsp extends FaustBaseWebAudioDsp {
     constructor() {
@@ -90,7 +89,7 @@ export class FakeDsp extends FaustBaseWebAudioDsp {
     destroy() {}
 }
 
-/** No accelerometer, no gyroscope, nothing to report. */
+/** Reports no accelerometer or gyroscope data, ever. */
 class SilentCommunicator {
     getNewAccDataAvailable() {
         return false;
@@ -105,8 +104,8 @@ class SilentCommunicator {
 /**
  * The controls the fake DSP declares.
  *
- * A button and a slider is enough: `parameterDescriptors` turns both into
- * AudioParams, and the automation walk does not care which is which.
+ * A button and a slider are enough: `parameterDescriptors` turns both into
+ * AudioParams, and the automation walk treats them alike.
  */
 const DSP_META = {
     name: 'probe',
@@ -129,10 +128,10 @@ const DSP_META = {
 };
 
 /**
- * A monophonic processor on a fake scope, with the clock in the caller's hand.
+ * A monophonic processor on the fake scope, with the clock under test control.
  *
- * `render` advances `currentFrame` by a block, the way the browser does
- * between calls, so a test schedules against the same clock a host would.
+ * `render` advances `currentFrame` by a block, as the browser does between
+ * calls, so tests schedule against the same clock a host would.
  */
 export function monoProcessor({ meta = DSP_META } = {}) {
     const port = new FakePort();
@@ -154,8 +153,8 @@ export function monoProcessor({ meta = DSP_META } = {}) {
 
     const Processor = getFaustAudioWorkletProcessor(
         {
-            // `parameterDescriptors` needs the real UI walk; nothing else of
-            // the base class is reachable from a processor built on a fake DSP.
+            // `parameterDescriptors` needs the real UI walk. Nothing else of
+            // the base class is reachable from a processor on a fake DSP.
             FaustBaseWebAudioDsp,
             FaustMonoWebAudioDsp: function () {
                 return dsp;
@@ -192,9 +191,9 @@ export function monoProcessor({ meta = DSP_META } = {}) {
         /** Seconds, on the clock a host schedules an AudioParam against. */
         time: (f) => f / SAMPLE_RATE,
         /**
-         * One block. `automation` maps a control path to either a single value
-         * the block holds, or the 128 values the browser hands over when it
-         * moves inside the block.
+         * Render one block. `automation` maps a control path to either the
+         * single value the block holds, or the 128 values the browser sends
+         * when the control moves inside the block.
          */
         render(automation = {}) {
             const block = { ...parameters };

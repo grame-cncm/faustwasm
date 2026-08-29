@@ -4,34 +4,32 @@
  *   npm run measure
  *   npm run measure -- --runtime ../faustwasm-master/dist/esm/index.js
  *
- * The unit tests under test/unit cover the arithmetic -- the queue, the
- * automation walk, the slicing -- in plain Node. This is the other half: a
- * real AudioWorklet, in a real browser, rendering offline, so what is measured
- * is the frame a control actually took effect on rather than the frame the
- * code meant to give it.
+ * The unit tests under test/unit cover the arithmetic in plain Node. This is
+ * the other half: a real AudioWorklet in a real browser, rendering offline, so
+ * what gets measured is the frame a control took effect on rather than the
+ * frame the code intended.
  *
  * The device under test is compiled here and is one line:
  *
  *   process = button("gate");
  *
- * so the rendered signal *is* the gate, and an onset is a sample that went
- * from 0 to 1 rather than something a threshold had to be talked into. What is
- * being measured is the wrapper -- when it applies a control -- and a DSP with
- * an envelope on it would only add its own attack to every number below.
+ * so the rendered signal is the gate itself, and an onset is a sample that
+ * went from 0 to 1 -- no threshold to tune. What is under test is the wrapper,
+ * and a DSP with an envelope would only add its attack to every number below.
  *
- * Three things are measured:
+ * Three measurements:
  *
- *   onsets     gate.setValueAtTime(1, t) at deliberately non-block-aligned t
+ *   onsets     gate.setValueAtTime(1, t) at non-block-aligned t
  *   retrigger  the same, with the gate dropped a few samples before the next
- *              hit so the 1 -> 0 -> 1 falls inside a single 128-frame block
+ *              hit so the 1 -> 0 -> 1 falls inside one 128-frame block
  *   keyOn      a polyphonic voice triggered by keyOn(ch, note, vel, time)
  *
- * Against 0.17.1 as published the first is out by 0 to 127 frames, the second
+ * Against 0.17.1 as published, the first is 0 to 127 frames late, the second
  * loses every hit whose gate drop shares a block with the hit after it, and
- * the third has no `time` argument to pass. Pass --runtime to point this at
- * that build and see it; without one it measures dist/esm/index.js.
+ * the third has no `time` to pass. Point --runtime at that build to see it;
+ * without it, dist/esm/index.js is measured.
  *
- * Chromium comes from Playwright, which is not a dependency of this package --
+ * Chromium comes from Playwright, which is not a dependency of this package:
  * `npm i -D playwright && npx playwright install chromium` to run this.
  */
 import {
@@ -50,16 +48,16 @@ const SAMPLE_RATE = 48000;
 const QUANTUM = 128;
 
 /**
- * 6000 frames is 46.875 blocks, so the hits walk through every phase of the
- * block instead of landing on the one alignment that would pass by luck.
+ * 6000 frames is 46.875 blocks, so the hits move through every phase of the
+ * block rather than landing on the one alignment that would pass by luck.
  */
 const SPACING = 6000;
 const HITS = 16;
 
-/** Wide enough that the gate is unambiguously down before the next hit. */
+/** Wide enough that the gate is clearly down before the next hit. */
 const GATE_WIDTH = 3 * QUANTUM;
 
-/** Tight enough that the drop and the next hit usually share a block. */
+/** Tight enough that the drop and the next hit share a block. */
 const TIGHT_GAP = 8;
 
 const runtimeArg = process.argv.indexOf('--runtime');
@@ -159,8 +157,8 @@ let failed = false;
 for (const [name, onsets] of Object.entries(measured)) {
     if (onsets.error) {
         console.log(`  ${name.padEnd(10)} unavailable: ${onsets.error}`);
-        // A runtime with no `time` argument to pass cannot be asked this
-        // question, which is the finding rather than a failure of the harness.
+        // A runtime with no `time` to pass cannot be asked this question.
+        // That is the finding, not a broken harness.
         if (name !== 'keyOn') failed = true;
         continue;
     }
@@ -193,9 +191,9 @@ process.exit(failed ? 1 : 0);
 /**
  * Everything below runs in the page.
  *
- * It is one function because `page.evaluate` serialises it: nothing outside
- * its own body is in scope there, config included, which is why that arrives
- * as an argument.
+ * One function, because `page.evaluate` serialises it and nothing outside its
+ * body is in scope over there -- which is why the config arrives as an
+ * argument.
  */
 async function measure({
     sampleRate,
@@ -227,9 +225,9 @@ async function measure({
      * The frames where the rendered gate went up.
      *
      * The render starts from silence, so frame 0 counts as an edge if the gate
-     * is already up there -- a hit scheduled on the first sample is the one
-     * alignment every implementation gets right, and leaving it out would hide
-     * the off-by-one it produces in everything after it.
+     * is already up. A hit on the first sample is the one alignment every
+     * implementation gets right, and omitting it would shift every later hit
+     * by one and hide the error.
      */
     const risingEdges = (buffer) => {
         const data = buffer.getChannelData(0);
@@ -247,15 +245,15 @@ async function measure({
 
     const monoFactory = await load('probe');
 
-    /** Schedule the gate as an AudioParam, the way a mono voice is played. */
+    /** Schedule the gate as an AudioParam, the way a mono voice plays. */
     const renderMono = async (gap) => {
         const ctx = context();
         const generator = new runtime.FaustMonoDspGenerator();
         generator.name = 'probe';
         const node = await generator.createNode(ctx, 'probe', {
             ...monoFactory,
-            // A fresh key per render, or the second one reuses the worklet
-            // processor the first one registered and its AudioParams with it.
+            // A fresh key per render: otherwise the second reuses the worklet
+            // processor the first registered, AudioParams included.
             shaKey: `probe-${gap}`
         });
         node.connect(ctx.destination);
@@ -285,9 +283,9 @@ async function measure({
         results.retrigger = { error: String(e.message || e) };
     }
 
-    // A polyphonic voice takes its trigger by message rather than as an
-    // AudioParam -- `gate` is one of the paths the poly wrapper reserves -- so
-    // this is the half of the question `setValueAtTime` cannot ask.
+    // A polyphonic voice is triggered by message, not by AudioParam: `gate`
+    // is one of the paths the poly wrapper reserves. So this is the half of
+    // the question `setValueAtTime` cannot ask.
     try {
         const polyFactory = await load('probe-poly');
         const mixer = await WebAssembly.compile(
@@ -312,9 +310,9 @@ async function measure({
             node.keyOn(0, 60, 100, on / sampleRate);
             node.keyOff(0, 60, 0, (on + gateWidth) / sampleRate);
         }
-        // The messages have to be across the port before rendering starts:
-        // OfflineAudioContext renders as fast as it can and does not wait for
-        // one.
+        // The messages must cross the port before rendering starts:
+        // OfflineAudioContext renders as fast as it can and waits for
+        // nothing.
         await new Promise((resolve) => setTimeout(resolve, 100 + quantum));
         results.keyOn = risingEdges(await ctx.startRendering());
     } catch (e) {
