@@ -17,6 +17,7 @@
         "format": "prettier --write src",
         "lint": " prettier --check src && eslint src",
         "test": "npm run build-esm && node --test \"test/unit/*.test.mjs\"",
+        "measure": "npm run build-esm && node test/timing/measure.mjs",
         "postbuild": "node postbuild.js"
     },
     "repository": {

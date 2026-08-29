@@ -336,3 +336,56 @@ test('automation and messages interleave by frame', () => {
     const events = p.render({ [GATE]: step(0, 1, 60) });
     assert.deepEqual(frames(events), [20, 60, 100]);
 });
+
+test('a timed panic cancels the notes later in its own block', () => {
+    const p = monoProcessor();
+    p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 20 });
+    p.port.send({ type: 'ctrlChange', data: [0, 123, 0], frame: 40 });
+    p.port.send({ type: 'keyOn', data: [0, 62, 100], frame: 100 });
+    p.port.send({ type: 'keyOn', data: [0, 64, 100], frame: 3 * BLOCK });
+    p.render();
+    assert.deepEqual(
+        p.dsp.notes.map((n) => n.pitch),
+        [60],
+        'the note before it played, the ones after it did not'
+    );
+    for (let i = 0; i < 4; i++) p.render();
+    assert.deepEqual(
+        p.dsp.notes.map((n) => n.pitch),
+        [60],
+        'and the one in a later block is gone too'
+    );
+});
+
+test('a panic does not cancel the automation around it', () => {
+    const p = monoProcessor();
+    p.port.send({ type: 'ctrlChange', data: [0, 123, 0], frame: 40 });
+    p.render({ [VOL]: step(0.5, 0.25, 90) });
+    assert.deepEqual(
+        p.dsp.writes,
+        [{ path: VOL, value: 0.25 }],
+        'a filter sweep is not a note waiting to sound'
+    );
+});
+
+test('only the controllers that silence the instrument flush', () => {
+    // 120 all sound off and 123 all notes off are the two the polyphonic DSP
+    // itself treats as all-notes-off. 121 resets controllers without ending a
+    // note; 122 is local control, which is about a keyboard's own wiring.
+    for (const [ctrl, expected] of [
+        [120, []],
+        [121, [60]],
+        [122, [60]],
+        [123, []]
+    ]) {
+        const p = monoProcessor();
+        p.port.send({ type: 'ctrlChange', data: [0, ctrl, 0], frame: 10 });
+        p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 50 });
+        p.render();
+        assert.deepEqual(
+            p.dsp.notes.map((n) => n.pitch),
+            expected,
+            `controller ${ctrl}`
+        );
+    }
+});

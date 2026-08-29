@@ -190,18 +190,23 @@ const getFaustFFTAudioWorkletProcessor = (
         /**
          * Port messages waiting for the block they were timestamped for.
          *
-         * The node takes a `time` on every control it sends, and it schedules
-         * the matching `AudioParam` for that instant. Applying the message the
-         * moment it arrives would write the value early, and the per-block
-         * comparison below would then take it back off again at the next
-         * block, and put it back at the right one -- a value that flickers
-         * rather than one that lands.
+         * The node takes a `time` on every control it sends. This processor
+         * used to ignore it and apply the message the moment it arrived, which
+         * for a MIDI message -- nothing mirrors those onto an `AudioParam` --
+         * meant the timestamp did nothing at all and the message landed
+         * whenever the main thread got round to posting it.
          *
-         * So they wait here, and are applied at the top of the block that
-         * contains them. Block granularity, not the sample accuracy the
-         * ordinary processor manages: this one buffers its input into an FFT
-         * window and hands the DSP whole frames of spectrum, so there is no
-         * such thing as a control write partway through what it computes.
+         * They wait here instead, and are applied at the top of the block that
+         * contains the instant. Two limits worth naming. It is a block, not a
+         * sample: this processor buffers its input into an FFT window and
+         * hands the DSP whole frames of spectrum, so there is no such thing as
+         * a control write partway through what it computes. And a `param`
+         * message still resolves a block later than that, because the
+         * per-block `[0]`-against-cache comparison below reads the AudioParam
+         * at the *start* of the block and writes the pre-`time` value straight
+         * back over it; the value the caller asked for arrives with the next
+         * block. Nothing is computed in between, so there is no artefact --
+         * just one block, and only for parameters.
          */
         protected fEventQueue: {
             frame: number;
@@ -515,8 +520,7 @@ const getFaustFFTAudioWorkletProcessor = (
             if (!this.fDSPCode) return true;
 
             // Anything timed for this block, before the block's own values are
-            // read: a message and the AudioParam it was mirrored onto then
-            // agree, rather than taking turns.
+            // read -- see `fEventQueue` for what that does and does not buy.
             this.applyDueEvents(audioClock.currentFrame);
 
             for (const path in parameters) {

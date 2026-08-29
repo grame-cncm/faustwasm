@@ -258,6 +258,11 @@ export class FaustAudioWorkletNode<
      * that instant and applies it on the sample rather than at the top of
      * whichever block the message happened to arrive in. Left out, the message
      * is applied on arrival, as it always was.
+     *
+     * A time that has already gone by is late rather than refused: the message
+     * happens at the top of the next block. `setParamValue` is the exception,
+     * because it writes an `AudioParam` too and `setValueAtTime` throws on a
+     * negative time -- there the caller hears about it.
      */
     midiMessage(data: number[] | Uint8Array, time?: number): void {
         const cmd = data[0] >> 4;
@@ -321,7 +326,13 @@ export class FaustAudioWorkletNode<
         });
     }
 
-    /** `time` is AudioContext seconds; see `midiMessage`. */
+    /**
+     * `time` is AudioContext seconds; see `midiMessage`.
+     *
+     * Unlike the notes, a negative `time` throws rather than arriving late,
+     * and nothing is sent: it is `AudioParam.setValueAtTime` that refuses it,
+     * and that call is made first for exactly that reason.
+     */
     setParamValue(path: string, value: number, time?: number) {
         const resolved = this.fParamAliases[path] || path;
         // The AudioParam goes first, because it is the half that can refuse:

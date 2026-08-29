@@ -123,6 +123,9 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
     const kFromAutomation = -2;
     const kFromSensors = -1;
 
+    /** What a cancelled event does with its turn. */
+    const kCancelled = () => {};
+
     /**
      * When one control's automation stops being a series of edges and starts
      * being a ramp, and how coarsely a ramp is then followed.
@@ -371,23 +374,36 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         }
 
         /**
-         * Drop everything still queued.
+         * Cancel everything scheduled and not yet performed.
          *
          * A panic -- all notes off, all sound off -- or the end of the DSP's
          * life has to reach what has not sounded yet as well as what has,
          * otherwise the notes queued behind it play afterwards, over a device
-         * that was told to be quiet. Events already collected for the block
-         * being rendered have been taken off the queue and still fire; the
-         * flush is about the blocks after this one.
+         * that was told to be quiet. That means the queue, and it also means
+         * the rest of the block being rendered: those events have already been
+         * taken off the queue, and a `keyOn` at frame 100 is just as much a
+         * note to cancel as one in the block after this.
+         *
+         * Only the messages. The automation and the sensors are the state of
+         * the controls through the block, not notes waiting to sound, and an
+         * all-notes-off is not a reason to stop a filter sweep.
          */
         protected flushEvents() {
             this.fEventQueue.length = 0;
+            for (const event of this.fBlockEvents) {
+                if (event.seq >= 0) event.apply = kCancelled;
+            }
         }
 
-        /** Whether a controller number is one of the MIDI panic messages. */
+        /**
+         * Whether a controller number silences the instrument.
+         *
+         * The two the polyphonic DSP itself treats as all-notes-off, and no
+         * more: 122 is local control, which is about a keyboard's own wiring,
+         * and 121 resets controllers to their defaults without ending a note.
+         */
         protected isPanic(ctrl: number) {
-            // 120 all sound off, 121 reset all controllers, 123 all notes off.
-            return ctrl >= 120 && ctrl <= 123;
+            return ctrl === 120 || ctrl === 123;
         }
 
         /**
