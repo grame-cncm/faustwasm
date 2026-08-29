@@ -69,6 +69,13 @@ const getFaustFFTAudioWorkletProcessor = (
     const { registerProcessor, AudioWorkletProcessor, sampleRate } =
         globalThis as unknown as AudioWorkletGlobalScope;
 
+    // `currentFrame` advances by a block between calls to `process`, so unlike
+    // `sampleRate` it has to be read at call time.
+    const audioClock = globalThis as unknown as AudioWorkletGlobalScope;
+
+    /** The render quantum, fixed by the Web Audio API. */
+    const kBlockSize = 128;
+
     const {
         FaustBaseWebAudioDsp,
         FaustWasmInstantiator,
@@ -179,6 +186,27 @@ const getFaustFFTAudioWorkletProcessor = (
         protected fDSPCode: FaustMonoWebAudioDsp;
 
         protected paramValuesCache: Record<string, number> = {};
+
+        /**
+         * Port messages waiting for the block they were timestamped for.
+         *
+         * The node takes a `time` on every control it sends, and it schedules
+         * the matching `AudioParam` for that instant. Applying the message the
+         * moment it arrives would write the value early, and the per-block
+         * comparison below would then take it back off again at the next
+         * block, and put it back at the right one -- a value that flickers
+         * rather than one that lands.
+         *
+         * So they wait here, and are applied at the top of the block that
+         * contains them. Block granularity, not the sample accuracy the
+         * ordinary processor manages: this one buffers its input into an FFT
+         * window and hands the DSP whole frames of spectrum, so there is no
+         * such thing as a control write partway through what it computes.
+         */
+        protected fEventQueue: {
+            frame: number;
+            apply: () => void;
+        }[] = [];
 
         protected wamInfo?: { moduleId: string; instanceId: string };
         protected communicator: FaustAudioWorkletProcessorCommunicator;
@@ -486,6 +514,11 @@ const getFaustFFTAudioWorkletProcessor = (
 
             if (!this.fDSPCode) return true;
 
+            // Anything timed for this block, before the block's own values are
+            // read: a message and the AudioParam it was mirrored onto then
+            // agree, rather than taking turns.
+            this.applyDueEvents(audioClock.currentFrame);
+
             for (const path in parameters) {
                 if (fftParamKeywords.find((k) => `/${path}`.endsWith(k)))
                     continue;
@@ -569,6 +602,66 @@ const getFaustFFTAudioWorkletProcessor = (
             return true;
         }
 
+        /**
+         * Read a message's timestamp as a whole frame on the audio clock.
+         *
+         * Null when it carries none, which means now. A fractional, NaN or
+         * infinite one would sit in the queue comparing false against
+         * everything, so it is rounded here or refused.
+         */
+        protected messageFrame(msg: {
+            time?: number;
+            frame?: number;
+        }): number | null {
+            const frame = Number.isFinite(msg.frame as number)
+                ? (msg.frame as number)
+                : Number.isFinite(msg.time as number)
+                  ? (msg.time as number) * sampleRate
+                  : null;
+            return frame === null ? null : Math.round(frame);
+        }
+
+        /**
+         * Perform `apply` now, or at the top of the block that contains the
+         * frame the sender asked for.
+         *
+         * A throw from a queued one is caught: it would otherwise come out of
+         * `process`, and the spec's answer to that is to stop calling the node
+         * for the rest of its life.
+         */
+        protected atTime(
+            msg: { time?: number; frame?: number },
+            apply: () => void
+        ) {
+            const frame = this.messageFrame(msg);
+            if (frame === null) {
+                apply();
+                return;
+            }
+            const guarded = () => {
+                try {
+                    apply();
+                } catch (error) {
+                    console.error(
+                        `Faust: a message timed for frame ${frame} threw and was dropped`,
+                        error
+                    );
+                }
+            };
+            let i = this.fEventQueue.length;
+            while (i > 0 && this.fEventQueue[i - 1].frame > frame) i--;
+            this.fEventQueue.splice(i, 0, { frame, apply: guarded });
+        }
+
+        /** Apply everything due by the end of the block starting at `start`. */
+        protected applyDueEvents(start: number) {
+            const end = start + kBlockSize;
+            while (this.fEventQueue.length && this.fEventQueue[0].frame < end) {
+                // A message whose block has gone by is late, not lost.
+                this.fEventQueue.shift()!.apply();
+            }
+        }
+
         protected handleMessageAux = (e: MessageEvent) => {
             // use arrow function for binding
             const msg = e.data;
@@ -576,18 +669,24 @@ const getFaustFFTAudioWorkletProcessor = (
             switch (msg.type) {
                 // Generic MIDI message
                 case 'midi':
-                    this.midiMessage(msg.data);
+                    this.atTime(msg, () => this.midiMessage(msg.data));
                     break;
                 // Typed MIDI message
                 case 'ctrlChange':
-                    this.ctrlChange(msg.data[0], msg.data[1], msg.data[2]);
+                    this.atTime(msg, () =>
+                        this.ctrlChange(msg.data[0], msg.data[1], msg.data[2])
+                    );
                     break;
                 case 'pitchWheel':
-                    this.pitchWheel(msg.data[0], msg.data[1]);
+                    this.atTime(msg, () =>
+                        this.pitchWheel(msg.data[0], msg.data[1])
+                    );
                     break;
                 // Generic data message
                 case 'param':
-                    this.setParamValue(msg.data.path, msg.data.value);
+                    this.atTime(msg, () =>
+                        this.setParamValue(msg.data.path, msg.data.value)
+                    );
                     break;
                 // Plot handler set on demand
                 case 'setPlotHandler': {
@@ -610,10 +709,12 @@ const getFaustFFTAudioWorkletProcessor = (
                     break;
                 }
                 case 'stop': {
+                    this.fEventQueue.length = 0;
                     this.fDSPCode?.stop();
                     break;
                 }
                 case 'destroy': {
+                    this.fEventQueue.length = 0;
                     this.port.close();
                     this.destroy();
                     break;

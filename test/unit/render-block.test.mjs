@@ -9,7 +9,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FaustBaseWebAudioDsp } from '../../dist/esm/index.js';
+import {
+    FaustBaseWebAudioDsp,
+    FaustMonoWebAudioDsp,
+    FaustPolyWebAudioDsp
+} from '../../dist/esm/index.js';
 
 const BLOCK = 128;
 
@@ -137,3 +141,59 @@ test('a negative frame is applied at the top of the block', () => {
         'render:0+128'
     ]);
 });
+
+test('applyEvents performs everything, in order, without rendering', () => {
+    const log = [];
+    const events = ['a', 'b', 'c'].map((name, i) => ({
+        frame: i * 10,
+        apply: () => log.push(name)
+    }));
+    dsp().applyEvents(events);
+    assert.deepEqual(log, ['a', 'b', 'c']);
+    assert.doesNotThrow(() => dsp().applyEvents(undefined));
+});
+
+/**
+ * A block the DSP declines to render still has to take its control writes.
+ *
+ * They have already been taken off the processor's queue by the time `compute`
+ * sees them, so a `keyOn` dropped here is a note that never sounds and never
+ * will -- and the DSP's cached values would go on disagreeing with the host's.
+ * The receiver is a bare base DSP, which is all these branches touch --
+ * `fFirstCall` aside, since the polyphonic `compute` lays out its wasm memory
+ * before it asks whether it is running.
+ */
+for (const [name, compute] of [
+    ['mono', FaustMonoWebAudioDsp.prototype.compute],
+    ['poly', FaustPolyWebAudioDsp.prototype.compute]
+]) {
+    test(`a stopped ${name} DSP still applies the block's events`, () => {
+        const log = [];
+        const stopped = dsp();
+        stopped.fFirstCall = false;
+        stopped.stop();
+        const result = compute.call(
+            stopped,
+            [],
+            [],
+            [{ frame: 0, apply: () => log.push('applied') }]
+        );
+        assert.equal(result, true, 'and stays in the graph');
+        assert.deepEqual(log, ['applied']);
+    });
+
+    test(`a destroyed ${name} DSP drops them`, () => {
+        const log = [];
+        const destroyed = dsp();
+        destroyed.fFirstCall = false;
+        destroyed.destroy();
+        const result = compute.call(
+            destroyed,
+            [],
+            [],
+            [{ frame: 0, apply: () => log.push('applied') }]
+        );
+        assert.equal(result, false);
+        assert.deepEqual(log, [], 'which is the point of destroying it');
+    });
+}

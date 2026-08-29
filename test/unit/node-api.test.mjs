@@ -165,3 +165,21 @@ test('setParamValue without a time still schedules at the context clock', () => 
     node.setParamValue('/probe/gate', 1);
     assert.deepEqual(scheduled, [{ value: 1, time: context.currentTime }]);
 });
+
+test('a rejected time leaves nothing on the wire', () => {
+    const node = monoNode();
+    node.parameters.set('/probe/gate', {
+        value: 0,
+        setValueAtTime: (value, time) => {
+            // What a real AudioParam does with a negative time.
+            if (!(time >= 0)) throw new RangeError('time must be non-negative');
+        }
+    });
+    node.port.posted.length = 0;
+    assert.throws(() => node.setParamValue('/probe/gate', 1, -1), RangeError);
+    assert.deepEqual(
+        node.port.posted,
+        [],
+        'or the DSP holds a value the AudioParam refused'
+    );
+});

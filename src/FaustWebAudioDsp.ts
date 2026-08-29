@@ -751,8 +751,29 @@ export interface IFaustBaseWebAudioDsp {
 }
 
 export type IFaustMonoWebAudioDsp = IFaustBaseWebAudioDsp;
+
+/**
+ * A node's controls, each with the instant it takes effect.
+ *
+ * `time` is AudioContext seconds -- the clock `AudioParam.setValueAtTime`
+ * takes -- so a note and a parameter ramp can be scheduled against one
+ * another. It is declared here, on the node, rather than on
+ * `IFaustBaseWebAudioDsp`, because it is a node's to offer: a node reaches
+ * its DSP across a message port and can hold a control write until the block
+ * that contains the instant, where a DSP is already inside the block by the
+ * time anyone asks it for anything.
+ *
+ * An AudioWorklet node lands the control on the sample it named. A
+ * ScriptProcessor node (`sp: true`) has no such queue and applies it on
+ * arrival, as it always did: the argument is accepted and ignored there.
+ */
 export interface IFaustMonoWebAudioNode
-    extends IFaustMonoWebAudioDsp, AudioNode {}
+    extends IFaustMonoWebAudioDsp, AudioNode {
+    midiMessage(data: number[] | Uint8Array, time?: number): void;
+    ctrlChange(chan: number, ctrl: number, value: number, time?: number): void;
+    pitchWheel(chan: number, value: number, time?: number): void;
+    setParamValue(path: string, value: number, time?: number): void;
+}
 
 export interface IFaustPolyWebAudioDsp extends IFaustBaseWebAudioDsp {
     /**
@@ -780,8 +801,26 @@ export interface IFaustPolyWebAudioDsp extends IFaustBaseWebAudioDsp {
      */
     allNotesOff(hard: boolean): void;
 }
+/** As `IFaustMonoWebAudioNode`, with the notes timestamped too. */
 export interface IFaustPolyWebAudioNode
-    extends IFaustPolyWebAudioDsp, AudioNode {}
+    extends IFaustPolyWebAudioDsp, AudioNode {
+    midiMessage(data: number[] | Uint8Array, time?: number): void;
+    ctrlChange(chan: number, ctrl: number, value: number, time?: number): void;
+    pitchWheel(chan: number, value: number, time?: number): void;
+    setParamValue(path: string, value: number, time?: number): void;
+    keyOn(
+        channel: number,
+        pitch: number,
+        velocity: number,
+        time?: number
+    ): void;
+    keyOff(
+        channel: number,
+        pitch: number,
+        velocity: number,
+        time?: number
+    ): void;
+}
 
 export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fOutputHandler: OutputParamHandler | null = null;
@@ -1089,6 +1128,21 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         if (frame < this.fBufferSize) {
             render(frame, this.fBufferSize - frame);
         }
+    }
+
+    /**
+     * Perform every event without rendering anything.
+     *
+     * A block the DSP declines to render still has to take its control
+     * writes. They were taken off the queue to be applied here, so a `keyOn`
+     * dropped because the node was stopped, or because an input was not
+     * connected yet, is a note that never sounds and never will -- and the
+     * DSP's cached parameter values would go on disagreeing with the host's.
+     * Only a destroyed DSP drops them, which is the point of destroying it.
+     */
+    protected applyEvents(events?: FaustTimedEvent[]) {
+        if (!events) return;
+        for (let i = 0; i < events.length; i++) events[i].apply();
     }
 
     /**
@@ -1916,7 +1970,10 @@ export class FaustMonoWebAudioDsp
         if (this.fDestroyed) return false;
 
         // Check Processing state: the node returns 'true' to stay in the graph, even if not processing
-        if (!this.fProcessing) return true;
+        if (!this.fProcessing) {
+            this.applyEvents(events);
+            return true;
+        }
 
         // Init memory again on first call (since WebAssembly.memory.grow() may have been called)
         if (this.fFirstCall) {
@@ -1934,6 +1991,7 @@ export class FaustMonoWebAudioDsp
                 (!input || !input[0] || input[0].length === 0)
             ) {
                 // console.log("Process input error");
+                this.applyEvents(events);
                 return true;
             }
 
@@ -1944,6 +2002,7 @@ export class FaustMonoWebAudioDsp
                 (!output || !output[0] || output[0].length === 0)
             ) {
                 // console.log("Process output error");
+                this.applyEvents(events);
                 return true;
             }
 
@@ -2235,62 +2294,53 @@ export class FaustPolyWebAudioDsp
     private fSampleRate: number;
 
     /**
-     * One slice of a block: clear the sum, render every live voice into it,
-     * then run the effect over it.
+     * The voices whose crossfade this block already rendered whole.
+     *
+     * Reused rather than rebuilt: `compute` runs on the audio thread, and a
+     * steal is rare enough that this is almost always empty.
+     */
+    private fStolen: FaustWebAudioDspVoice[] = [];
+
+    /**
+     * One slice of a block: render every live voice into the sum, then run
+     * the effect over it.
      *
      * Built once rather than per call, since `compute` runs on the audio
      * thread. Everything it touches -- the mixer, the voice table, the effect
      * -- takes a frame count already, so a slice is the same work over fewer
      * frames rather than a different code path.
+     *
+     * The sum is cleared once for the block rather than once per slice, and
+     * the voices whose note was stolen were rendered across the whole block
+     * before the first slice, so this leaves them alone. A voice that becomes
+     * `kLegatoVoice` partway through the block is not one of them: it keeps
+     * playing the note it is losing for the rest of the block and takes its
+     * crossfade at the top of the next one, exactly as it did when a `keyOn`
+     * could only ever arrive between two blocks.
      */
     private fRenderSlice = (offset: number, count: number) => {
         this.setBufferOffset(offset);
         this.setMixingOffset(offset, count);
-        this.fInstance.mixerAPI.clearOutput(
-            count,
-            this.getNumOutputs(),
-            this.fAudioOutputs
-        );
         this.fVoiceTable.forEach((voice) => {
-            if (voice.fCurNote === FaustWebAudioDspVoice.kLegatoVoice) {
-                // Play from current note and next note
-                voice.computeLegato(
-                    count,
-                    this.fAudioInputs,
-                    this.fAudioMixing,
-                    this.fAudioMixingHalf
-                );
-                // FadeOut on first half buffer
-                this.fInstance.mixerAPI.fadeOut(
-                    count >> 1,
-                    this.getNumOutputs(),
-                    this.fAudioMixing
-                );
-                // Mix it in result
-                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
-                    count,
-                    this.getNumOutputs(),
-                    this.fAudioMixing,
-                    this.fAudioOutputs
-                );
-            } else if (voice.fCurNote !== FaustWebAudioDspVoice.kFreeVoice) {
-                // Compute current note
-                voice.compute(count, this.fAudioInputs, this.fAudioMixing);
-                // Mix it in result
-                voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
-                    count,
-                    this.getNumOutputs(),
-                    this.fAudioMixing,
-                    this.fAudioOutputs
-                );
-                // Check the level to possibly set the voice in kFreeVoice again
-                if (
-                    voice.fCurNote == FaustWebAudioDspVoice.kReleaseVoice &&
-                    voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL
-                ) {
-                    voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
-                }
-            }
+            if (voice.fCurNote === FaustWebAudioDspVoice.kFreeVoice) return;
+            if (this.fStolen.length && this.fStolen.indexOf(voice) !== -1)
+                return;
+            // Compute current note
+            voice.compute(count, this.fAudioInputs, this.fAudioMixing);
+            // Mix it in result
+            const level = this.fInstance.mixerAPI.mixCheckVoice(
+                count,
+                this.getNumOutputs(),
+                this.fAudioMixing,
+                this.fAudioOutputs
+            );
+            // The loudest the voice got anywhere in the block. Whether a
+            // release has died away is a question about the block: a slice of
+            // a few frames landing on a zero crossing reads nothing from a
+            // voice that is still plainly sounding, and freeing it there cuts
+            // the tail off. The check itself waits until `compute` has the
+            // whole block, below.
+            if (level > voice.fLevel) voice.fLevel = level;
         });
         if (this.fInstance.effectAPI)
             this.fInstance.effectAPI.compute(
@@ -2300,6 +2350,46 @@ export class FaustPolyWebAudioDsp
                 this.fAudioOutputs
             );
     };
+
+    /**
+     * Render the voices whose note was stolen, across the whole block.
+     *
+     * A steal is a crossfade: the voice renders the note it is losing over the
+     * first half of the buffer, that half is faded out, and the note it is
+     * taking renders the second half. Half of a *block* -- 64 frames -- and
+     * not half of whatever slice the voice happens to fall in, which late in a
+     * sliced block is a fade of one or two frames, or of none at all, which is
+     * a click. So this runs before the slicing, over the full block, and the
+     * slices skip these voices.
+     */
+    private renderStolenVoices() {
+        const stolen = this.fStolen;
+        stolen.length = 0;
+        this.fVoiceTable.forEach((voice) => {
+            if (voice.fCurNote !== FaustWebAudioDspVoice.kLegatoVoice) return;
+            stolen.push(voice);
+            // Play from current note and next note
+            voice.computeLegato(
+                this.fBufferSize,
+                this.fAudioInputs,
+                this.fAudioMixing,
+                this.fAudioMixingHalf
+            );
+            // FadeOut on first half buffer
+            this.fInstance.mixerAPI.fadeOut(
+                this.fBufferSize >> 1,
+                this.getNumOutputs(),
+                this.fAudioMixing
+            );
+            // Mix it in result
+            voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
+                this.fBufferSize,
+                this.getNumOutputs(),
+                this.fAudioMixing,
+                this.fAudioOutputs
+            );
+        });
+    }
 
     /**
      * Move the mixing tables along with the input and output ones.
@@ -2631,7 +2721,10 @@ export class FaustPolyWebAudioDsp
         }
 
         // Check Processing state: the node returns 'true' to stay in the graph, even if not processing
-        if (!this.fProcessing) return true;
+        if (!this.fProcessing) {
+            this.applyEvents(events);
+            return true;
+        }
 
         // Check inputs
         if (
@@ -2639,6 +2732,7 @@ export class FaustPolyWebAudioDsp
             (!input || !input[0] || input[0].length === 0)
         ) {
             // console.log("Process input error");
+            this.applyEvents(events);
             return true;
         }
 
@@ -2648,6 +2742,7 @@ export class FaustPolyWebAudioDsp
             (!output || !output[0] || output[0].length === 0)
         ) {
             // console.log("Process output error");
+            this.applyEvents(events);
             return true;
         }
 
@@ -2666,8 +2761,32 @@ export class FaustPolyWebAudioDsp
         // Possibly call an externally given callback (for instance to synchronize playing a MIDIFile...)
         if (this.fComputeHandler) this.fComputeHandler(this.fBufferSize);
 
+        // Clear the sum once for the block, not once per slice: a stolen
+        // voice writes its whole crossfade into it before the slices start,
+        // and a slice clearing its own range would wipe part of that.
+        this.setBufferOffset(0);
+        this.setMixingOffset(0, this.fBufferSize);
+        this.fInstance.mixerAPI.clearOutput(
+            this.fBufferSize,
+            this.getNumOutputs(),
+            this.fAudioOutputs
+        );
+        this.fVoiceTable.forEach((voice) => (voice.fLevel = 0));
+        this.renderStolenVoices();
+
         // Compute, in slices around the timed events if there are any
         this.renderBlock(events, this.fRenderSlice);
+
+        // A voice in release whose level never rose above the threshold
+        // anywhere in the block has died away, and its slot goes back.
+        this.fVoiceTable.forEach((voice) => {
+            if (
+                voice.fCurNote === FaustWebAudioDspVoice.kReleaseVoice &&
+                voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL
+            ) {
+                voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
+            }
+        });
 
         // Update bargraph
         this.updateOutputs();

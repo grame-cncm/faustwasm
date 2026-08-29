@@ -324,19 +324,25 @@ export class FaustAudioWorkletNode<
     /** `time` is AudioContext seconds; see `midiMessage`. */
     setParamValue(path: string, value: number, time?: number) {
         const resolved = this.fParamAliases[path] || path;
+        // The AudioParam goes first, because it is the half that can refuse:
+        // `setValueAtTime` throws on a negative time and on a NaN. Posting the
+        // message before finding that out would leave the DSP holding a value
+        // the AudioParam never took, with the caller holding an exception and
+        // no way to know the write had already gone.
+        //
+        // Keeping the two in step is the point of writing both: `getParamValue`
+        // and any automation scheduled afterwards start from what was written,
+        // and the processor now reads that automation per sample, so the two
+        // routes agree on the value and on the frame. Whichever the DSP sees
+        // second is a write of what it already holds.
+        const param = this.parameters.get(resolved);
+        if (param)
+            param.setValueAtTime(value, time ?? this.context.currentTime);
         this.port.postMessage({
             type: 'param',
             data: { path: resolved, value },
             time
         });
-        // Keep the AudioParam in step, so that `getParamValue` and any
-        // automation scheduled afterwards start from what was just written.
-        // The processor now reads that automation per sample, so the two
-        // routes agree on both the value and the frame; whichever the DSP sees
-        // second is a write of the value it already holds.
-        const param = this.parameters.get(resolved);
-        if (param)
-            param.setValueAtTime(value, time ?? this.context.currentTime);
     }
     getParamValue(path: string) {
         // Get value of AudioParam
@@ -457,15 +463,8 @@ export class FaustPolyAudioWorkletNode
     }
 
     // Public API
-    keyOn(channel: number, pitch: number, velocity: number, time?: number) {
-        const e = { type: 'keyOn', data: [channel, pitch, velocity], time };
-        this.port.postMessage(e);
-    }
-
-    keyOff(channel: number, pitch: number, velocity: number, time?: number) {
-        const e = { type: 'keyOff', data: [channel, pitch, velocity], time };
-        this.port.postMessage(e);
-    }
+    // `keyOn` and `keyOff` are inherited: the base posts the same message, and
+    // the processor routes it to the polyphonic DSP.
 
     allNotesOff(hard: boolean) {
         const e = { type: 'ctrlChange', data: [0, 123, 0] };

@@ -14,6 +14,9 @@ import { monoProcessor, BLOCK, SAMPLE_RATE } from './harness.mjs';
 const GATE = '/probe/gate';
 const VOL = '/probe/vol';
 
+/** The frames a block's events landed on, which is what these tests are about. */
+const frames = (events) => events.map((e) => e.frame);
+
 /** A block of automation: `value` from `at` onwards, `from` before it. */
 function step(from, value, at) {
     return Array.from({ length: BLOCK }, (_, i) => (i < at ? from : value));
@@ -28,7 +31,7 @@ test('a block where nothing moves carries no events', () => {
 test('a control that changes between blocks is written once, at frame 0', () => {
     const p = monoProcessor();
     p.render();
-    assert.deepEqual(p.render({ [VOL]: 0.25 }), [{ frame: 0, seq: -1 }]);
+    assert.deepEqual(frames(p.render({ [VOL]: 0.25 })), [0]);
     assert.deepEqual(p.dsp.writes, [{ path: VOL, value: 0.25 }]);
 });
 
@@ -42,8 +45,7 @@ test('a control that holds its new value is not written again', () => {
 
 test('a step inside the block is an event on the frame it happens', () => {
     const p = monoProcessor();
-    const events = p.render({ [GATE]: step(0, 1, 40) });
-    assert.deepEqual(events, [{ frame: 40, seq: -1 }]);
+    assert.deepEqual(frames(p.render({ [GATE]: step(0, 1, 40) })), [40]);
     assert.deepEqual(p.dsp.writes, [{ path: GATE, value: 1 }]);
 });
 
@@ -56,41 +58,48 @@ test('1 -> 0 -> 1 inside one block is two edges, not none', () => {
     const automation = Array.from({ length: BLOCK }, (_, i) =>
         i >= 60 && i < 70 ? 0 : 1
     );
-    assert.deepEqual(p.render({ [GATE]: automation }), [
-        { frame: 60, seq: -1 },
-        { frame: 70, seq: -1 }
-    ]);
+    assert.deepEqual(frames(p.render({ [GATE]: automation })), [60, 70]);
     assert.deepEqual(p.dsp.writes.slice(1), [
         { path: GATE, value: 0 },
         { path: GATE, value: 1 }
     ]);
 });
 
-test('every step of a ramp is its own event', () => {
+test('a handful of steps in one block are all kept', () => {
     const p = monoProcessor();
+    const at = [3, 17, 40, 41, 90, 127];
+    // Starting from 0.5, the control's own default, so frame 0 is not a change.
+    const automation = Array.from(
+        { length: BLOCK },
+        (_, i) => 0.5 + at.filter((f) => f <= i).length / 16
+    );
+    assert.deepEqual(frames(p.render({ [VOL]: automation })), at);
+});
+
+test('a ramp is followed coarsely rather than sample by sample', () => {
+    const p = monoProcessor();
+    // A `linearRampToValueAtTime` across the block: 128 different values, none
+    // of which is an edge. Writing each one would mean 128 one-frame compute
+    // calls and 128 messages to the main thread, for a slider.
     const events = p.render({
         [VOL]: Array.from({ length: BLOCK }, (_, i) => i / BLOCK)
     });
-    assert.equal(events.length, BLOCK);
-    assert.deepEqual(
-        events.map((e) => e.frame),
-        Array.from({ length: BLOCK }, (_, i) => i)
+    assert.ok(
+        events.length < BLOCK / 4,
+        `${events.length} events for a ramp is still a per-sample walk`
     );
-    assert.deepEqual(
-        p.dsp.writes.map((w) => w.value),
-        Array.from({ length: BLOCK }, (_, i) => i / BLOCK)
-    );
+    assert.ok(events.length > 1, 'a ramp is still followed inside the block');
+    assert.equal(events[0].frame, 0);
 });
 
-test('a ramp that starts where the control already is skips frame 0', () => {
+test('a ramp still leaves the DSP holding the value the block ended on', () => {
     const p = monoProcessor();
-    // 0.5 is the control's `init`, which is what the cache was seeded with.
-    const events = p.render({
-        [VOL]: Array.from({ length: BLOCK }, (_, i) => 0.5 + i / 256)
-    });
-    assert.equal(events.length, BLOCK - 1);
-    assert.equal(events[0].frame, 1);
-    assert.equal(events.at(-1).frame, BLOCK - 1);
+    const ramp = Array.from({ length: BLOCK }, (_, i) => i / BLOCK);
+    p.render({ [VOL]: ramp });
+    assert.equal(p.dsp.writes.at(-1).value, ramp[BLOCK - 1]);
+    // Which is what the next block compares against, so a block that holds
+    // the value the ramp reached has nothing to say.
+    assert.deepEqual(p.render({ [VOL]: ramp[BLOCK - 1] }), []);
 });
 
 test('an untimed message is applied on arrival, before the next block', () => {
@@ -141,10 +150,103 @@ test('a message whose block has gone by happens at the top of this one', () => {
     assert.equal(events[0].frame, 0, 'late, not lost');
 });
 
-test('a frame is taken as given, alongside a time in seconds', () => {
+test('a frame is on the audio clock, not on the block', () => {
     const p = monoProcessor();
-    p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 77 });
+    p.render();
+    p.render();
+    // Two blocks in, so an absolute frame and a block-relative one are
+    // different numbers and the test says which this is.
+    assert.equal(p.frame, 2 * BLOCK);
+    p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 2 * BLOCK + 77 });
     assert.equal(p.render()[0].frame, 77);
+});
+
+test('a fractional frame is rounded to a whole one', () => {
+    const p = monoProcessor();
+    p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 40.6 });
+    assert.equal(p.render()[0].frame, 41);
+});
+
+test('a time that is not a number is refused rather than queued', () => {
+    const p = monoProcessor();
+    for (const time of [NaN, Infinity, -Infinity, '40', null]) {
+        p.port.send({ type: 'keyOn', data: [0, 99, 100], time });
+    }
+    // A NaN compares false against every frame, so a queued one would sit at
+    // the head of the queue for ever and hold everything behind it.
+    p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 20 });
+    const events = p.render();
+    assert.equal(events.length, 1);
+    assert.equal(events[0].frame, 20);
+    assert.deepEqual(
+        p.dsp.notes.map((n) => n.pitch),
+        [99, 99, 99, 99, 99, 60],
+        'the unusable timestamps are treated as untimed, and applied on arrival'
+    );
+});
+
+test('two overdue messages are applied in time order, not post order', () => {
+    const p = monoProcessor();
+    p.render();
+    p.render();
+    // Both belong to a block that has gone by, and are posted late and out of
+    // order. They collapse onto frame 0, where only the tie-break can tell
+    // them apart.
+    p.port.send({ type: 'keyOn', data: [0, 62, 100], frame: 100 });
+    p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 10 });
+    p.render();
+    assert.deepEqual(
+        p.dsp.notes.map((n) => n.pitch),
+        [60, 62],
+        'the same order they would have played in if they had been on time'
+    );
+});
+
+test('a panic cancels what has been scheduled and not yet played', () => {
+    const p = monoProcessor();
+    p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 4 * BLOCK });
+    // All notes off, arriving now.
+    p.port.send({ type: 'ctrlChange', data: [0, 123, 0] });
+    for (let i = 0; i < 6; i++) p.render();
+    assert.deepEqual(p.dsp.notes, [], 'the queued note never played');
+    assert.deepEqual(p.dsp.midi, [
+        { type: 'ctrlChange', channel: 0, ctrl: 123, value: 0 }
+    ]);
+});
+
+test('a stop clears what was scheduled for the stretch it stopped', () => {
+    const p = monoProcessor();
+    p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 4 * BLOCK });
+    p.port.send({ type: 'stop' });
+    for (let i = 0; i < 6; i++) p.render();
+    assert.deepEqual(p.dsp.notes, []);
+});
+
+test('a message that throws costs that message and nothing else', () => {
+    const p = monoProcessor();
+    // Per the Web Audio spec, a `process` that throws fires processorerror and
+    // is never called again -- one bad message would silence the node for
+    // good.
+    p.dsp.keyOn = (channel, pitch) => {
+        if (pitch === 99) throw new Error('no such voice');
+        p.dsp.notes.push({ type: 'keyOn', channel, pitch });
+    };
+    const errors = [];
+    const reported = console.error;
+    console.error = (...args) => errors.push(args);
+    try {
+        p.port.send({ type: 'keyOn', data: [0, 99, 100], frame: 10 });
+        p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 20 });
+        assert.doesNotThrow(() => p.render());
+    } finally {
+        console.error = reported;
+    }
+    assert.deepEqual(
+        p.dsp.notes.map((n) => n.pitch),
+        [60],
+        'the message after the bad one still played'
+    );
+    assert.equal(errors.length, 1, 'and the failure was reported');
 });
 
 test('a timed param message is written at its frame', () => {
@@ -185,10 +287,7 @@ test('messages posted out of order are applied in time order', () => {
     p.port.send({ type: 'keyOn', data: [0, 62, 100], time: 90 / SAMPLE_RATE });
     p.port.send({ type: 'keyOn', data: [0, 60, 100], time: 10 / SAMPLE_RATE });
     const events = p.render();
-    assert.deepEqual(
-        events.map((e) => e.frame),
-        [10, 90]
-    );
+    assert.deepEqual(frames(events), [10, 90]);
     assert.deepEqual(
         p.dsp.notes.map((n) => n.pitch),
         [60, 62]
@@ -197,14 +296,16 @@ test('messages posted out of order are applied in time order', () => {
 
 test('automation goes before a message on the same frame', () => {
     const p = monoProcessor();
+    const order = [];
+    p.dsp.setParamValue = () => order.push('automation');
+    p.dsp.keyOn = () => order.push('message');
     p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 40 });
-    const events = p.render({ [GATE]: step(0, 1, 40) });
+    assert.deepEqual(frames(p.render({ [GATE]: step(0, 1, 40) })), [40, 40]);
     assert.deepEqual(
-        events.map((e) => e.frame),
-        [40, 40]
+        order,
+        ['automation', 'message'],
+        'the automation is the state the block starts from'
     );
-    assert.equal(events[0].seq, -1, 'the block starts from the automation');
-    assert.ok(events[1].seq >= 0);
 });
 
 test('the events of a block always tile it exactly', () => {
@@ -233,8 +334,5 @@ test('automation and messages interleave by frame', () => {
     p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 20 });
     p.port.send({ type: 'keyOn', data: [0, 62, 100], frame: 100 });
     const events = p.render({ [GATE]: step(0, 1, 60) });
-    assert.deepEqual(
-        events.map((e) => e.frame),
-        [20, 60, 100]
-    );
+    assert.deepEqual(frames(events), [20, 60, 100]);
 });
