@@ -355,8 +355,12 @@ const getFaustFFTAudioWorkletProcessor = (
             if (!paramMgrProcessor) return;
             if (paramMgrProcessor.handleEvent) return;
             paramMgrProcessor.handleEvent = (event) => {
+                // A WamEvent's `time` is AudioContext seconds, so it goes
+                // through the same queue as a timestamped port message --
+                // block granularity here, as for everything else this
+                // processor is handed. See `fEventQueue`.
                 if (event.type === 'wam-midi')
-                    this.midiMessage(event.data.bytes);
+                    this.atTime(event, () => this.midiMessage(event.data.bytes));
             };
         }
 

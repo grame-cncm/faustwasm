@@ -303,8 +303,12 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
             if (!paramMgrProcessor) return;
             if (paramMgrProcessor.handleEvent) return;
             paramMgrProcessor.handleEvent = (event) => {
+                // A WamEvent's `time` is AudioContext seconds, the same clock
+                // a timestamped port message uses, so it goes through the same
+                // queue. A host that sends none gets what it always got: the
+                // message applied on arrival.
                 if (event.type === 'wam-midi')
-                    this.midiMessage(event.data.bytes);
+                    this.atTime(event, () => this.midiMessage(event.data.bytes));
             };
         }
 

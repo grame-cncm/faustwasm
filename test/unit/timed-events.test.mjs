@@ -389,3 +389,37 @@ test('only the controllers that silence the instrument flush', () => {
         );
     }
 });
+
+// The WAM path had its own way of losing a note: `setupWamEventHandler`
+// installed a handler that called `midiMessage` directly and dropped the
+// event's time, so anything routed through Web Audio Modules landed at the top
+// of whichever block it was processed in -- the scatter this whole branch
+// exists to remove, still there on the one route that was not a port message.
+test('a WAM MIDI event is applied on the frame it carries', () => {
+    const p = monoProcessor({ wamInfo: true });
+    p.port.send({ type: 'setupWamEventHandler' });
+    assert.equal(
+        typeof p.wam.handleEvent,
+        'function',
+        'the handler is installed'
+    );
+
+    p.wam.handleEvent({
+        type: 'wam-midi',
+        // WamEvent.time is AudioContext seconds, the same clock as a port
+        // message's, so it belongs in the same queue.
+        time: 55 / SAMPLE_RATE,
+        data: { bytes: [144, 60, 100] }
+    });
+    assert.deepEqual(p.dsp.midi, [], 'not applied on arrival');
+    assert.deepEqual(frames(p.render()), [55]);
+    assert.deepEqual(p.dsp.midi, [{ type: 'midi', data: [144, 60, 100] }]);
+});
+
+test('a WAM MIDI event with no time is applied on arrival', () => {
+    const p = monoProcessor({ wamInfo: true });
+    p.port.send({ type: 'setupWamEventHandler' });
+    p.wam.handleEvent({ type: 'wam-midi', data: { bytes: [144, 60, 100] } });
+    assert.deepEqual(p.dsp.midi, [{ type: 'midi', data: [144, 60, 100] }]);
+    assert.deepEqual(p.render(), []);
+});

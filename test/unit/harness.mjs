@@ -133,7 +133,7 @@ const DSP_META = {
  * `render` advances `currentFrame` by a block, as the browser does between
  * calls, so tests schedule against the same clock a host would.
  */
-export function monoProcessor({ meta = DSP_META } = {}) {
+export function monoProcessor({ meta = DSP_META, wamInfo = false } = {}) {
     const port = new FakePort();
     const dsp = new FakeDsp();
     let frame = 0;
@@ -172,7 +172,14 @@ export function monoProcessor({ meta = DSP_META } = {}) {
     );
 
     const processor = new Processor({
-        processorOptions: { name: 'probe', sampleSize: 4, factory: {} }
+        processorOptions: {
+            name: 'probe',
+            sampleSize: 4,
+            factory: {},
+            // Only a processor told which WAM instance it belongs to will look
+            // for a param manager at all.
+            ...(wamInfo ? { moduleId: 'module', instanceId: 'instance' } : {})
+        }
     });
 
     const parameters = {};
@@ -180,10 +187,23 @@ export function monoProcessor({ meta = DSP_META } = {}) {
         parameters[name] = new Float32Array([defaultValue]);
     }
 
+    /**
+     * A WAM param manager for this processor to find.
+     *
+     * `setupWamEventHandler` looks the processor up through the global
+     * `webAudioModules` registry and installs itself as the handler, so a test
+     * of that path has to put a registry there first.
+     */
+    const wam = { handleEvent: null };
+    scope.webAudioModules = {
+        getModuleScope: () => ({ paramMgrProcessors: { instance: wam } })
+    };
+
     return {
         dsp,
         port,
         processor,
+        wam,
         /** The frame the next `render` will start at. */
         get frame() {
             return frame;
