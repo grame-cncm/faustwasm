@@ -52,8 +52,6 @@ test('a step inside the block is an event on the frame it happens', () => {
 test('1 -> 0 -> 1 inside one block is two edges, not none', () => {
     const p = monoProcessor();
     // The gate is up when the block starts, drops at 60, returns at 70.
-    // Reading only frame 0 sees 1, matches the cached 1, and misses the drop
-    // entirely -- the hit that never retriggers.
     p.render({ [GATE]: 1 });
     const automation = Array.from({ length: BLOCK }, (_, i) =>
         i >= 60 && i < 70 ? 0 : 1
@@ -78,9 +76,7 @@ test('a handful of steps in one block are all kept', () => {
 
 test('a ramp is followed coarsely rather than sample by sample', () => {
     const p = monoProcessor();
-    // A `linearRampToValueAtTime` across the block: 128 distinct values, no
-    // edges. Honouring each would mean 128 one-frame compute calls and 128
-    // messages to the main thread, for a slider.
+    // A `linearRampToValueAtTime` across the block: 128 distinct values.
     const events = p.render({
         [VOL]: Array.from({ length: BLOCK }, (_, i) => i / BLOCK)
     });
@@ -97,8 +93,7 @@ test('a ramp still leaves the DSP holding the value the block ended on', () => {
     const ramp = Array.from({ length: BLOCK }, (_, i) => i / BLOCK);
     p.render({ [VOL]: ramp });
     assert.equal(p.dsp.writes.at(-1).value, ramp[BLOCK - 1]);
-    // That is what the next block compares against, so a block holding the
-    // value the ramp reached produces no events.
+    // That is what the next block compares against.
     assert.deepEqual(p.render({ [VOL]: ramp[BLOCK - 1] }), []);
 });
 
@@ -154,8 +149,7 @@ test('a frame is on the audio clock, not on the block', () => {
     const p = monoProcessor();
     p.render();
     p.render();
-    // Two blocks in, so absolute and block-relative readings differ and this
-    // pins down which one `frame` means.
+    // Two blocks in, so absolute and block-relative readings differ.
     assert.equal(p.frame, 2 * BLOCK);
     p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 2 * BLOCK + 77 });
     assert.equal(p.render()[0].frame, 77);
@@ -172,8 +166,8 @@ test('a time that is not a number is refused rather than queued', () => {
     for (const time of [NaN, Infinity, -Infinity, '40', null]) {
         p.port.send({ type: 'keyOn', data: [0, 99, 100], time });
     }
-    // A NaN compares false against every frame, so a queued one would stay at
-    // the head of the queue and block everything behind it.
+    // A queued NaN would compare false against every frame and block the
+    // queue behind it.
     p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 20 });
     const events = p.render();
     assert.equal(events.length, 1);
@@ -189,9 +183,8 @@ test('two overdue messages are applied in time order, not post order', () => {
     const p = monoProcessor();
     p.render();
     p.render();
-    // Both belong to a block that has passed, and are posted late and out of
-    // order. They collapse onto frame 0, where only the tie-break separates
-    // them.
+    // Both belong to a block that has passed, posted out of order. They
+    // collapse onto frame 0, where only the tie-break separates them.
     p.port.send({ type: 'keyOn', data: [0, 62, 100], frame: 100 });
     p.port.send({ type: 'keyOn', data: [0, 60, 100], frame: 10 });
     p.render();
@@ -224,9 +217,8 @@ test('a stop clears what was scheduled for the stretch it stopped', () => {
 
 test('a message that throws costs that message and nothing else', () => {
     const p = monoProcessor();
-    // Per the Web Audio spec, a `process` that throws fires processorerror
-    // and is never called again, so one bad message would silence the node
-    // permanently.
+    // A `process` that throws fires processorerror and is never called
+    // again.
     p.dsp.keyOn = (channel, pitch) => {
         if (pitch === 99) throw new Error('no such voice');
         p.dsp.notes.push({ type: 'keyOn', channel, pitch });
@@ -315,8 +307,8 @@ test('the events of a block always tile it exactly', () => {
     p.port.send({ type: 'keyOff', data: [0, 60, 0], frame: 60 });
     p.port.send({ type: 'keyOff', data: [0, 62, 0], frame: BLOCK - 1 });
     p.render({ [GATE]: step(0, 1, 60) });
-    // The fake DSP goes through the real `renderBlock`, so these are the wasm
-    // calls that would have been made.
+    // The fake DSP goes through the real `renderBlock`, so these are the
+    // slices wasm would have been given.
     const parts = p.dsp.slices[0];
     assert.deepEqual(parts, [
         [0, 60],
@@ -390,11 +382,6 @@ test('only the controllers that silence the instrument flush', () => {
     }
 });
 
-// The WAM path had its own way of losing a note: `setupWamEventHandler`
-// installed a handler that called `midiMessage` directly and dropped the
-// event's time, so anything routed through Web Audio Modules landed at the top
-// of whichever block it was processed in -- the scatter this whole branch
-// exists to remove, still there on the one route that was not a port message.
 test('a WAM MIDI event is applied on the frame it carries', () => {
     const p = monoProcessor({ wamInfo: true });
     p.port.send({ type: 'setupWamEventHandler' });

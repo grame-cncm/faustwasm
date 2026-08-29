@@ -154,11 +154,7 @@ test('applyEvents performs everything, in order, without rendering', () => {
 });
 
 /**
- * A block the DSP declines to render still has to apply its control writes.
- *
- * By the time `compute` sees them they have already left the processor's
- * queue, so dropping a `keyOn` here loses it for good, and the DSP's cached
- * values would disagree with the host's from then on.
+ * A block the DSP declines to render still applies its control writes.
  *
  * The receiver is a bare base DSP, which is all these branches touch, apart
  * from `fFirstCall`: the polyphonic `compute` lays out its wasm memory before

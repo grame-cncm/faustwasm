@@ -252,15 +252,11 @@ export class FaustAudioWorkletNode<
     }
 
     /**
-     * `time` is in AudioContext seconds, the clock `AudioParam` methods take.
+     * Send a raw MIDI message, decoding it to the typed call it belongs to.
      *
-     * With a time, the processor holds the message until the block containing
-     * that instant and applies it on the exact sample. Without one, it is
-     * applied on arrival.
-     *
-     * A time already in the past is late, not rejected: the message happens at
-     * the top of the next block. `setParamValue` is the exception -- it also
-     * writes an `AudioParam`, and `setValueAtTime` throws on a negative time.
+     * @param time - AudioContext seconds. The message is applied on that exact
+     * sample. Omitted, it is applied on arrival; already past, at the top of
+     * the next block.
      */
     midiMessage(data: number[] | Uint8Array, time?: number): void {
         const cmd = data[0] >> 4;
@@ -325,23 +321,18 @@ export class FaustAudioWorkletNode<
     }
 
     /**
-     * `time` is in AudioContext seconds; see `midiMessage`.
+     * Set a control's value, on the DSP and on the matching `AudioParam`.
      *
-     * Unlike a note, a negative `time` throws instead of arriving late, and
-     * nothing is sent. `AudioParam.setValueAtTime` is what rejects it, which
-     * is why that call comes first.
+     * @param time - AudioContext seconds; see `midiMessage`. A negative time
+     * throws and sends nothing.
      */
     setParamValue(path: string, value: number, time?: number) {
         const resolved = this.fParamAliases[path] || path;
-        // The AudioParam first, because it is the half that can refuse:
-        // `setValueAtTime` throws on a negative or NaN time. Posting first
-        // would leave the DSP holding a value the AudioParam rejected, with
-        // the caller seeing only the exception.
-        //
-        // Both are written so they stay in step: `getParamValue` and any later
-        // automation start from this value. The processor reads that
-        // automation per sample, so message and AudioParam agree on the value
-        // and the frame, and whichever the DSP sees second is a no-op.
+        // The AudioParam first: `setValueAtTime` throws on a negative or NaN
+        // time, and nothing should be sent if it does. Both are written so
+        // `getParamValue` and any later automation start from this value; the
+        // processor reads that automation per sample, so whichever the DSP
+        // sees second is a no-op.
         const param = this.parameters.get(resolved);
         if (param)
             param.setValueAtTime(value, time ?? this.context.currentTime);
@@ -470,8 +461,7 @@ export class FaustPolyAudioWorkletNode
     }
 
     // Public API
-    // `keyOn` and `keyOff` are inherited: the base posts the same message,
-    // which the processor routes to the polyphonic DSP.
+    // `keyOn` and `keyOff` are inherited from the base.
 
     allNotesOff(hard: boolean) {
         const e = { type: 'ctrlChange', data: [0, 123, 0] };

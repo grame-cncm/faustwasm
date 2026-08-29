@@ -20,11 +20,7 @@ import type {
 } from '@webaudiomodules/sdk-parammgr';
 
 /**
- * When a port message should take effect.
- *
- * Both fields are on the audio clock, the one `AudioParam` is scheduled
- * against: `time` in AudioContext seconds, `frame` in samples for a sender
- * that already counts in samples. Neither field means "on arrival".
+ * When a port message should take effect. Neither field means on arrival.
  */
 export interface FaustMessageTime {
     /** AudioContext seconds, as passed to `AudioParam.setValueAtTime` */
@@ -98,45 +94,28 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
     const { registerProcessor, AudioWorkletProcessor, sampleRate } =
         globalThis as unknown as AudioWorkletGlobalScope;
 
-    // `currentFrame` is the audio clock in samples. It advances every
-    // `process` call, so it must be read then, not destructured once.
+    // Read at call time: `currentFrame` advances every `process` call.
     const audioClock = globalThis as unknown as AudioWorkletGlobalScope;
 
-    // The render quantum, fixed by the Web Audio API and matching the buffer
-    // size the DSPs below are constructed with.
+    // The render quantum, and the buffer size the DSPs are constructed with.
     const kBlockSize = 128;
 
     /**
-     * A timed event, plus a tie-break for events sharing a frame.
-     *
-     * Frame alone leaves two events on the same sample unordered, and a
-     * `keyOff` sorting ahead of its own `keyOn` leaves a voice stuck on. The
-     * ranking is the order these three ran in before any of them were timed:
-     * automation first, as the state the block starts from, then sensors, then
-     * messages in the order the queue hands them over.
+     * A timed event, plus `seq` to order events sharing a frame: automation
+     * first, then sensors, then messages in the order the queue yields them.
      */
     type FaustTimedEventSeq = FaustTimedEvent & { seq: number };
 
     const kFromAutomation = -2;
     const kFromSensors = -1;
 
-    /** Stands in for the `apply` of a cancelled event. */
+    /** Replaces the `apply` of a cancelled event. */
     const kCancelled = () => {};
 
     /**
-     * Where a control stops looking like a series of edges and starts looking
-     * like a ramp, and how coarsely a ramp is then followed.
-     *
-     * Every Faust slider is an a-rate AudioParam, so one
-     * `linearRampToValueAtTime` gives `process` 128 distinct values for a
-     * single control. Honouring each would mean 128 one-frame `compute` calls
-     * per block, each re-running the DSP's control section, plus 128
-     * `in-param` messages to the main thread.
-     *
-     * Sample accuracy is for edges -- gates, triggers, switches -- which move
-     * once or twice a block. A control that changes more often than
-     * `kRampChanges` is followed every `kRampStride` changes instead, plus the
-     * value it ends the block on.
+     * A control changing more than `kRampChanges` times in a block is treated
+     * as a ramp and followed every `kRampStride` changes, plus the value it
+     * ends the block on. Below that, every change is applied on its frame.
      */
     const kRampChanges = 16;
     const kRampStride = 16;
@@ -201,25 +180,19 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         protected paramValuesCache: Record<string, number> = {};
 
         /**
-         * Port messages waiting for the block they were timestamped for.
-         *
-         * Sorted by frame, then by arrival. `process` drains everything up to
-         * the end of the block it is about to render; the rest waits.
+         * Port messages waiting for the block they were timestamped for,
+         * sorted by frame and then by arrival.
          */
         protected fEventQueue: FaustTimedEventSeq[] = [];
         protected fEventSeq = 0;
 
         /**
-         * The events of the block about to be rendered.
-         *
-         * Refilled rather than reallocated, so a quiet block allocates
-         * nothing.
+         * The events of the block about to be rendered. Refilled in place.
          */
         protected fBlockEvents: FaustTimedEventSeq[] = [];
 
         /**
          * Scratch space for the frames one control's automation changed on.
-         * Reused for the same reason as `fBlockEvents`.
          */
         protected fChangedFrames: number[] = [];
 
@@ -303,24 +276,21 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
             if (!paramMgrProcessor) return;
             if (paramMgrProcessor.handleEvent) return;
             paramMgrProcessor.handleEvent = (event) => {
-                // A WamEvent's `time` is AudioContext seconds, the same clock
-                // a timestamped port message uses, so it goes through the same
-                // queue. A host that sends none gets what it always got: the
-                // message applied on arrival.
+                // A WamEvent's `time` is AudioContext seconds, so it goes
+                // through the same queue as a timestamped port message.
                 if (event.type === 'wam-midi')
-                    this.atTime(event, () => this.midiMessage(event.data.bytes));
+                    this.atTime(event, () =>
+                        this.midiMessage(event.data.bytes)
+                    );
             };
         }
 
         /**
          * Read a message's timestamp as a whole frame on the audio clock.
-         * Null if it carries none, meaning now.
          *
-         * Both routes round, and both reject anything non-finite. A fraction
-         * would become a fractional slice count and a channel pointer partway
-         * through a sample. A NaN compares false against every frame, so a
-         * queued one would stay at the head of the queue and block every event
-         * behind it.
+         * @returns the frame, rounded, or null if the message carries no
+         * usable timestamp -- meaning apply it now. Non-finite values are
+         * rejected.
          */
         protected messageFrame(msg: FaustMessageTime): number | null {
             const frame = Number.isFinite(msg.frame as number)
@@ -332,16 +302,11 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         }
 
         /**
-         * Apply `apply` now, or queue it for the frame the sender asked for.
+         * Apply `apply` now, or queue it for the frame `msg` is timestamped
+         * for.
          *
-         * Untimed messages are applied on arrival, between two blocks, which
-         * is equivalent to frame 0 of the next one. A throw from one of those
-         * escapes the port handler and costs that message, as it always did.
-         *
-         * Timed ones have to catch. They run from inside `process`, and the
-         * Web Audio spec's response to a `process` that throws is to fire
-         * `processorerror` and stop calling the node -- so one bad message
-         * would silence the device permanently.
+         * A queued `apply` runs inside `process`, so a throw from one is
+         * caught and logged rather than left to reach the processor.
          */
         protected atTime(msg: FaustMessageTime, apply: () => void) {
             const frame = this.messageFrame(msg);
@@ -363,24 +328,17 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                     }
                 }
             };
-            // Insert from the back: a sequencer posts in time order, so the
-            // common case is a comparison or two.
+            // Insert from the back: messages usually arrive in time order.
             let i = this.fEventQueue.length;
             while (i > 0 && this.fEventQueue[i - 1].frame > frame) i--;
             this.fEventQueue.splice(i, 0, event);
         }
 
         /**
-         * Cancel everything scheduled and not yet performed.
+         * Cancel every message scheduled and not yet applied: the queue, and
+         * the messages remaining in the block being rendered.
          *
-         * A panic, or the end of the DSP's life, has to reach the notes that
-         * have not sounded yet as well as the ones that have -- otherwise they
-         * play afterwards, over a device that was told to be quiet.
-         *
-         * That means the queue and the rest of the block being rendered, whose
-         * events have already left the queue. Messages only: automation and
-         * sensor writes are the state of the controls through the block, and
-         * an all-notes-off should not stop a filter sweep.
+         * Automation and sensor events are left alone.
          */
         protected flushEvents() {
             this.fEventQueue.length = 0;
@@ -390,29 +348,22 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         }
 
         /**
-         * Whether a controller number silences the instrument.
-         *
-         * Exactly the two `FaustPolyWebAudioDsp.ctrlChange` treats as
-         * all-notes-off. Not 121, which resets controllers without ending a
-         * note, and not 122, which is a keyboard's local control.
+         * Whether a controller number silences the instrument: 120 all sound
+         * off, 123 all notes off. The two `FaustPolyWebAudioDsp.ctrlChange`
+         * treats as all-notes-off.
          */
         protected isPanic(ctrl: number) {
             return ctrl === 120 || ctrl === 123;
         }
 
         /**
-         * One control's automation for the block, as events.
+         * Append one control's automation for the block to `events`, one
+         * event per change.
          *
-         * A control that holds arrives as a single value, worth an event only
-         * if it differs from what the DSP has. A control that moves arrives as
-         * 128, and each change is an edge due on its own frame.
-         *
-         * Reading only `[0]`, as this used to, pushes every `setValueAtTime`
-         * out to the next block boundary and misses a `1 -> 0 -> 1` inside one
-         * block completely -- a gate that never retriggers.
-         *
-         * Above `kRampChanges` the control is ramping rather than stepping,
-         * and is followed at `kRampStride`. See the constants.
+         * A control that holds through the block arrives as a single value and
+         * yields an event only if it differs from the cached one. A control
+         * that changes more than `kRampChanges` times is followed coarsely;
+         * see the constants.
          */
         protected collectAutomation(
             path: string,
@@ -433,8 +384,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                 const frame = changes[n];
                 events.push(this.paramEvent(path, automation[frame], frame));
             }
-            // Always write the value the block ends on, or the next block
-            // compares against a value the DSP was never given.
+            // Always write the value the block ends on: it is what the next
+            // block compares against.
             const lastChange = changes.length - 1;
             if (lastChange % stride) {
                 const frame = changes[lastChange];
@@ -455,13 +406,11 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         }
 
         /**
-         * Everything due inside the block starting at `start`.
+         * Everything due inside the block starting at frame `start`:
+         * AudioParam automation, new sensor readings, and the port messages
+         * timestamped for a frame inside it.
          *
-         * Three sources: the automation each `AudioParam` handed over, any new
-         * sensor readings, and the port messages timestamped for a frame
-         * inside the block.
-         *
-         * Sorted by frame, and on a tie by source -- see `FaustTimedEventSeq`.
+         * @returns the events, sorted by frame and then by source
          */
         protected collectEvents(
             parameters: { [key: string]: Float32Array },
@@ -472,10 +421,9 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
             for (const path in parameters) {
                 this.collectAutomation(path, parameters[path], events);
             }
-            // Sensor writes used to run after the parameter read and before
-            // `compute`, so a control that is both an AudioParam and mapped to
-            // an axis took the sensor's value. An event at frame 0 ranked
-            // after the automation preserves that.
+            // At frame 0, ranked after the automation, so a control that is
+            // both an AudioParam and mapped to an axis takes the sensor's
+            // value into the block.
             if (this.fCommunicator.getNewAccDataAvailable()) {
                 const acc = this.fCommunicator.getAcc();
                 if (acc) {
@@ -503,11 +451,9 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
             let ordinal = 0;
             while (this.fEventQueue.length && this.fEventQueue[0].frame < end) {
                 const event = this.fEventQueue.shift() as FaustTimedEventSeq;
-                // A message whose block has passed is late, not lost: it
-                // happens at the top of this one. Several of them collapse
-                // onto frame 0 together, so the tie-break is the order they
-                // come off the queue, which is time order. Posting order would
-                // replay an out-of-order schedule out of order.
+                // A message whose block has passed is applied at the top of
+                // this one. Several collapse onto frame 0, so they are
+                // renumbered in queue order, which is time order.
                 event.frame = Math.max(0, event.frame - start);
                 event.seq = ordinal++;
                 events.push(event);
@@ -611,8 +557,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                     break;
                 }
                 case 'instanceClear': {
-                    // Notes queued before the clear would put back the state
-                    // it just cleared.
+                    // Queued notes would put back the state being cleared.
                     this.flushEvents();
                     this.fDSPCode.instanceClear();
                     break;
@@ -630,8 +575,7 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                     break;
                 }
                 case 'stop': {
-                    // What was scheduled belongs to the stretch being
-                    // stopped, and should not still be waiting on restart.
+                    // What was scheduled belongs to the stretch being stopped.
                     this.flushEvents();
                     this.fDSPCode.stop();
                     break;
@@ -794,9 +738,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
             else super.midiMessage(data);
         }
 
-        // The base switch already routes 'keyOn' and 'keyOff' through
-        // `this.keyOn` / `this.keyOff`, overridden below. This exists only to
-        // bind `this` for the port listener.
+        // Binds `this` for the port listener. The base switch routes 'keyOn'
+        // and 'keyOff' through the overrides below.
         protected handleMessageAux = (e: MessageEvent) => {
             super.handleMessageAux(e);
         };

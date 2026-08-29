@@ -1,10 +1,10 @@
 /**
  * The legato split.
  *
- * `computeLegato` used to be handed 128 and split it with `/ 2`. It can now be
- * handed any count, odd ones included, and a fractional count reaching wasm is
- * not a rounding error -- it is a different number of frames from what the
- * mixer is about to read. The two halves must add up to what was asked for.
+ * `computeLegato` can be handed any count, odd ones included. A fractional
+ * count reaching wasm is a different number of frames from what the mixer
+ * reads, so the two halves must be whole and must add up to what was asked
+ * for.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

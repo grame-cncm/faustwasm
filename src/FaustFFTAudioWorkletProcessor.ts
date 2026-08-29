@@ -69,8 +69,7 @@ const getFaustFFTAudioWorkletProcessor = (
     const { registerProcessor, AudioWorkletProcessor, sampleRate } =
         globalThis as unknown as AudioWorkletGlobalScope;
 
-    // `currentFrame` advances every `process` call, so it must be read then,
-    // not destructured once.
+    // Read at call time: `currentFrame` advances every `process` call.
     const audioClock = globalThis as unknown as AudioWorkletGlobalScope;
 
     /** The render quantum, fixed by the Web Audio API. */
@@ -190,23 +189,13 @@ const getFaustFFTAudioWorkletProcessor = (
         /**
          * Port messages waiting for the block they were timestamped for.
          *
-         * The node puts a `time` on every control it sends. This processor
-         * used to ignore it, which mattered most for MIDI messages: nothing
-         * mirrors those onto an `AudioParam`, so the timestamp did nothing and
-         * the message landed whenever it was posted.
+         * Applied at the top of that block, not on its exact sample: this
+         * processor hands its DSP whole frames of spectrum, so a control write
+         * partway through one has no meaning.
          *
-         * They now wait here and are applied at the top of the block that
-         * contains the instant. Two limits:
-         *
-         * Block, not sample. This processor buffers input into an FFT window
-         * and hands the DSP whole frames of spectrum, so a control write
-         * partway through what it computes has no meaning.
-         *
-         * A `param` still resolves one block later than that. The
+         * A `param` message resolves one block later again, because the
          * `[0]`-against-cache sync below reads the AudioParam at the start of
-         * the block and writes the pre-`time` value back over it; the intended
-         * value arrives with the next block. Nothing is computed in between,
-         * so there is no artefact.
+         * the block and writes the pre-`time` value back over it.
          */
         protected fEventQueue: {
             frame: number;
@@ -356,11 +345,11 @@ const getFaustFFTAudioWorkletProcessor = (
             if (paramMgrProcessor.handleEvent) return;
             paramMgrProcessor.handleEvent = (event) => {
                 // A WamEvent's `time` is AudioContext seconds, so it goes
-                // through the same queue as a timestamped port message --
-                // block granularity here, as for everything else this
-                // processor is handed. See `fEventQueue`.
+                // through the same queue as a timestamped port message.
                 if (event.type === 'wam-midi')
-                    this.atTime(event, () => this.midiMessage(event.data.bytes));
+                    this.atTime(event, () =>
+                        this.midiMessage(event.data.bytes)
+                    );
             };
         }
 
@@ -524,7 +513,6 @@ const getFaustFFTAudioWorkletProcessor = (
             if (!this.fDSPCode) return true;
 
             // Anything timed for this block, before its own values are read.
-            // See `fEventQueue` for what this does and does not buy.
             this.applyDueEvents(audioClock.currentFrame);
 
             for (const path in parameters) {
@@ -612,10 +600,10 @@ const getFaustFFTAudioWorkletProcessor = (
 
         /**
          * Read a message's timestamp as a whole frame on the audio clock.
-         * Null if it carries none, meaning now.
          *
-         * Rounded, and non-finite values rejected: a NaN compares false
-         * against every frame and would block the queue behind it.
+         * @returns the frame, rounded, or null if the message carries no
+         * usable timestamp -- meaning apply it now. Non-finite values are
+         * rejected.
          */
         protected messageFrame(msg: {
             time?: number;
@@ -631,10 +619,10 @@ const getFaustFFTAudioWorkletProcessor = (
 
         /**
          * Apply `apply` now, or at the top of the block containing the frame
-         * the sender asked for.
+         * `msg` is timestamped for.
          *
-         * Queued ones catch: a throw would otherwise escape `process`, and the
-         * spec's response is to stop calling the node permanently.
+         * A queued `apply` runs inside `process`, so a throw from one is
+         * caught and logged rather than left to reach the processor.
          */
         protected atTime(
             msg: { time?: number; frame?: number },
@@ -664,7 +652,7 @@ const getFaustFFTAudioWorkletProcessor = (
         protected applyDueEvents(start: number) {
             const end = start + kBlockSize;
             while (this.fEventQueue.length && this.fEventQueue[0].frame < end) {
-                // A message whose block has passed is late, not lost.
+                // A message whose block has passed is applied here.
                 this.fEventQueue.shift()!.apply();
             }
         }
