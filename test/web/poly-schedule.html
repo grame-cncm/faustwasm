@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Sample-accurate scheduling test</title>
+        <script src="../../dist/cjs-bundle/index.js"></script>
+    </head>
+    <body style="font-family: sans-serif; margin: 1.5rem">
+        <h1>Sample-accurate scheduling</h1>
+        <p>
+            Compares the same arpeggio played twice: first scheduled with
+            <code>setTimeout</code> (the pre-timestamp way, jitter of up to a
+            block plus whatever the main thread is doing), then with
+            <code>keyOn(channel, pitch, velocity, time)</code> against the
+            AudioContext clock (each note lands on its exact sample). A gate
+            retrigger inside a single block, inaudible before, closes the demo.
+        </p>
+        <button id="start">Start</button>
+        <pre id="log" style="background: #f6f6f6; padding: 1rem; border-radius: 4px"></pre>
+    </body>
+    <script>
+        const polycode = `
+import("stdfaust.lib");
+process = ba.pulsen(1, ba.hz2midikey(freq) * 1000) : pm.marimba(freq, 0, 7000, 0.5, 0.8) * gate * gain with {
+freq = hslider("freq", 440, 40, 8000, 1);
+gain = hslider("gain", 0.5, 0, 1, 0.01);
+gate = button("gate");
+};
+effect = dm.freeverb_demo;`;
+
+        const PATTERN = [60, 64, 67, 71, 72, 71, 67, 64];
+        const STEP = 0.125; // seconds between notes
+        const log = (msg) => {
+            document.getElementById("log").textContent += msg + "\n";
+            console.log(msg);
+        };
+
+        // The old way: the main thread fires each note when its timer
+        // happens to run.
+        const playWithTimeouts = (node) => {
+            log("Pattern 1: setTimeout scheduling (jitter audible on a busy page)");
+            PATTERN.forEach((pitch, i) => {
+                setTimeout(() => {
+                    node.keyOn(0, pitch, 100);
+                    setTimeout(() => node.keyOff(0, pitch, 0), STEP * 900);
+                }, i * STEP * 1000);
+            });
+        };
+
+        // The new way: everything is scheduled up front against the
+        // AudioContext clock, and each note lands on its exact sample.
+        const playWithTimestamps = (node, audioCtx) => {
+            log("Pattern 2: keyOn(..., time) scheduling (sample-accurate)");
+            const t0 = audioCtx.currentTime + 0.1;
+            PATTERN.forEach((pitch, i) => {
+                node.keyOn(0, pitch, 100, t0 + i * STEP);
+                node.keyOff(0, pitch, 0, t0 + (i + 0.9) * STEP);
+            });
+            return t0 + PATTERN.length * STEP;
+        };
+
+        // A 1 -> 0 -> 1 gate retrigger inside one 128-frame block: both
+        // edges land, so the note audibly restarts. Before timestamps the
+        // whole excursion was lost.
+        const retriggerInsideOneBlock = (node, audioCtx) => {
+            const gatePath = node.getParams().find((p) => p.endsWith("/gate"));
+            log(`Retrigger: ${gatePath} 1 -> 0 -> 1 within a single block`);
+            const t0 = audioCtx.currentTime + 0.1;
+            const frame = 1 / audioCtx.sampleRate;
+            node.keyOn(0, 55, 100, t0);
+            node.keyOff(0, 55, 0, t0 + 1.0);
+            node.setParamValue(gatePath, 0, t0 + 0.5);
+            node.setParamValue(gatePath, 1, t0 + 0.5 + 32 * frame);
+        };
+
+        const { instantiateFaustModule, LibFaust, FaustCompiler, FaustPolyDspGenerator } = faustwasm;
+        document.getElementById("start").onclick = async () => {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            await audioCtx.resume();
+            const faustModule = await instantiateFaustModule();
+            const libFaust = new LibFaust(faustModule);
+            const compiler = new FaustCompiler(libFaust);
+            const generator = new FaustPolyDspGenerator();
+            await generator.compile(compiler, "dsp", polycode, "");
+            const node = await generator.createNode(audioCtx, 4);
+            node.connect(audioCtx.destination);
+            log("Node ready");
+
+            playWithTimeouts(node);
+            setTimeout(() => {
+                const end = playWithTimestamps(node, audioCtx);
+                const msLeft = (end - audioCtx.currentTime) * 1000 + 500;
+                setTimeout(() => retriggerInsideOneBlock(node, audioCtx), msLeft);
+            }, PATTERN.length * STEP * 1000 + 500);
+        };
+    </script>
+</html>

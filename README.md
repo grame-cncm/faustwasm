@@ -281,6 +281,33 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 })();
 ```
 
+### Sample-accurate scheduling
+
+Every control method on a Faust AudioWorklet node takes an optional `time` argument as its last parameter: `setParamValue(path, value, time)`, `keyOn(channel, pitch, velocity, time)`, `keyOff(channel, pitch, velocity, time)`, `midiMessage(data, time)`, `ctrlChange(channel, ctrl, value, time)`, `pitchWheel(channel, wheel, time)`. `time` is in AudioContext seconds — the same clock as `audioCtx.currentTime` and `AudioParam.setValueAtTime` — and the action lands on the exact sample that instant names, inside the audio block that contains it. The unit is the second (a JavaScript double), the granularity is the sample: the processor converts it with `Math.round(time * sampleRate)` to a frame on the audio clock, so an instant is honoured to the nearest sample (about 21 µs at 48 kHz):
+
+```JavaScript
+const t0 = audioCtx.currentTime + 0.1;
+
+// A parameter change on the exact sample
+node.setParamValue("/mydsp/gate", 1, t0);
+node.setParamValue("/mydsp/gate", 0, t0 + 0.05);
+
+// A polyphonic pattern scheduled ahead of time
+node.keyOn(0, 60, 100, t0);
+node.keyOff(0, 60, 0, t0 + 0.5);
+node.keyOn(0, 63, 100, t0 + 0.25);
+```
+
+Regular `AudioParam` automation on the node's parameters (`setValueAtTime`, `linearRampToValueAtTime`, ...) is followed sample-accurately as well, so a note and a parameter ramp can be scheduled against one another. Timestamps carried by Web Audio Modules (WAM) events are honoured the same way.
+
+Left out, `time` behaves as before: the message is applied on arrival, at the start of the next audio block. A `time` already in the past is applied as soon as possible, in order. Notes:
+
+- the FFT processor honours `time` at block granularity rather than sample granularity;
+- ScriptProcessor nodes (`sp: true`) accept the argument and apply the message on arrival;
+- `setParamValue` with a negative `time` throws (it is refused by `AudioParam.setValueAtTime`).
+
+The page `test/web/poly-schedule.html` demonstrates the API, and `test/timing/measure.mjs` measures the sample accuracy (see below).
+
 ### Running the tests
 
 Unit tests live in `test/unit` and run in plain Node (no browser needed). This builds the ESM bundle first, then runs every `*.test.mjs` file with Node's built-in test runner:
