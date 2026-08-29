@@ -281,6 +281,37 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 })();
 ```
 
+### Running the tests
+
+Unit tests live in `test/unit` and run in plain Node (no browser needed). This builds the ESM bundle first, then runs every `*.test.mjs` file with Node's built-in test runner:
+
+```bash
+npm test
+```
+
+A timing measurement lives in `test/timing/measure.mjs`: it renders MIDI notes and parameter changes through a real AudioWorklet in headless Chromium and checks that each one lands on the exact sample it was scheduled for. It needs [Playwright](https://playwright.dev), which is deliberately not a dependency of this package:
+
+```bash
+npm i --no-save playwright
+npx playwright install chromium
+npm run measure
+```
+
+`test/node` contains standalone smoke-test scripts exercising the dynamic compiler and the parameter alias API. Build the ESM bundle first, then run them directly:
+
+```bash
+npm run build-esm
+node test/node/test.js
+node test/node/test-param-aliases.js
+```
+
+`test/web` contains interactive test pages to be checked by hand in a browser: mono and polyphonic instruments, FFT processors, soundfiles, and the `createFaustNode` API. Build the package, serve the repo root (so `dist/` and `libfaust-wasm/` are reachable), then open a page such as [http://localhost:8000/test/web/mono.html](http://localhost:8000/test/web/mono.html):
+
+```bash
+npm run build
+python3 -m http.server 8000
+```
+
 ### Projects examples
 
 Several examples can be tested by launching a local web server at the faustwasm root level, and going in `test/faustlive-wasm` and `libfaust-in-worklet` folders.
