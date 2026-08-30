@@ -2285,6 +2285,8 @@ export class FaustPolyWebAudioDsp
     private fAudioMixing!: number;
     private fAudioMixingHalf!: number;
     private fMixingBase: number[] = [];
+    /** Float view of the memory, kept from `initMemory` like `fHEAP32`. */
+    private fHEAPF!: Float32Array | Float64Array;
     private fVoiceTable: FaustWebAudioDspVoice[];
     private fSampleRate: number;
 
@@ -2341,12 +2343,20 @@ export class FaustPolyWebAudioDsp
     /**
      * Render the stolen voices, each across the whole block.
      *
-     * A steal is a crossfade: the voice plays the note it is losing over the
+     * A steal is a hand-over: the voice plays the note it is losing over the
      * first half of the buffer, that half fades out, and the new note plays
-     * the second half. The fade has to be half a block -- 64 frames -- rather
-     * than half a slice, which late in the block would be a frame or two, or
-     * nothing at all. So this runs before the slicing, and `fRenderSlice`
-     * skips these voices.
+     * the second half, faded in. Both fades are needed. `fadeOut` scales the
+     * buffer, not the voice: after `keyOn` the DSP carries on from its live
+     * state -- an envelope that never reached silence is still up -- so
+     * without the fade-in the second half started at full level, a step on
+     * every stolen note. On a monophonic patch whose voice never falls
+     * silent that is a click on every note after the first (measured on a
+     * long-release bass: 0, 0, 0, 0.1485, 0.2618 across the split).
+     *
+     * The fades have to be half a block -- 64 frames -- rather than half a
+     * slice, which late in the block would be a frame or two, or nothing at
+     * all. So this runs before the slicing, and `fRenderSlice` skips these
+     * voices.
      */
     private renderStolenVoices() {
         const stolen = this.fStolen;
@@ -2367,6 +2377,14 @@ export class FaustPolyWebAudioDsp
                 this.getNumOutputs(),
                 this.fAudioMixing
             );
+            // FadeIn on second half buffer, the mirror of fadeOut: 1/count
+            // up to 1. `computeLegato` gives an odd count's extra frame to
+            // the second half, so it is measured from the split, not halved.
+            this.fadeIn(
+                this.fBufferSize - (this.fBufferSize >> 1),
+                this.getNumOutputs(),
+                this.fAudioMixingHalf
+            );
             // Mix it in result
             voice.fLevel = this.fInstance.mixerAPI.mixCheckVoice(
                 this.fBufferSize,
@@ -2375,6 +2393,23 @@ export class FaustPolyWebAudioDsp
                 this.fAudioOutputs
             );
         });
+    }
+
+    /**
+     * Scale `count` frames of each channel at `$tables` from 1/count up to 1.
+     *
+     * The mixer has `fadeOut` in wasm; this is its counterpart on the JS
+     * side, over the channel-pointer table the same way the mixer reads it.
+     */
+    private fadeIn(count: number, chans: number, $tables: number) {
+        const shift = Math.log2(this.fSampleSize);
+        const HEAPF = this.fHEAPF;
+        for (let chan = 0; chan < chans; chan++) {
+            const start = this.fHEAP32[($tables >> 2) + chan] >> shift;
+            for (let i = 0; i < count; i++) {
+                HEAPF[start + i] *= (i + 1) / count;
+            }
+        }
     }
 
     /**
@@ -2584,6 +2619,7 @@ export class FaustPolyWebAudioDsp
         for (let chan = 0; chan < this.getNumInputs(); chan++) {
             this.fInBase[chan] = HEAP32[(this.fAudioInputs >> 2) + chan];
         }
+        this.fHEAPF = HEAPF;
         this.fOutBase = [];
         this.fMixingBase = [];
         for (let chan = 0; chan < this.getNumOutputs(); chan++) {
