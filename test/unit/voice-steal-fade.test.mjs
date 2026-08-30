@@ -20,7 +20,7 @@ const BLOCK = 128;
  * ends up in the mixing buffer is the voice's output shaped only by the
  * JavaScript side of the hand-over.
  */
-function polyDsp() {
+function polyDsp(block = BLOCK) {
     const memory = new WebAssembly.Memory({ initial: 1 });
     const meta = {
         name: 'probe',
@@ -69,16 +69,16 @@ function polyDsp() {
         },
         voiceJSON: JSON.stringify(meta)
     };
-    const dsp = new FaustPolyWebAudioDsp(instance, 48000, 4, BLOCK, []);
+    const dsp = new FaustPolyWebAudioDsp(instance, 48000, 4, block, []);
     return { dsp, memory };
 }
 
 /** The mixing buffer of channel 0 after a block. */
-function mixing(dsp, memory) {
+function mixing(dsp, memory, block = BLOCK) {
     const HEAP32 = new Int32Array(memory.buffer);
     const HEAPF = new Float32Array(memory.buffer);
     const start = HEAP32[dsp.fAudioMixing >> 2] >> 2;
-    return Array.from(HEAPF.subarray(start, start + BLOCK));
+    return Array.from(HEAPF.subarray(start, start + block));
 }
 
 test('the second half of a stolen block fades in from 1/count', () => {
@@ -100,6 +100,30 @@ test('the second half of a stolen block fades in from 1/count', () => {
     assert.equal(ramp.length, BLOCK - half);
     assert.ok(Math.abs(ramp[0] - 1 / ramp.length) < 1e-6, `starts at 1/count, got ${ramp[0]}`);
     assert.equal(ramp[ramp.length - 1], 1, 'ends at 1');
+    for (let i = 1; i < ramp.length; i++) {
+        assert.ok(ramp[i] > ramp[i - 1], `rises at frame ${i}`);
+    }
+});
+
+test('an odd block gives the extra frame to the second half, and the ramp covers it', () => {
+    const block = 127;
+    const { dsp, memory } = polyDsp(block);
+    dsp.start();
+    const out = [new Float32Array(block)];
+    dsp.keyOn(0, 60, 100);
+    dsp.compute([], out);
+    dsp.keyOn(0, 67, 100);
+    dsp.compute([], out);
+
+    // computeLegato splits at count >> 1 = 63 and renders the remaining 64
+    // frames as the second half; the fade-in is measured from the split.
+    const half = block >> 1;
+    const buf = mixing(dsp, memory, block);
+    assert.ok(buf.slice(0, half).every((v) => v === 1), 'first half untouched by the JS side');
+    const ramp = buf.slice(half);
+    assert.equal(ramp.length, block - half);
+    assert.ok(Math.abs(ramp[0] - 1 / ramp.length) < 1e-6, `starts at 1/count, got ${ramp[0]}`);
+    assert.equal(ramp[ramp.length - 1], 1, 'ends at 1 on the last frame of the block');
     for (let i = 1; i < ramp.length; i++) {
         assert.ok(ramp[i] > ramp[i - 1], `rises at frame ${i}`);
     }
