@@ -331,7 +331,7 @@ CLI tests live in `test/cli` and run the scripts in `scripts/` as real processes
 npm run test-cli
 ```
 
-`npm run test-all` runs the unit tests and the CLI tests together. The CLI tests write under `test/out`, which is gitignored, and take a few seconds.
+`npm run test-all` runs the unit tests and the CLI tests together. Both write under `test/out`, which is gitignored and removed once the suite passes; a failing run leaves it in place so the output can be inspected. The CLI tests take a few seconds.
 
 `test/web` contains interactive test pages to be checked by hand in a browser: mono and polyphonic instruments, FFT processors, soundfiles, and the `createFaustNode` API. Build the package, serve the repo root (so `dist/` and `libfaust-wasm/` are reachable), then open a page such as [http://localhost:8000/test/web/mono.html](http://localhost:8000/test/web/mono.html):
 

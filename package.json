@@ -17,10 +17,13 @@
         "format": "prettier --write src",
         "lint": " prettier --check src && eslint src",
         "test": "npm run build-esm && node --test \"test/unit/*.test.mjs\"",
+        "posttest": "node test/cleanup.mjs",
         "test-cli": "npm run build-esm && node --test \"test/cli/*.test.mjs\"",
+        "posttest-cli": "node test/cleanup.mjs",
         "test-all": "npm run test && npm run test-cli",
         "measure": "npm run build-esm && node test/timing/measure.mjs",
-        "postbuild": "node postbuild.js"
+        "postbuild": "node postbuild.js",
+        "prepack": "node test/cleanup.mjs"
     },
     "repository": {
         "type": "git",
