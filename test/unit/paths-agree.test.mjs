@@ -95,7 +95,15 @@ class SilentCommunicator {
     setNewGyrDataAvailable() {}
 }
 
-/** The dependency bundle a generated processor is built against. */
+/**
+ * The dependency bundle a generated processor is built against.
+ *
+ * Typed loosely on purpose: the declaration narrows the poly classes to
+ * `undefined` for a mono processor and the reverse for a poly one, while this
+ * one object serves both.
+ *
+ * @type {any}
+ */
 const DEPENDENCIES = {
     FaustBaseWebAudioDsp,
     FaustMonoWebAudioDsp,
@@ -115,7 +123,7 @@ const DEPENDENCIES = {
  * @param {any} processorOptions
  * @param {number} outputs - channel count
  * @param {Float32Array[]} [inputs] - the whole input signal, per channel
- * @param {(processor: any) => void} [before] - run once before the first block
+ * @param {(processor: any) => void} [setUp] - run once before the first block
  * @returns {Float32Array[]}
  */
 const renderWorklet = (
@@ -123,7 +131,7 @@ const renderWorklet = (
     processorOptions,
     outputs,
     inputs = [],
-    setUp
+    setUp = undefined
 ) => {
     let frame = 0;
     Object.defineProperty(globalThis, 'currentFrame', {
@@ -187,10 +195,13 @@ const inputSignal = (length) =>
 
 // ------------------------------------------ the offline and worklet paths
 
-for (const [name, code, outputs] of [
+/** @type {[string, string, number][]} - name, Faust source, output channels */
+const AGREE_CASES = [
     ['a generator', OSC, 1],
     ['a stereo DSP', STEREO, 2]
-]) {
+];
+
+for (const [name, code, outputs] of AGREE_CASES) {
     test(`${name} renders the same offline and in a worklet`, async () => {
         const factory = await compiler.createMonoDSPFactory(
             'agree',
@@ -314,10 +325,15 @@ const midiToFreq = (pitch) => 440 * 2 ** ((pitch - 69) / 12);
 const renderMono = async (pitch, velocity) => {
     const generator = new FaustMonoDspGenerator();
     await generator.compile(compiler, 'inst', INSTRUMENT, '-ftz 2');
+    // The setup has to be checked, not assumed. compile swallows a failed
+    // compilation of its own accord, and a test that only asserts on the
+    // final render passes just as well over a step that quietly did nothing.
+    assert.ok(generator.factory, 'the mono DSP has to have compiled');
     const processor = await generator.createOfflineProcessor(
         SAMPLE_RATE,
         BLOCK
     );
+    assert.ok(processor, 'the offline processor has to exist');
     processor.setParamValue('/inst/freq', midiToFreq(pitch));
     processor.setParamValue('/inst/gain', velocity / 127);
     processor.setParamValue('/inst/gate', 1);
@@ -337,6 +353,13 @@ const renderPoly = async (voices, pitch, velocity) => {
     // fifth parameter is the effect's Faust source, and passing a number
     // there reached the emscripten binding as a non-string.
     await generator.compile(compiler, 'instpoly', INSTRUMENT, '-ftz 2');
+    // Same postcondition. Note what it does NOT cover: passing the voice
+    // count as compile's fifth argument (the effect's source) leaves this
+    // state untouched -- voiceFactory and mixerModule are still set, and
+    // effectFactory is null either way, since INSTRUMENT declares no effect.
+    // That mistake is caught by `npm run lint-tests`, not from here.
+    assert.ok(generator.voiceFactory, 'the voices have to have compiled');
+    assert.ok(generator.mixerModule, 'the mixer has to have been loaded');
     const processor = await generator.createOfflineProcessor(
         SAMPLE_RATE,
         BLOCK,

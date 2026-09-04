@@ -98,15 +98,16 @@ const setUserAgent = (userAgent) =>
 before(async () => {
     // The base class the node extends. A plain object-shaped stand-in is
     // enough: the node never calls up into it.
-    globalThis.ScriptProcessorNode = class {};
+    globalThis.ScriptProcessorNode = /** @type {any} */ (class {});
     setUserAgent('test');
-    globalThis.window = {
+    // A window with just the three members the node reaches for.
+    globalThis.window = /** @type {any} */ ({
         DeviceMotionEvent: function DeviceMotionEvent() {},
         addEventListener: (type, fn, capture) =>
             listeners.push(['add', type, fn, capture]),
         removeEventListener: (type, fn, capture) =>
             listeners.push(['remove', type, fn, capture])
-    };
+    });
     const mod = await import('../../dist/esm/index.js');
     FaustMonoScriptProcessorNode = mod.FaustMonoScriptProcessorNode;
     FaustPolyScriptProcessorNode = mod.FaustPolyScriptProcessorNode;
@@ -209,7 +210,11 @@ test('each callback recomputes, it does not accumulate', () => {
 
 // --------------------------------------------------------- the forwarding
 
-/** Every plain forward, as [what to call on the node, the args]. */
+/**
+ * Every plain forward, as [what to call on the node, the args].
+ *
+ * @type {[string, any[]][]}
+ */
 const FORWARDS = [
     ['init', []],
     ['instanceInit', []],

@@ -152,7 +152,14 @@ export function monoProcessor({ meta = DSP_META, wamInfo = false } = {}) {
     });
 
     const Processor = getFaustAudioWorkletProcessor(
-        {
+        /**
+         * Stand-ins, not implementations: the processor only reaches for the
+         * handful of members below, and spelling out FaustMonoWebAudioDsp or
+         * FaustMonoDspInstance in full would cost more than it catches.
+         *
+         * @type {any}
+         */
+        ({
             // `parameterDescriptors` needs the real UI walk. Nothing else of
             // the base class is reachable from a processor on a fake DSP.
             FaustBaseWebAudioDsp,
@@ -161,13 +168,15 @@ export function monoProcessor({ meta = DSP_META, wamInfo = false } = {}) {
             },
             FaustWasmInstantiator: { createSyncMonoDSPInstance: () => ({}) },
             FaustAudioWorkletProcessorCommunicator: SilentCommunicator
-        },
-        {
+        }),
+        // The metadata carries only the fields the UI walk reads, not the
+        // filename and compile options a compiled DSP would also have.
+        /** @type {any} */ ({
             processorName: 'probe',
             dspName: 'probe',
             dspMeta: meta,
             poly: false
-        },
+        }),
         false
     );
 
@@ -184,7 +193,9 @@ export function monoProcessor({ meta = DSP_META, wamInfo = false } = {}) {
 
     const parameters = {};
     for (const { name, defaultValue } of Processor.parameterDescriptors) {
-        parameters[name] = new Float32Array([defaultValue]);
+        // An AudioParamDescriptor may leave defaultValue out; the Web Audio
+        // default is 0, and a Float32Array cannot hold undefined.
+        parameters[name] = new Float32Array([defaultValue ?? 0]);
     }
 
     /**

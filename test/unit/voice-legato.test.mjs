@@ -26,7 +26,14 @@ function voice() {
         compute: (dsp, count, $inputs, $outputs) =>
             log.push(`render:${count}->${$outputs}`)
     };
-    const v = new FaustWebAudioDspVoice(0, api, [GATE], { [GATE]: 0 }, 48000);
+    // `api` carries only the members a voice calls, not the full wasm API.
+    const v = new FaustWebAudioDspVoice(
+        0,
+        /** @type {any} */ (api),
+        [GATE],
+        { [GATE]: 0 },
+        48000
+    );
     v.fNextNote = 60;
     v.fNextVel = 100;
     log.length = 0;

@@ -404,7 +404,7 @@ test('a WAM MIDI event is applied on the frame it carries', () => {
         'the handler is installed'
     );
 
-    p.wam.handleEvent({
+    /** @type {any} */ (p.wam).handleEvent({
         type: 'wam-midi',
         // WamEvent.time is AudioContext seconds, the same clock as a port
         // message's, so it belongs in the same queue.
@@ -419,7 +419,10 @@ test('a WAM MIDI event is applied on the frame it carries', () => {
 test('a WAM MIDI event with no time is applied on arrival', () => {
     const p = monoProcessor({ wamInfo: true });
     p.port.send({ type: 'setupWamEventHandler' });
-    p.wam.handleEvent({ type: 'wam-midi', data: { bytes: [144, 60, 100] } });
+    /** @type {any} */ (p.wam).handleEvent({
+        type: 'wam-midi',
+        data: { bytes: [144, 60, 100] }
+    });
     assert.deepEqual(p.dsp.midi, [{ type: 'midi', data: [144, 60, 100] }]);
     assert.deepEqual(p.render(), []);
 });

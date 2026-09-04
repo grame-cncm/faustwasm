@@ -16,6 +16,7 @@
         "build-types-bundle": "dts-bundle-generator -o dist/cjs-bundle/index.d.ts src/index-bundle.ts --external-imports",
         "format": "prettier --write src",
         "lint": " prettier --check src && eslint src",
+        "lint-tests": "tsc -p tsconfig.test.json",
         "test": "npm run build-esm && node --test \"test/unit/*.test.mjs\"",
         "posttest": "node test/cleanup.mjs",
         "test-cli": "npm run build-esm && node --test \"test/cli/*.test.mjs\"",

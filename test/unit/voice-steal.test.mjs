@@ -95,11 +95,18 @@ function polyDsp() {
         },
         voiceJSON: JSON.stringify(meta)
     };
-    return new FaustPolyWebAudioDsp(instance, 48000, 4, 128, []);
+    return new FaustPolyWebAudioDsp(
+        /** @type {any} */ (instance),
+        48000,
+        4,
+        128,
+        {}
+    );
 }
 
 /** The note each voice slot holds, `kLegatoVoice` slots by the note leaving. */
-const notes = (dsp) => dsp.fVoiceTable.map((voice) => voice.fCurNote);
+const notes = (dsp) =>
+    /** @type {any} */ (dsp).fVoiceTable.map((voice) => voice.fCurNote);
 
 /**
  * Let a released voice's tail die away.
@@ -110,7 +117,7 @@ const notes = (dsp) => dsp.fVoiceTable.map((voice) => voice.fCurNote);
  */
 function fadeOut(dsp, pitch) {
     dsp.keyOff(0, pitch, 0);
-    dsp.fVoiceTable.forEach((voice) => {
+    /** @type {any} */ (dsp).fVoiceTable.forEach((voice) => {
         if (voice.fCurNote === FaustWebAudioDspVoice.kReleaseVoice)
             voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
     });
@@ -126,7 +133,7 @@ test('a full pool steals the note held the longest', () => {
     const stolen = notes(dsp).indexOf(FaustWebAudioDspVoice.kLegatoVoice);
     assert.notEqual(stolen, -1, 'a voice was stolen');
     assert.equal(held[stolen], 60, 'the first note of the chord goes');
-    assert.equal(dsp.fVoiceTable[stolen].fNextNote, 70);
+    assert.equal(/** @type {any} */ (dsp).fVoiceTable[stolen].fNextNote, 70);
 });
 
 test('notes played before the chord do not change which voice goes', () => {
@@ -164,5 +171,5 @@ test('a voice in release is stolen before any playing voice', () => {
 
     const stolen = notes(dsp).indexOf(FaustWebAudioDspVoice.kLegatoVoice);
     assert.equal(held[stolen], FaustWebAudioDspVoice.kReleaseVoice);
-    assert.equal(dsp.fVoiceTable[stolen].fNextNote, 70);
+    assert.equal(/** @type {any} */ (dsp).fVoiceTable[stolen].fNextNote, 70);
 });

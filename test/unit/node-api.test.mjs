@@ -47,13 +47,16 @@ class FakePort {
  * when the module is evaluated. So the stand-in has to exist before the
  * import, which means the import has to be dynamic.
  */
-globalThis.AudioWorkletNode = class {
+class FakeAudioWorkletNode {
     constructor(context) {
         this.context = context;
         this.port = new FakePort();
         this.parameters = new Map();
     }
-};
+}
+// A stand-in, not an AudioWorkletNode: it carries what the class under
+// test reads and nothing else.
+globalThis.AudioWorkletNode = /** @type {any} */ (FakeAudioWorkletNode);
 
 const { FaustMonoAudioWorkletNode, FaustPolyAudioWorkletNode } =
     await import('../../dist/esm/index.js');
@@ -61,25 +64,34 @@ const { FaustMonoAudioWorkletNode, FaustPolyAudioWorkletNode } =
 const context = { sampleRate: 48000, currentTime: 1.5 };
 
 function monoNode() {
-    return new FaustMonoAudioWorkletNode(context, {
-        processorOptions: {
-            name: 'probe',
-            sampleSize: 4,
-            factory: { json: JSON_DSP }
-        }
-    });
+    // Loosely typed on the way out: `context`, the AudioParamMap and the
+    // MessagePort here are stand-ins carrying only what the node reads, and
+    // the tests below reach for `parameters.set` and `port.posted`, which the
+    // real declarations do not have.
+    return /** @type {any} */ (
+        new FaustMonoAudioWorkletNode(/** @type {any} */ (context), {
+            processorOptions: {
+                name: 'probe',
+                sampleSize: 4,
+                factory: /** @type {any} */ ({ json: JSON_DSP })
+            }
+        })
+    );
 }
 
 function polyNode() {
-    return new FaustPolyAudioWorkletNode(context, {
-        processorOptions: {
-            name: 'probe',
-            sampleSize: 4,
-            voices: 8,
-            voiceFactory: { json: JSON_DSP },
-            mixerModule: {}
-        }
-    });
+    // Same stand-ins as the mono side, same reason.
+    return /** @type {any} */ (
+        new FaustPolyAudioWorkletNode(/** @type {any} */ (context), {
+            processorOptions: {
+                name: 'probe',
+                sampleSize: 4,
+                voices: 8,
+                voiceFactory: /** @type {any} */ ({ json: JSON_DSP }),
+                mixerModule: /** @type {any} */ ({})
+            }
+        })
+    );
 }
 
 /** The messages a call posted, ignoring anything the constructor sent. */

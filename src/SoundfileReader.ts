@@ -84,8 +84,11 @@ class SoundfileReader {
      */
     static findSoundfilesFromMeta(
         dspMeta: FaustDspMeta
-    ): LooseFaustDspFactory['soundfiles'] {
-        const soundfiles: LooseFaustDspFactory['soundfiles'] = {};
+    ): Record<string, AudioData | null> {
+        // Not LooseFaustDspFactory['soundfiles'], which includes
+        // undefined: this always returns a map, and the optional type
+        // forced every caller to guard a case that cannot happen.
+        const soundfiles: Record<string, AudioData | null> = {};
         const callback = (item: FaustUIItem) => {
             if (item.type === 'soundfile') {
                 const urls = FaustBaseWebAudioDsp.splitSoundfileNames(item.url);

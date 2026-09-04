@@ -1,5 +1,6 @@
 export interface WavEncoderOptions {
-    bitDepth: number;
+    /** Defaults to 16; ignored when `float` is set, which forces 32. */
+    bitDepth?: number;
     float?: boolean;
     symmetric?: boolean;
     shared?: boolean;
@@ -24,7 +25,7 @@ class WavEncoder {
         const numberOfChannels = audioBuffer.length;
         const length = audioBuffer[0].length;
         const { shared, float } = options;
-        const bitDepth = float ? 32 : options.bitDepth | 0 || 16;
+        const bitDepth = float ? 32 : (options.bitDepth ?? 0) | 0 || 16;
         const byteDepth = bitDepth >> 3;
         const byteLength = length * numberOfChannels * byteDepth;
         const AB = shared

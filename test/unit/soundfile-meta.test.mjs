@@ -115,7 +115,9 @@ before(async () => {
 });
 
 test('every declared soundfile is found in the metadata', () => {
-    const found = Object.keys(SoundfileReader.findSoundfilesFromMeta(meta));
+    const found = Object.keys(
+        SoundfileReader.findSoundfilesFromMeta(/** @type {any} */ (meta))
+    );
     // soundfile1.dsp declares two soundfiles of four names each.
     assert.equal(found.length, 8);
     assert.ok(found.includes('Alonepad_reverb_stereo_instru1.flac'));
@@ -123,7 +125,9 @@ test('every declared soundfile is found in the metadata', () => {
 });
 
 test('the found names are the ones to fetch, unquoted and untrimmed of path', () => {
-    const found = Object.keys(SoundfileReader.findSoundfilesFromMeta(meta));
+    const found = Object.keys(
+        SoundfileReader.findSoundfilesFromMeta(/** @type {any} */ (meta))
+    );
     for (const name of found) {
         assert.ok(!name.includes("'"), `${name} still carries a quote`);
         assert.equal(name, name.trim());
@@ -132,7 +136,9 @@ test('the found names are the ones to fetch, unquoted and untrimmed of path', ()
 });
 
 test('the map starts with nothing loaded', () => {
-    const found = SoundfileReader.findSoundfilesFromMeta(meta);
+    const found = SoundfileReader.findSoundfilesFromMeta(
+        /** @type {any} */ (meta)
+    );
     // Each name maps to null until something fetches it; a non-null entry
     // here would be taken for already-loaded audio.
     for (const value of Object.values(found)) assert.equal(value, null);
@@ -140,7 +146,10 @@ test('the map starts with nothing loaded', () => {
 
 test('a DSP without soundfiles asks for none', async () => {
     const empty = { ui: [] };
-    assert.deepEqual(SoundfileReader.findSoundfilesFromMeta(empty), {});
+    assert.deepEqual(
+        SoundfileReader.findSoundfilesFromMeta(/** @type {any} */ (empty)),
+        {}
+    );
 });
 
 test('the same name declared twice is fetched once', () => {
@@ -159,7 +168,9 @@ test('the same name declared twice is fetched once', () => {
     // The result is keyed by name, so two DSP-side references to one file
     // collapse into a single download.
     assert.deepEqual(
-        Object.keys(SoundfileReader.findSoundfilesFromMeta(twice)),
+        Object.keys(
+            SoundfileReader.findSoundfilesFromMeta(/** @type {any} */ (twice))
+        ),
         ['shared.wav']
     );
 });
@@ -187,7 +198,9 @@ test('soundfiles nested in groups are found', () => {
         ]
     };
     assert.deepEqual(
-        Object.keys(SoundfileReader.findSoundfilesFromMeta(nested)),
+        Object.keys(
+            SoundfileReader.findSoundfilesFromMeta(/** @type {any} */ (nested))
+        ),
         ['deep.wav']
     );
 });
@@ -201,10 +214,11 @@ test('with no location there are no fallback paths', () => {
 });
 
 test('with a location the page, its folder and the origin are tried', () => {
-    globalThis.location = {
+    // A partial Location: the getter reads href and origin, nothing else.
+    globalThis.location = /** @type {any} */ ({
         href: 'https://example.org/apps/synth/index.html',
         origin: 'https://example.org'
-    };
+    });
     try {
         assert.deepEqual(SoundfileReader.fallbackPaths, [
             'https://example.org/apps/synth/index.html',
@@ -212,6 +226,6 @@ test('with a location the page, its folder and the origin are tried', () => {
             'https://example.org'
         ]);
     } finally {
-        delete globalThis.location;
+        delete (/** @type {any} */ (globalThis).location);
     }
 });

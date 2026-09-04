@@ -25,7 +25,10 @@ const BLOCK = 128;
  * reaches past it.
  */
 function dsp() {
-    return new FaustBaseWebAudioDsp(4, BLOCK, {});
+    // Typed loosely so the tests can reach `renderBlock`, `applyEvents` and
+    // `fFirstCall`. They are protected to TypeScript and ordinary members at
+    // runtime, which is the whole premise of this file (see the header).
+    return /** @type {any} */ (new FaustBaseWebAudioDsp(4, BLOCK, {}));
 }
 
 /** Render a block and return what happened, in order. */
@@ -164,10 +167,13 @@ test('applyEvents performs everything, in order, without rendering', () => {
  * from `fFirstCall`: the polyphonic `compute` lays out its wasm memory before
  * checking whether it is running.
  */
-for (const [name, compute] of [
+/** @type {[string, Function][]} - the name, and the compute to call unbound */
+const COMPUTES = [
     ['mono', FaustMonoWebAudioDsp.prototype.compute],
     ['poly', FaustPolyWebAudioDsp.prototype.compute]
-]) {
+];
+
+for (const [name, compute] of COMPUTES) {
     test(`a stopped ${name} DSP still applies the block's events`, () => {
         const log = [];
         const stopped = dsp();

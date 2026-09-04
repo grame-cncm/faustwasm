@@ -16,7 +16,11 @@ interface Format {
  * Code from https://github.com/mohayonao/wav-decoder
  */
 class WavDecoder {
-    static decode(buffer: ArrayBuffer, options?: WavDecoderOptions) {
+    // ArrayBufferLike, not ArrayBuffer: DataView takes either, and
+    // WavEncoder.encode returns a SharedArrayBuffer under its `shared`
+    // option -- so the encode/decode round trip, which is what
+    // faust2sndfile -in does, could not type-check.
+    static decode(buffer: ArrayBufferLike, options?: WavDecoderOptions) {
         const dataView = new DataView(buffer);
         const reader = new Reader(dataView);
         if (reader.string(4) !== 'RIFF') {

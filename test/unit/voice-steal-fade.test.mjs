@@ -92,7 +92,13 @@ function polyDsp(block = BLOCK) {
         },
         voiceJSON: JSON.stringify(meta)
     };
-    const dsp = new FaustPolyWebAudioDsp(instance, 48000, 4, block, []);
+    const dsp = new FaustPolyWebAudioDsp(
+        /** @type {any} */ (instance),
+        48000,
+        4,
+        block,
+        {}
+    );
     return { dsp, memory };
 }
 

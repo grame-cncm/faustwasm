@@ -1,0 +1,22 @@
+{
+    // Type-checks the test sources. They are plain .mjs, so nothing here is
+    // compiled -- the point is to catch, before anything runs, the mistakes a
+    // green test can hide: an argument of the wrong type that the callee
+    // happens to tolerate, a call that does not match its signature, a JSDoc
+    // that has drifted from the code it describes.
+    "compilerOptions": {
+        "checkJs": true,
+        "allowJs": true,
+        "noEmit": true,
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "target": "ES2020",
+        "strictNullChecks": true,
+        // The fakes these tests build stand in for wasm instances and Web
+        // Audio scopes; spelling every one of them out in full would cost
+        // more than it catches. Wrong *usage* of the real API is the target.
+        "noImplicitAny": false,
+        "skipLibCheck": true
+    },
+    "include": ["test/unit/**/*.mjs", "test/cli/**/*.mjs"]
+}
