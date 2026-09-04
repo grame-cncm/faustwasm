@@ -1837,8 +1837,6 @@ export class FaustMonoWebAudioDsp
         this.fInstance = instance;
         this.fSampleRate = sampleRate;
 
-        console.log(`sampleSize: ${sampleSize} bufferSize: ${bufferSize}`);
-
         // Create JSON object
         this.fJSONDsp = JSON.parse(this.fInstance.json);
 
@@ -2468,8 +2466,6 @@ export class FaustPolyWebAudioDsp
         super(sampleSize, bufferSize, soundfiles);
         this.fInstance = instance;
         this.fSampleRate = sampleRate;
-
-        console.log(`sampleSize: ${sampleSize} bufferSize: ${bufferSize}`);
 
         // Create JSON for voice
         this.fJSONDsp = JSON.parse(this.fInstance.voiceJSON);
