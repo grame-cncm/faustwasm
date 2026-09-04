@@ -31,7 +31,7 @@ const faust2svgFiles = async (inputFile, outputDir, argv = []) => {
     const svgs = diagram.from(name, code, argv.join(' '));
     console.log(`Generated ${Object.keys(svgs).length} files.`);
     console.log(`Writing files to ${outputDir}`);
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    fs.mkdirSync(outputDir, { recursive: true });
     for (const file in svgs) {
         const svgPath = path.join(outputDir, file);
         fs.writeFileSync(svgPath, svgs[file]);

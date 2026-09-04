@@ -69,6 +69,10 @@ const faust2wavFiles = async (
     console.log(`Encoding...`);
     const outputBuffer = WavEncoder.encode(output, { bitDepth, sampleRate });
     console.log(`Writing output wav file ${outputWav}.`);
+    // The output is a file path, not a directory: create the folders leading
+    // to it so that a nested target does not fail after all the rendering
+    // work is already done.
+    fs.mkdirSync(path.dirname(path.resolve(outputWav)), { recursive: true });
     fs.writeFileSync(outputWav, new Uint8Array(outputBuffer));
 };
 

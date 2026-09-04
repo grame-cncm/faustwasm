@@ -31,7 +31,7 @@ const faust2CmajorFiles = async (inputFile, outputDir, argv = []) => {
     if (!argv.find((a) => a === '-I')) argv.push('-I', 'libraries/');
     const cmajor_file = cmajor.compile(name, code, argv.join(' '));
     console.log(`Writing files to ${outputDir}`);
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    fs.mkdirSync(outputDir, { recursive: true });
     const cmajorPath = path.join(outputDir, `${name}.cmajor`);
     fs.writeFileSync(cmajorPath, cmajor_file);
     return cmajor_file;

@@ -182,6 +182,55 @@ export const loadFactory = async (dir, prefix = 'dsp') => ({
 });
 
 /**
+ * Read the header of a RIFF/WAVE file the CLI produced.
+ *
+ * `faust2sndfile` takes `-sr`, `-bd` and `-c` and its whole job is to honour
+ * them, which is a claim about the bytes of the file rather than about
+ * anything the process printed. The chunks are walked rather than read at
+ * fixed offsets, so the parser does not quietly agree with a malformed file.
+ *
+ * @param {string} file - Path to the .wav file.
+ * @returns {{ format: number, channels: number, sampleRate: number,
+ *   bitDepth: number, dataBytes: number, frames: number }}
+ */
+export const wavInfo = (file) => {
+    const buf = fs.readFileSync(file);
+    if (buf.toString('ascii', 0, 4) !== 'RIFF')
+        throw new Error(`${file} is not a RIFF file`);
+    if (buf.toString('ascii', 8, 12) !== 'WAVE')
+        throw new Error(`${file} is not a WAVE file`);
+
+    let fmt = null;
+    let dataBytes = null;
+    // Chunks start after the 12-byte RIFF header, each one an id, a size and
+    // that many bytes, padded to an even length.
+    let offset = 12;
+    while (offset + 8 <= buf.length) {
+        const id = buf.toString('ascii', offset, offset + 4);
+        const size = buf.readUInt32LE(offset + 4);
+        const body = offset + 8;
+        if (id === 'fmt ') {
+            fmt = {
+                format: buf.readUInt16LE(body),
+                channels: buf.readUInt16LE(body + 2),
+                sampleRate: buf.readUInt32LE(body + 4),
+                bitDepth: buf.readUInt16LE(body + 14)
+            };
+        } else if (id === 'data') {
+            dataBytes = size;
+        }
+        offset = body + size + (size % 2);
+    }
+    if (!fmt) throw new Error(`${file} has no fmt chunk`);
+    if (dataBytes === null) throw new Error(`${file} has no data chunk`);
+    return {
+        ...fmt,
+        dataBytes,
+        frames: dataBytes / (fmt.channels * (fmt.bitDepth / 8))
+    };
+};
+
+/**
  * Every `.dsp` fixture in `test/`, discovered rather than listed.
  *
  * A DSP dropped into `test/` is covered by the suite the moment it lands,
