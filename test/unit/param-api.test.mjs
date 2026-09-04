@@ -222,3 +222,72 @@ test('a parameter set by shortname reaches the DSP too', async () => {
     // The alias must be the same write, not a parallel bookkeeping entry.
     assert.deepEqual(soft, render(other));
 });
+
+/**
+ * Run something with console.warn captured.
+ *
+ * @param {() => void} fn
+ * @returns {string[]} the warnings emitted, in order
+ */
+const captureWarnings = (fn) => {
+    const warnings = [];
+    const original = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+        fn();
+    } finally {
+        console.warn = original;
+    }
+    return warnings;
+};
+
+test('an unknown path says so on the console', async () => {
+    const dsp = await makeDsp();
+    const warnings = captureWarnings(() => {
+        dsp.setParamValue('/alias/Freqq', 1);
+    });
+    assert.equal(warnings.length, 1);
+    // The message has to name the path, or it sends the reader hunting.
+    assert.match(warnings[0], /\/alias\/Freqq/);
+    assert.match(warnings[0], /ignored/);
+    assert.match(warnings[0], /getParams/);
+});
+
+test('reading an unknown path says what it returned instead', async () => {
+    const dsp = await makeDsp();
+    const warnings = captureWarnings(() => {
+        dsp.getParamValue('/alias/Gainn');
+    });
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /returning 0/);
+});
+
+test('the same bad path is reported once, not once per call', async () => {
+    const dsp = await makeDsp();
+    const warnings = captureWarnings(() => {
+        for (let i = 0; i < 50; i += 1) dsp.setParamValue('/alias/nope', i);
+    });
+    // This can be reached from the audio thread at the rate a host moves a
+    // slider; a warning per call would flood the console from there.
+    assert.equal(warnings.length, 1);
+});
+
+test('each distinct bad path gets its own report', async () => {
+    const dsp = await makeDsp();
+    const warnings = captureWarnings(() => {
+        dsp.setParamValue('/alias/one', 1);
+        dsp.setParamValue('/alias/two', 1);
+        dsp.getParamValue('/alias/three');
+    });
+    assert.equal(warnings.length, 3);
+});
+
+test('a valid path warns about nothing', async () => {
+    const dsp = await makeDsp();
+    const warnings = captureWarnings(() => {
+        dsp.setParamValue('/alias/Freq', 880);
+        dsp.setParamValue('Freq', 990);
+        dsp.getParamValue('/alias/Gain');
+    });
+    assert.deepEqual(warnings, []);
+});

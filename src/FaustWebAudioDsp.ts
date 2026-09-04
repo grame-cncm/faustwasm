@@ -905,6 +905,30 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }[][] = new Array(128).fill(null).map(() => []);
 
     protected fPathTable: { [address: string]: number } = {};
+
+    /** Paths already complained about, so the warning is not repeated. */
+    protected fUnknownPaths: Set<string> = new Set();
+
+    /**
+     * Report a parameter path that is in no control's alias list.
+     *
+     * Silence here is expensive: the path is a typo, or one kept from an
+     * older version of the DSP, and without a word the control simply does
+     * nothing while the caller believes it worked. But this can be reached
+     * from the audio thread, at the rate a host moves a slider, so each path
+     * is reported once and then let through quietly.
+     *
+     * @param path - the path that was not found
+     * @param action - what was done instead
+     */
+    protected warnUnknownPath(path: string, action: string) {
+        if (this.fUnknownPaths.has(path)) return;
+        this.fUnknownPaths.add(path);
+        console.warn(
+            `Faust: unknown parameter path "${path}", ${action}. ` +
+                `Use getParams() for the list of valid paths.`
+        );
+    }
     protected fUICallback: UIHandler = (item: FaustUIItem) => {
         if (item.type === 'hbargraph' || item.type === 'vbargraph') {
             const registerPath = (alias: string) => {
@@ -2070,7 +2094,7 @@ export class FaustMonoWebAudioDsp
         // an older version of the DSP, silently wrote over the head of the
         // DSP struct and came back out as a full-scale spike.
         const index = this.fPathTable[path];
-        if (index === undefined) return;
+        if (index === undefined) return this.warnUnknownPath(path, 'ignored');
         if (this.fPlotHandler)
             this.fCachedEvents.push({ type: 'param', data: { path, value } });
         this.fInstance.api.setParamValue(this.fDSP, index, value);
@@ -2078,7 +2102,10 @@ export class FaustMonoWebAudioDsp
     }
     getParamValue(path: string) {
         const index = this.fPathTable[path];
-        if (index === undefined) return 0;
+        if (index === undefined) {
+            this.warnUnknownPath(path, 'returning 0');
+            return 0;
+        }
         return this.fInstance.api.getParamValue(this.fDSP, index);
     }
 
@@ -2875,7 +2902,7 @@ export class FaustPolyWebAudioDsp
         // UI is parsed into it in the constructor -- so this rejects only
         // paths that belong to neither.
         const index = this.fPathTable[path];
-        if (index === undefined) return;
+        if (index === undefined) return this.warnUnknownPath(path, 'ignored');
         if (this.fPlotHandler)
             this.fCachedEvents.push({ type: 'param', data: { path, value } });
         if (
@@ -2893,7 +2920,10 @@ export class FaustPolyWebAudioDsp
     }
     getParamValue(path: string) {
         const index = this.fPathTable[path];
-        if (index === undefined) return 0;
+        if (index === undefined) {
+            this.warnUnknownPath(path, 'returning 0');
+            return 0;
+        }
         if (
             this.fJSONEffect &&
             FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) &&
