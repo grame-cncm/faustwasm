@@ -32,9 +32,32 @@ function polyDsp(block = BLOCK) {
                 type: 'vgroup',
                 label: 'probe',
                 items: [
-                    { type: 'hslider', label: 'freq', address: '/probe/freq', index: 0, init: 440, min: 20, max: 2000, step: 1 },
-                    { type: 'hslider', label: 'gain', address: '/probe/gain', index: 4, init: 0.5, min: 0, max: 1, step: 0.01 },
-                    { type: 'button', label: 'gate', address: '/probe/gate', index: 8 }
+                    {
+                        type: 'hslider',
+                        label: 'freq',
+                        address: '/probe/freq',
+                        index: 0,
+                        init: 440,
+                        min: 20,
+                        max: 2000,
+                        step: 1
+                    },
+                    {
+                        type: 'hslider',
+                        label: 'gain',
+                        address: '/probe/gain',
+                        index: 4,
+                        init: 0.5,
+                        min: 0,
+                        max: 1,
+                        step: 0.01
+                    },
+                    {
+                        type: 'button',
+                        label: 'gate',
+                        address: '/probe/gate',
+                        index: 8
+                    }
                 ]
             }
         ]
@@ -94,11 +117,17 @@ test('the second half of a stolen block fades in from 1/count', () => {
     const half = BLOCK >> 1;
     const buf = mixing(dsp, memory);
     // First half: the outgoing note, left to the mixer's fadeOut (inert here).
-    assert.ok(buf.slice(0, half).every((v) => v === 1), 'first half untouched by the JS side');
+    assert.ok(
+        buf.slice(0, half).every((v) => v === 1),
+        'first half untouched by the JS side'
+    );
     // Second half: a ramp from 1/64 to 1, the mirror of fadeOut.
     const ramp = buf.slice(half);
     assert.equal(ramp.length, BLOCK - half);
-    assert.ok(Math.abs(ramp[0] - 1 / ramp.length) < 1e-6, `starts at 1/count, got ${ramp[0]}`);
+    assert.ok(
+        Math.abs(ramp[0] - 1 / ramp.length) < 1e-6,
+        `starts at 1/count, got ${ramp[0]}`
+    );
     assert.equal(ramp[ramp.length - 1], 1, 'ends at 1');
     for (let i = 1; i < ramp.length; i++) {
         assert.ok(ramp[i] > ramp[i - 1], `rises at frame ${i}`);
@@ -119,11 +148,21 @@ test('an odd block gives the extra frame to the second half, and the ramp covers
     // frames as the second half; the fade-in is measured from the split.
     const half = block >> 1;
     const buf = mixing(dsp, memory, block);
-    assert.ok(buf.slice(0, half).every((v) => v === 1), 'first half untouched by the JS side');
+    assert.ok(
+        buf.slice(0, half).every((v) => v === 1),
+        'first half untouched by the JS side'
+    );
     const ramp = buf.slice(half);
     assert.equal(ramp.length, block - half);
-    assert.ok(Math.abs(ramp[0] - 1 / ramp.length) < 1e-6, `starts at 1/count, got ${ramp[0]}`);
-    assert.equal(ramp[ramp.length - 1], 1, 'ends at 1 on the last frame of the block');
+    assert.ok(
+        Math.abs(ramp[0] - 1 / ramp.length) < 1e-6,
+        `starts at 1/count, got ${ramp[0]}`
+    );
+    assert.equal(
+        ramp[ramp.length - 1],
+        1,
+        'ends at 1 on the last frame of the block'
+    );
     for (let i = 1; i < ramp.length; i++) {
         assert.ok(ramp[i] > ramp[i - 1], `rises at frame ${i}`);
     }
@@ -135,5 +174,8 @@ test('a note on a free voice is not faded', () => {
     const out = [new Float32Array(BLOCK)];
     dsp.keyOn(0, 60, 100);
     dsp.compute([], out);
-    assert.ok(mixing(dsp, memory).every((v) => v === 1), 'no ramp on a fresh voice');
+    assert.ok(
+        mixing(dsp, memory).every((v) => v === 1),
+        'no ramp on a fresh voice'
+    );
 });

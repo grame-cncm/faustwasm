@@ -190,7 +190,10 @@ class Reader {
         const x2 = this.dataView.getUint8(this.pos + 2);
         const xx = x0 + (x1 << 8) + (x2 << 16);
 
-        const data = xx > 0x800000 ? xx - 0x1000000 : xx;
+        // 0x800000 is itself negative -- the most negative 24-bit value,
+        // digital full scale down -- so the test has to include it. With a
+        // strict `>` that one sample came back as +1.0 instead of -1.0.
+        const data = xx >= 0x800000 ? xx - 0x1000000 : xx;
         this.pos += 3;
         return data < 0 ? data / 8388608 : data / 8388607;
     }
@@ -200,7 +203,10 @@ class Reader {
         const x2 = this.dataView.getUint8(this.pos + 2);
         const xx = x0 + (x1 << 8) + (x2 << 16);
 
-        const data = xx > 0x800000 ? xx - 0x1000000 : xx;
+        // 0x800000 is itself negative -- the most negative 24-bit value,
+        // digital full scale down -- so the test has to include it. With a
+        // strict `>` that one sample came back as +1.0 instead of -1.0.
+        const data = xx >= 0x800000 ? xx - 0x1000000 : xx;
         this.pos += 3;
         return data / 8388608;
     }

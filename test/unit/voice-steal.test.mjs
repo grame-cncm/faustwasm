@@ -40,9 +40,32 @@ function polyDsp() {
                 type: 'vgroup',
                 label: 'probe',
                 items: [
-                    { type: 'hslider', label: 'freq', address: '/probe/freq', index: 0, init: 440, min: 20, max: 2000, step: 1 },
-                    { type: 'hslider', label: 'gain', address: '/probe/gain', index: 4, init: 0.5, min: 0, max: 1, step: 0.01 },
-                    { type: 'button', label: 'gate', address: '/probe/gate', index: 8 }
+                    {
+                        type: 'hslider',
+                        label: 'freq',
+                        address: '/probe/freq',
+                        index: 0,
+                        init: 440,
+                        min: 20,
+                        max: 2000,
+                        step: 1
+                    },
+                    {
+                        type: 'hslider',
+                        label: 'gain',
+                        address: '/probe/gain',
+                        index: 4,
+                        init: 0.5,
+                        min: 0,
+                        max: 1,
+                        step: 0.01
+                    },
+                    {
+                        type: 'button',
+                        label: 'gate',
+                        address: '/probe/gate',
+                        index: 8
+                    }
                 ]
             }
         ]
