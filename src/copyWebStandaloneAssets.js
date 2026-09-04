@@ -20,7 +20,7 @@ const copyWebStandaloneAssets = (
     effect = false
 ) => {
     console.log(`Writing assets files.`);
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    fs.mkdirSync(outputDir, { recursive: true });
 
     // Define find and replace patterns
     const findAndReplace = ['FAUST_DSP_NAME', dspName];
@@ -103,7 +103,7 @@ const copyWebStandaloneAssets = (
  */
 const copyWebPWAAssets = (outputDir, dspName, poly = false, effect = false) => {
     console.log(`Writing assets files.`);
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    fs.mkdirSync(outputDir, { recursive: true });
 
     // Generate VERSION_DATE
     const now = new Date();
@@ -212,7 +212,7 @@ const copyWebTemplateAssets = (
     effect = false
 ) => {
     // Create output directory if it doesn't exist
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    fs.mkdirSync(outputDir, { recursive: true });
 
     // Define find and replace patterns
     const findAndReplace = ['FAUST_DSP_NAME', dspName];

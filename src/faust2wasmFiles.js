@@ -196,13 +196,20 @@ const faust2wasmFiles = async (
         dspModule = factory.code;
         dspMeta = JSON.parse(factory.json);
     }
-    const files = [dspModulePath, dspMetaPath];
-    if (mixerModule) files.push(mixerModulePath);
-    if (effectModule) files.push(effectModulePath, effectMetaPath);
+    // Every file this script may write, whether or not this run writes it:
+    // a mono build in a directory that held a poly one has to take the effect
+    // and mixer modules away, or they stay behind next to a mono index.js.
+    const outputs = [
+        dspModulePath,
+        dspMetaPath,
+        effectModulePath,
+        effectMetaPath,
+        mixerModulePath
+    ];
 
     console.log(`Writing files to ${outputDir}`);
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-    for (const filePath in files) {
+    fs.mkdirSync(outputDir, { recursive: true });
+    for (const filePath of outputs) {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     fs.writeFileSync(dspModulePath, dspModule);
