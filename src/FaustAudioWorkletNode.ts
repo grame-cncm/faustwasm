@@ -90,7 +90,7 @@ export class FaustAudioWorkletNode<
                 registerAlias(item.label);
                 if (!item.meta) return;
                 item.meta.forEach((meta) => {
-                    const { midi, acc, gyr } = meta;
+                    const { acc, gyr } = meta;
                     if (acc) this.#hasAccInput = true;
                     if (gyr) this.#hasGyrInput = true;
                 });

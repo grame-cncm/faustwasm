@@ -26,7 +26,9 @@ class FaustSvgDiagrams implements IFaustSvgDiagrams {
             files
                 .filter((file) => file !== '.' && file !== '..')
                 .forEach((file) => fs.unlink(`/${name}-svg/${file}`));
-        } catch {}
+        } catch {
+            // No previous diagram directory to clear: nothing to do.
+        }
         const success = this.compiler.generateAuxFiles(
             name,
             code,

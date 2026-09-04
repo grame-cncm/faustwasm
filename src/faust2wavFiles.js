@@ -13,7 +13,6 @@ import {
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const __filename = fileURLToPath(import.meta.url);
 
 /**
  * @param {string} inputFile

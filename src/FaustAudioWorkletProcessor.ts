@@ -308,7 +308,9 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                 // queue. A host that sends none gets what it always got: the
                 // message applied on arrival.
                 if (event.type === 'wam-midi')
-                    this.atTime(event, () => this.midiMessage(event.data.bytes));
+                    this.atTime(event, () =>
+                        this.midiMessage(event.data.bytes)
+                    );
             };
         }
 
@@ -819,7 +821,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         ? FaustPolyAudioWorkletProcessor
         : FaustMonoAudioWorkletProcessor;
     if (register) {
-        const name = processorName || dspName || (poly ? 'mydsp_poly' : 'mydsp');
+        const name =
+            processorName || dspName || (poly ? 'mydsp_poly' : 'mydsp');
         // Registering the same processor twice in one AudioWorkletGlobalScope
         // is benign — a host may add the module more than once for a given
         // context — so that case stays tolerated, tracked on the scope itself

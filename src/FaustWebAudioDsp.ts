@@ -1955,11 +1955,9 @@ export class FaustMonoWebAudioDsp
     // Public API
     compute(
         input:
-            | Float32Array[]
-            | ((input: Float32Array[] | Float64Array[]) => any),
+            Float32Array[] | ((input: Float32Array[] | Float64Array[]) => any),
         output:
-            | Float32Array[]
-            | ((output: Float32Array[] | Float64Array[]) => any),
+            Float32Array[] | ((output: Float32Array[] | Float64Array[]) => any),
         events?: FaustTimedEvent[]
     ) {
         // Check DSP state

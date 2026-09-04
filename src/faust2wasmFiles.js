@@ -33,7 +33,6 @@ import { fileURLToPath } from 'url';
 //    - Append otherArgs, then `-ftz 2` as usual.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const __filename = fileURLToPath(import.meta.url);
 
 /**
  *  Script to compile a Faust DSP file to WebAssembly and write the output to files.
@@ -58,8 +57,6 @@ const faust2wasmFiles = async (
     console.log(`Reading file ${inputFile}`);
     const code = fs.readFileSync(inputFile, { encoding: 'utf8' });
 
-    const fileName = /** @type {string} */ (inputFile.split('/').pop());
-    const dspName = fileName.replace(/\.dsp$/, '');
     // Step 1: get the compiler's in-memory FS (host FS is not visible to WASM).
     const faustFs = compiler.fs();
     const inputDir = path.dirname(path.resolve(inputFile));
@@ -82,7 +79,9 @@ const faust2wasmFiles = async (
     const ensureFsDir = (dir) => {
         try {
             faustFs.mkdirTree(dir);
-        } catch {}
+        } catch {
+            // Already present, or created concurrently: either is fine.
+        }
     };
     const isFaustSource = (filePath) => {
         const ext = path.extname(filePath).toLowerCase();
@@ -90,7 +89,8 @@ const faust2wasmFiles = async (
     };
     // Step 4: mirror a host include directory into the in-memory FS.
     const copyIncludeDirToFs = (srcDir, destDir) => {
-        if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) return;
+        if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory())
+            return;
         const entries = fs.readdirSync(srcDir, { withFileTypes: true });
         for (const entry of entries) {
             const srcPath = path.join(srcDir, entry.name);
@@ -133,7 +133,11 @@ const faust2wasmFiles = async (
             memfsIncludeDirs.push(includeDir.path);
             continue;
         }
-        const memfsDir = path.posix.join('/faust', 'user', `inc${includeIndex}`);
+        const memfsDir = path.posix.join(
+            '/faust',
+            'user',
+            `inc${includeIndex}`
+        );
         includeIndex += 1;
         copyIncludeDirToFs(includeDir.path, memfsDir);
         memfsIncludeDirs.push(memfsDir);

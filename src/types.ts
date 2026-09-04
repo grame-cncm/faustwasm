@@ -198,21 +198,14 @@ export interface FaustUIMeta {
 export type FaustUIGroupType = 'vgroup' | 'hgroup' | 'tgroup';
 export type FaustUIOutputType = 'hbargraph' | 'vbargraph';
 export type FaustUIInputType =
-    | 'vslider'
-    | 'hslider'
-    | 'button'
-    | 'checkbox'
-    | 'nentry'
-    | 'soundfile';
+    'vslider' | 'hslider' | 'button' | 'checkbox' | 'nentry' | 'soundfile';
 export interface FaustUIGroup {
     type: FaustUIGroupType;
     label: string;
     items: FaustUIItem[];
 }
 export type FaustUIType =
-    | FaustUIGroupType
-    | FaustUIOutputType
-    | FaustUIInputType;
+    FaustUIGroupType | FaustUIOutputType | FaustUIInputType;
 
 export interface AudioParamDescriptor {
     automationRate?: AutomationRate;

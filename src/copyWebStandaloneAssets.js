@@ -5,7 +5,6 @@ import { cpSync, cpSyncModify } from '../fileutils.js';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const __filename = fileURLToPath(import.meta.url);
 
 /**
  * A build stamp, as `YYYYMMDD-HHmm`.

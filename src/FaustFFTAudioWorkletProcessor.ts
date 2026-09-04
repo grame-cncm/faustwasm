@@ -47,8 +47,7 @@ export interface FaustFFTAudioWorkletProcessorDependencies {
     FaustAudioWorkletProcessorCommunicator: typeof FaustAudioWorkletProcessorCommunicator;
     FFTUtils: typeof FFTUtils;
 }
-export interface FaustFFTAudioWorkletNodeOptions
-    extends AudioWorkletNodeOptions {
+export interface FaustFFTAudioWorkletNodeOptions extends AudioWorkletNodeOptions {
     processorOptions: FaustFFTAudioWorkletProcessorOptions;
 }
 export interface FaustFFTAudioWorkletProcessorOptions {
@@ -360,7 +359,9 @@ const getFaustFFTAudioWorkletProcessor = (
                 // block granularity here, as for everything else this
                 // processor is handed. See `fEventQueue`.
                 if (event.type === 'wam-midi')
-                    this.atTime(event, () => this.midiMessage(event.data.bytes));
+                    this.atTime(event, () =>
+                        this.midiMessage(event.data.bytes)
+                    );
             };
         }
 

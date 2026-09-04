@@ -14,7 +14,7 @@ Guidance for AI coding agents working in this repository.
   - `FaustAudioWorkletProcessor.ts` / `FaustAudioWorkletNode.ts` — the AudioWorklet pair; timed events queue on the processor side.
   - `FaustFFTAudioWorkletProcessor.ts` — FFT variant (block-granular control, not sample-accurate, by design).
 - `scripts/` — CLI tools (`faust2wasm-ts`, `faust2svg-ts`, …) declared in `package.json` `bin`.
-- `dist/` — build output (esbuild), committed. Do not edit by hand; rebuild instead.
+- `dist/` — build output (esbuild). Gitignored, so a fresh clone has none: build before running anything that imports it (the test scripts do it for you). It is *not* in `.npmignore`, so it is what the npm package actually ships. Do not edit by hand; rebuild instead.
 - `test/` — see below.
 
 ## Build, test, lint

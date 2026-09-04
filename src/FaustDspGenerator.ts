@@ -80,7 +80,7 @@ export interface IFaustDspGenerator {
         name: string,
         code: string,
         sp?: boolean,
-        bufferSize?: number,
+        bufferSize?: number
     ): Promise<IFaustMonoWebAudioNode | IFaustPolyWebAudioNode | null>;
 }
 
@@ -383,15 +383,14 @@ export class FaustMonoDspGenerator implements IFaustMonoDspGenerator {
                     .get(context)
                     ?.has(processorName)
             ) {
-                try {
-                    const processorCode = `
+                const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
-                        processorName,
-                        dspName: name,
-                        dspMeta: meta,
-                        poly: false
-                    } as FaustData)};
+                    processorName,
+                    dspName: name,
+                    dspMeta: meta,
+                    poly: false
+                } as FaustData)};
 // Implementation needed classes of functions
 var ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 var FaustDspInstance = ${FaustDspInstance.name};
@@ -421,19 +420,16 @@ const dependencies = {
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
 `;
-                    const url = URL.createObjectURL(
-                        new Blob([processorCode], { type: 'text/javascript' })
-                    );
-                    await context.audioWorklet.addModule(url);
-                    // Keep the DSP name
-                    FaustMonoDspGenerator.gWorkletProcessors
-                        .get(context)
-                        ?.add(processorName);
-                } catch (e) {
-                    // console.error(`=> exception raised while running createMonoNode: ${e}`);
-                    // console.error(`=> check that your page is served using https.${e}`);
-                    throw e;
-                }
+                const url = URL.createObjectURL(
+                    new Blob([processorCode], { type: 'text/javascript' })
+                );
+                // Fails when the page is not served from a secure origin
+                // (https, or localhost): the classic cause here.
+                await context.audioWorklet.addModule(url);
+                // Keep the DSP name
+                FaustMonoDspGenerator.gWorkletProcessors
+                    .get(context)
+                    ?.add(processorName);
             }
             // Create the AWN
             const node = new FaustMonoAudioWorkletNode(context, {
@@ -480,15 +476,14 @@ const dependencies = {
                 .get(context)
                 ?.has(processorName)
         ) {
-            try {
-                const processorCode = `
+            const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
-                    processorName,
-                    dspName: name,
-                    dspMeta: meta,
-                    fftOptions
-                } as FaustFFTData)};
+                processorName,
+                dspName: name,
+                dspMeta: meta,
+                fftOptions
+            } as FaustFFTData)};
 // Implementation needed classes of functions
 var ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 var FaustDspInstance = ${FaustDspInstance.name};
@@ -520,19 +515,16 @@ const dependencies = {
 // Generate the actual AudioWorkletProcessor code
 (${getFaustFFTAudioWorkletProcessor.toString()})(dependencies, faustData);
 `;
-                const url = URL.createObjectURL(
-                    new Blob([processorCode], { type: 'text/javascript' })
-                );
-                await context.audioWorklet.addModule(url);
-                // Keep the DSP name
-                FaustMonoDspGenerator.gWorkletProcessors
-                    .get(context)
-                    ?.add(processorName);
-            } catch (e) {
-                // console.error(`=> exception raised while running createMonoNode: ${e}`);
-                // console.error(`=> check that your page is served using https.${e}`);
-                throw e;
-            }
+            const url = URL.createObjectURL(
+                new Blob([processorCode], { type: 'text/javascript' })
+            );
+            // Fails when the page is not served from a secure origin
+            // (https, or localhost): the classic cause here.
+            await context.audioWorklet.addModule(url);
+            // Keep the DSP name
+            FaustMonoDspGenerator.gWorkletProcessors
+                .get(context)
+                ?.add(processorName);
         }
         // Create the AWN
         const node = new FaustMonoAudioWorkletNode(context, {
@@ -585,25 +577,19 @@ const dependencies = {
         };
         // const sampleSize = meta.compile_options.match("-double") ? 8 : 4;
         // Dynamically create AudioWorkletProcessor if code not yet created
-        try {
-            // DSP name and JSON string for DSP are generated
-            const faustData = {
-                processorName,
-                dspName: name,
-                dspMeta: meta,
-                poly: false
-            } as FaustData;
-            // Generate the actual AudioWorkletProcessor code
-            const Processor = getFaustAudioWorkletProcessor(
-                dependencies,
-                faustData
-            );
-            return Processor;
-        } catch (e) {
-            // console.error(`=> exception raised while running createMonoNode: ${e}`);
-            // console.error(`=> check that your page is served using https.${e}`);
-            throw e;
-        }
+        // DSP name and JSON string for DSP are generated
+        const faustData = {
+            processorName,
+            dspName: name,
+            dspMeta: meta,
+            poly: false
+        } as FaustData;
+        // Generate the actual AudioWorkletProcessor code
+        const Processor = getFaustAudioWorkletProcessor(
+            dependencies,
+            faustData
+        );
+        return Processor;
     }
 
     async createOfflineProcessor(
@@ -872,16 +858,15 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
                     .get(context)
                     ?.has(processorName)
             ) {
-                try {
-                    const processorCode = `
+                const processorCode = `
 // DSP name and JSON string for DSP are generated
 const faustData = ${JSON.stringify({
-                        processorName,
-                        dspName: name,
-                        dspMeta: voiceMeta,
-                        poly: true,
-                        effectMeta
-                    } as FaustData)};
+                    processorName,
+                    dspName: name,
+                    dspMeta: voiceMeta,
+                    poly: true,
+                    effectMeta
+                } as FaustData)};
 // Implementation needed classes of functions
 var ${FaustDspInstance.name} = ${FaustDspInstance.toString()}
 var FaustDspInstance = ${FaustDspInstance.name};
@@ -913,19 +898,16 @@ const dependencies = {
 // Generate the actual AudioWorkletProcessor code
 (${getFaustAudioWorkletProcessor.toString()})(dependencies, faustData);
 `;
-                    const url = URL.createObjectURL(
-                        new Blob([processorCode], { type: 'text/javascript' })
-                    );
-                    await context.audioWorklet.addModule(url);
-                    // Keep the DSP name
-                    FaustPolyDspGenerator.gWorkletProcessors
-                        .get(context)
-                        ?.add(processorName);
-                } catch (e) {
-                    // console.error(`=> exception raised while running createPolyNode: ${e}`);
-                    // console.error(`=> check that your page is served using https.${e}`);
-                    throw e;
-                }
+                const url = URL.createObjectURL(
+                    new Blob([processorCode], { type: 'text/javascript' })
+                );
+                // Fails when the page is not served from a secure origin
+                // (https, or localhost): the classic cause here.
+                await context.audioWorklet.addModule(url);
+                // Keep the DSP name
+                FaustPolyDspGenerator.gWorkletProcessors
+                    .get(context)
+                    ?.add(processorName);
             }
             // Create the AWN
             // `addModule` above resolves even when the module's top-level code
@@ -981,36 +963,29 @@ const dependencies = {
         const effectMeta = effectFactory
             ? JSON.parse(effectFactory.json)
             : undefined;
-        const sampleSize = voiceMeta.compile_options.match('-double') ? 8 : 4;
         // Dynamically create AudioWorkletProcessor if code not yet created
-        try {
-            const dependencies = {
-                FaustBaseWebAudioDsp,
-                FaustMonoWebAudioDsp: undefined,
-                FaustWasmInstantiator,
-                FaustPolyWebAudioDsp,
-                FaustWebAudioDspVoice,
-                FaustAudioWorkletProcessorCommunicator
-            };
-            // DSP name and JSON string for DSP are generated
-            const faustData = {
-                processorName,
-                dspName: name,
-                dspMeta: voiceMeta,
-                poly: true,
-                effectMeta
-            } as FaustData;
-            // Generate the actual AudioWorkletProcessor code
-            const Processor = getFaustAudioWorkletProcessor<true>(
-                dependencies,
-                faustData
-            );
-            return Processor;
-        } catch (e) {
-            // console.error(`=> exception raised while running createPolyNode: ${e}`);
-            // console.error(`=> check that your page is served using https.${e}`);
-            throw e;
-        }
+        const dependencies = {
+            FaustBaseWebAudioDsp,
+            FaustMonoWebAudioDsp: undefined,
+            FaustWasmInstantiator,
+            FaustPolyWebAudioDsp,
+            FaustWebAudioDspVoice,
+            FaustAudioWorkletProcessorCommunicator
+        };
+        // DSP name and JSON string for DSP are generated
+        const faustData = {
+            processorName,
+            dspName: name,
+            dspMeta: voiceMeta,
+            poly: true,
+            effectMeta
+        } as FaustData;
+        // Generate the actual AudioWorkletProcessor code
+        const Processor = getFaustAudioWorkletProcessor<true>(
+            dependencies,
+            faustData
+        );
+        return Processor;
     }
 
     async createOfflineProcessor(
@@ -1108,13 +1083,13 @@ interface JSONData {
 }
 
 export class FaustDspGenerator implements IFaustDspGenerator {
-    
     private static compilerPromise: Promise<FaustCompiler> | null = null;
-    
+
     // Analyze the metadata of a Faust JSON file and extract the [midi:on] and [nvoices:n] options
-    private extractMidiAndNvoices(
-        jsonData: JSONData
-    ): { midi: boolean; nvoices: number } {
+    private extractMidiAndNvoices(jsonData: JSONData): {
+        midi: boolean;
+        nvoices: number;
+    } {
         const optionsMetadata = jsonData.meta.find((meta) => meta.options);
         if (optionsMetadata && optionsMetadata.options) {
             const options = optionsMetadata.options;
@@ -1133,7 +1108,7 @@ export class FaustDspGenerator implements IFaustDspGenerator {
             return { midi: false, nvoices: -1 };
         }
     }
-    
+
     /**
      * Compile DSP code, inspect metadata for [nvoices:] (and optionally [midi:on]), and build either a mono
      * or poly WebAudio node (ScriptProcessor or AudioWorklet depending on `sp`). Compilation uses a shared,
@@ -1144,7 +1119,7 @@ export class FaustDspGenerator implements IFaustDspGenerator {
         name: string,
         code: string,
         sp?: boolean,
-        bufferSize?: number,
+        bufferSize?: number
     ): Promise<IFaustMonoWebAudioNode | IFaustPolyWebAudioNode | null> {
         const getCompiler = async () => {
             if (!FaustDspGenerator.compilerPromise) {
@@ -1152,10 +1127,9 @@ export class FaustDspGenerator implements IFaustDspGenerator {
                 // Falling back to document/baseURI keeps things working when import.meta.url is unavailable (es2019 target).
                 const baseURL =
                     (typeof document !== 'undefined'
-                        ? ('src' in (document.currentScript || {})
-                              ? (document.currentScript as HTMLScriptElement)
-                                    .src
-                              : document.baseURI)
+                        ? 'src' in (document.currentScript || {})
+                            ? (document.currentScript as HTMLScriptElement).src
+                            : document.baseURI
                         : undefined) ||
                     (typeof window !== 'undefined'
                         ? window.location.href
@@ -1165,7 +1139,7 @@ export class FaustDspGenerator implements IFaustDspGenerator {
                 const jsURL = new URL(
                     '../libfaust-wasm/libfaust-wasm.js',
                     baseURL
-                    ).href;
+                ).href;
                 const dataURL = jsURL.replace(/c?js$/, 'data');
                 const wasmURL = jsURL.replace(/c?js$/, 'wasm');
                 FaustDspGenerator.compilerPromise =
