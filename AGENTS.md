@@ -47,6 +47,7 @@ npm run measure    # sample-accuracy measurement in headless Chromium
 - `FaustAudioWorkletProcessor` code runs on the audio thread: no allocation in the per-block path (buffers and event arrays are reused), no throwing out of `process` (a throw kills the node for good).
 - Timed events must keep these invariants: events taken off the queue are always applied, even when `compute` returns early; timestamps are finite whole frames; a panic (CC 120/123, `instanceClear`, `stop`, `destroy`) flushes pending events.
 - Polyphony: voice stealing picks the voice with the smallest global allocation date (`fDate` on `FaustPolyWebAudioDsp`); stolen voices render their crossfade over the whole block. Regression tests in `test/unit/voice-steal.test.mjs` and `voice-legato.test.mjs`.
+- `test/unit/paths-agree.test.mjs` renders the same DSP down two routes and requires them to match sample for sample: offline against AudioWorklet, and the mono DSP against one polyphonic voice. It tests the glue rather than the wasm, and needs no regenerating when libfaust moves, since both sides move together. Note what it cannot catch: a change in code *shared* by both routes shifts them equally and stays green, which is what the direct unit tests above are for.
 - The mono/poly behavior is expected to stay bit-identical to the published package unless the change is deliberate — `npm run measure` and the unit tests are the safety net.
 
 ## Related repositories
