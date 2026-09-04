@@ -244,10 +244,10 @@ export interface AudioWorkletGlobalScope {
 
 export interface InterfaceFFT {
     forward(
-        arr: ArrayLike<number> | ((arr: Float32Array) => any)
+        arr: ArrayLike<number> | ((arr: Float32Array) => void)
     ): Float32Array;
     inverse(
-        arr: ArrayLike<number> | ((arr: Float32Array) => any)
+        arr: ArrayLike<number> | ((arr: Float32Array) => void)
     ): Float32Array;
     dispose(): void;
 }
@@ -293,19 +293,19 @@ export declare const FFTUtils: {
         real: Float32Array | Float64Array,
         imag?: Float32Array | Float64Array,
         index?: Float32Array | Float64Array
-    ) => any;
+    ) => void;
     /** Convert from Faust processor's output to spectral data for Inversed FFT, real/imag are readonly, real/imag length = *fftSize* / 2 + 1; fft length depends on the FFT implementation */
     signalToFFT: (
         real: Float32Array | Float64Array,
         imag: Float32Array | Float64Array,
         fft: Float32Array | Float64Array
-    ) => any;
+    ) => void;
     /** Convert from Faust processor's output to direct audio output, real/imag are readonly, fft length = fftSize = (real/imag length - 1) * 2 */
     signalToNoFFT: (
         real: Float32Array | Float64Array,
         imag: Float32Array | Float64Array,
         fft: Float32Array | Float64Array
-    ) => any;
+    ) => void;
 };
 
 export interface AudioData {

@@ -22,6 +22,14 @@ export default defineConfig(
       // than leaving it unread. Unused *variables* are still reported, which
       // is the half that finds dead code.
       "@typescript-eslint/no-unused-vars": ["error", { args: "none" }],
+      // What is left of `any` in src/ sits on boundaries this package does
+      // not control: the compiler's JSON metadata, host event payloads
+      // (WAM, MIDI), the AudioWorklet global scope, Emscripten's module
+      // object. `unknown` there would only push narrowing onto every caller
+      // and change the published .d.ts. Callbacks whose return is ignored
+      // have been typed `void` instead of `any`, which is the half of this
+      // rule that was finding something.
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 );

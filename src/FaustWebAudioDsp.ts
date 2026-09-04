@@ -1174,14 +1174,14 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     // JSON parsing functions
     static parseUI(
         ui: FaustUIDescriptor,
-        callback: (item: FaustUIItem) => any
+        callback: (item: FaustUIItem) => void
     ) {
         ui.forEach((group) => this.parseGroup(group, callback));
     }
 
     static parseGroup(
         group: FaustUIGroup,
-        callback: (item: FaustUIItem) => any
+        callback: (item: FaustUIItem) => void
     ) {
         if (group.items) {
             this.parseItems(group.items, callback);
@@ -1189,12 +1189,12 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     }
     static parseItems(
         items: FaustUIItem[],
-        callback: (item: FaustUIItem) => any
+        callback: (item: FaustUIItem) => void
     ) {
         items.forEach((item) => this.parseItem(item, callback));
     }
 
-    static parseItem(item: FaustUIItem, callback: (item: FaustUIItem) => any) {
+    static parseItem(item: FaustUIItem, callback: (item: FaustUIItem) => void) {
         if (
             item.type === 'vgroup' ||
             item.type === 'hgroup' ||
@@ -1955,9 +1955,10 @@ export class FaustMonoWebAudioDsp
     // Public API
     compute(
         input:
-            Float32Array[] | ((input: Float32Array[] | Float64Array[]) => any),
+            Float32Array[] | ((input: Float32Array[] | Float64Array[]) => void),
         output:
-            Float32Array[] | ((output: Float32Array[] | Float64Array[]) => any),
+            | Float32Array[]
+            | ((output: Float32Array[] | Float64Array[]) => void),
         events?: FaustTimedEvent[]
     ) {
         // Check DSP state

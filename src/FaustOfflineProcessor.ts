@@ -20,7 +20,7 @@ export interface IFaustOfflineProcessor extends IFaustBaseWebAudioDsp {
     render(
         inputs?: Float32Array[],
         length?: number,
-        onUpdate?: (sample: number) => any
+        onUpdate?: (sample: number) => void
     ): Float32Array[];
 }
 
@@ -257,7 +257,7 @@ export class FaustOfflineProcessor<Poly extends boolean = false> {
     render(
         inputs: Float32Array[] = [],
         length = this.fBufferSize,
-        onUpdate?: (sample: number) => any
+        onUpdate?: (sample: number) => void
     ): Float32Array[] {
         let l = 0;
         const outputs = new Array(this.fDSPCode.getNumOutputs())
