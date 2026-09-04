@@ -333,7 +333,10 @@ const renderMono = async (pitch, velocity) => {
  */
 const renderPoly = async (voices, pitch, velocity) => {
     const generator = new FaustPolyDspGenerator();
-    await generator.compile(compiler, 'instpoly', INSTRUMENT, '-ftz 2', voices);
+    // The voice count belongs to createOfflineProcessor, not here: compile's
+    // fifth parameter is the effect's Faust source, and passing a number
+    // there reached the emscripten binding as a non-string.
+    await generator.compile(compiler, 'instpoly', INSTRUMENT, '-ftz 2');
     const processor = await generator.createOfflineProcessor(
         SAMPLE_RATE,
         BLOCK,
