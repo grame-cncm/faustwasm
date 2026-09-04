@@ -36,7 +36,7 @@ npm run measure    # sample-accuracy measurement in headless Chromium
   - The `.dsp` fixtures are discovered, not listed: dropping one into `test/` adds it to the sweep. A fixture that needs extra flags to compile goes in `DSP_EXTRA_ARGS` in `test/cli/runner.mjs` (as `foo.dsp` does, which needs `-I test/includes`).
   - The expected file set per mode lives in `test/cli/expected.mjs`; adding an asset to `assets/standalone/` means updating it.
 - `npm run measure` needs Playwright, which is deliberately **not** a dependency: `npm i --no-save playwright && npx playwright install chromium`. Keep it that way.
-- `test/node` holds standalone smoke scripts (`node test/node/test.js`) and `test/web` manual browser pages; they are not part of `npm test`.
+- `test/web` holds manual browser pages; they are not part of `npm test`. (`test/node` used to hold smoke scripts no npm script ran; they are now `test/unit/param-api.test.mjs`.)
 - `instantiateFaustModuleFromFile` writes a uniquely-named wrapper module next to `libfaust-wasm.js` and deletes it after import. The unique name is what makes concurrent compilations safe; do not go back to a fixed one.
 
 ## Conventions and invariants

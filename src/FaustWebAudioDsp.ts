@@ -2065,20 +2065,21 @@ export class FaustMonoWebAudioDsp
     }
 
     setParamValue(path: string, value: number) {
+        // A path that is not in the table used to reach wasm as `undefined`,
+        // which the binding coerces to offset 0: a typo, or a path kept from
+        // an older version of the DSP, silently wrote over the head of the
+        // DSP struct and came back out as a full-scale spike.
+        const index = this.fPathTable[path];
+        if (index === undefined) return;
         if (this.fPlotHandler)
             this.fCachedEvents.push({ type: 'param', data: { path, value } });
-        this.fInstance.api.setParamValue(
-            this.fDSP,
-            this.fPathTable[path],
-            value
-        );
+        this.fInstance.api.setParamValue(this.fDSP, index, value);
         this.callInputParamHandler(path, this.getParamValue(path));
     }
     getParamValue(path: string) {
-        return this.fInstance.api.getParamValue(
-            this.fDSP,
-            this.fPathTable[path]
-        );
+        const index = this.fPathTable[path];
+        if (index === undefined) return 0;
+        return this.fInstance.api.getParamValue(this.fDSP, index);
     }
 
     getMeta() {
@@ -2868,6 +2869,13 @@ export class FaustPolyWebAudioDsp
     }
 
     setParamValue(path: string, value: number) {
+        // Same guard as the mono case, and it matters more here: an unknown
+        // path fell through to the voice branch and wrote offset 0 of every
+        // voice at once. Effect parameters are in the table too -- the effect
+        // UI is parsed into it in the constructor -- so this rejects only
+        // paths that belong to neither.
+        const index = this.fPathTable[path];
+        if (index === undefined) return;
         if (this.fPlotHandler)
             this.fCachedEvents.push({ type: 'param', data: { path, value } });
         if (
@@ -2875,30 +2883,25 @@ export class FaustPolyWebAudioDsp
             FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) &&
             this.fInstance.effectAPI
         ) {
-            this.fInstance.effectAPI.setParamValue(
-                this.fEffect,
-                this.fPathTable[path],
-                value
-            );
+            this.fInstance.effectAPI.setParamValue(this.fEffect, index, value);
         } else {
             this.fVoiceTable.forEach((voice) =>
-                voice.setParamValue(this.fPathTable[path], value)
+                voice.setParamValue(index, value)
             );
         }
         this.callInputParamHandler(path, this.getParamValue(path));
     }
     getParamValue(path: string) {
+        const index = this.fPathTable[path];
+        if (index === undefined) return 0;
         if (
             this.fJSONEffect &&
             FaustPolyWebAudioDsp.findPath(this.fJSONEffect.ui, path) &&
             this.fInstance.effectAPI
         ) {
-            return this.fInstance.effectAPI.getParamValue(
-                this.fEffect,
-                this.fPathTable[path]
-            );
+            return this.fInstance.effectAPI.getParamValue(this.fEffect, index);
         } else {
-            return this.fVoiceTable[0].getParamValue(this.fPathTable[path]);
+            return this.fVoiceTable[0].getParamValue(index);
         }
     }
 
