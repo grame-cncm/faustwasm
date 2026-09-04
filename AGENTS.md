@@ -23,13 +23,19 @@ Guidance for AI coding agents working in this repository.
 npm run build      # full build: cjs, esm, bundled variants, .d.ts
 npm run build-esm  # fast build, enough for the unit tests
 npm test           # build-esm + Node's test runner on test/unit/*.test.mjs
+npm run test-cli   # build-esm + Node's test runner on test/cli/*.test.mjs
+npm run test-all   # both suites
 npm run lint       # prettier --check && eslint on src
 npm run measure    # sample-accuracy measurement in headless Chromium
 ```
 
 - Unit tests (`test/unit`) run in plain Node against `dist/esm`, with fakes for the wasm instance and the AudioWorklet scope (`test/unit/harness.mjs`). No browser needed. Always run `npm test` after touching `src/`.
+- CLI tests (`test/cli`) spawn the scripts in `scripts/` as real processes and assert on what they write to disk: the output-mode matrix of `faust2wasm.js`, every `.dsp` in `test/` (compiled, then reloaded from the generated artifacts and rendered offline), and the include/argument/failure edges. They take a few seconds and write under `test/out`. Run `npm run test-cli` after touching `scripts/`, `src/faust2wasmFiles.js`, `src/copyWebStandaloneAssets.js` or `assets/standalone/`.
+  - The `.dsp` fixtures are discovered, not listed: dropping one into `test/` adds it to the sweep. A fixture that needs extra flags to compile goes in `DSP_EXTRA_ARGS` in `test/cli/runner.mjs` (as `foo.dsp` does, which needs `-I test/includes`).
+  - The expected file set per mode lives in `test/cli/expected.mjs`; adding an asset to `assets/standalone/` means updating it.
 - `npm run measure` needs Playwright, which is deliberately **not** a dependency: `npm i --no-save playwright && npx playwright install chromium`. Keep it that way.
 - `test/node` holds standalone smoke scripts (`node test/node/test.js`) and `test/web` manual browser pages; they are not part of `npm test`.
+- `instantiateFaustModuleFromFile` writes a uniquely-named wrapper module next to `libfaust-wasm.js` and deletes it after import. The unique name is what makes concurrent compilations safe; do not go back to a fixed one.
 
 ## Conventions and invariants
 

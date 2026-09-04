@@ -1,0 +1,9 @@
+// A local library that lives outside the DSP's own directory, so that
+// reaching it requires `-I test/includes`. It backs the README's include
+// example and the CLI's include-remapping test.
+declare name "mylib";
+
+import("stdfaust.lib");
+
+// A gain stage with a slider, enough to show up in the generated metadata.
+mygain = *(hslider("gain", 0.5, 0, 1, 0.01));

@@ -46,14 +46,25 @@ ${jsCode}
 
 export default ${jsCode.match(jsCodeHead)?.[1]};
 `;
-        const jsFileMod = jsFile.replace(/c?js$/, 'mjs');
+        // The wrapped module has to be written out before it can be imported,
+        // and the name has to be unique: a fixed one makes two concurrent
+        // compilations race, each unlinking the file the other is still
+        // importing. It stays in the same directory so that `__dirname` inside
+        // the emscripten module keeps pointing at libfaust-wasm.
+        const unique = `${process.pid.toString(36)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        const jsFileMod = jsFile.replace(/c?js$/, `${unique}.mjs`);
         await fs.writeFile(jsFileMod, jsCode);
-        FaustModule = (
-            await import(
-                /* webpackIgnore: true */ pathToFileURL(jsFileMod).href
-            )
-        ).default;
-        await fs.unlink(jsFileMod);
+        try {
+            FaustModule = (
+                await import(
+                    /* webpackIgnore: true */ pathToFileURL(jsFileMod).href
+                )
+            ).default;
+        } finally {
+            // Cleanup must not mask an import failure, nor fail the call when
+            // the module loaded fine.
+            await fs.unlink(jsFileMod).catch(() => {});
+        }
         // Using a type assertion `as ArrayBuffer` to satisfy the strict type checking.
         dataBinary = new Uint8Array(await fs.readFile(dataFile))
             .buffer as ArrayBuffer;

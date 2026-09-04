@@ -63,7 +63,7 @@ For example:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/mono.dsp test/out
 ```
-will create a set of files: `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html` in the `out` folder. `-no-template` option will omit `index.js` and `index.html` files.
+will create a set of files: `index.js`, `create-node.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html` and the `faustwasm` folder in the `out` folder. The `-no-template` option omits everything but `dsp-module.wasm` and `dsp-meta.json`.
 
 Polyphonic instrument with:
 
@@ -71,7 +71,7 @@ Polyphonic instrument with:
 rm -rf test/out # make sure you are under the faustwasm directory.
 node scripts/faust2wasm.js test/poly.dsp test/out -poly
 ```
-will create a set of files: `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html` (and possibly `effect-module.wasm`, `effect-meta.json`) in the `out` folder.
+will create a set of files: `index.js`, `create-node.js`, `dsp-module.wasm`, `dsp-meta.json`, `mixer-module.wasm`, `index.html` and the `faustwasm` folder (and, when the DSP source defines an `effect`, `effect-module.wasm` and `effect-meta.json`) in the `out` folder.
 
 #### Local include files and `-I`
 
@@ -83,7 +83,7 @@ The CLI runs the Faust compiler inside a WebAssembly in-memory filesystem, so it
 
 This means you can run the CLI from any working directory as long as your local includes live next to the DSP or are listed with `-I`.
 
-Example:
+Example, using the `test/foo.dsp` and `test/includes/mylib.lib` fixtures that ship with the repository (`mylib.lib` deliberately does not sit next to `foo.dsp`, so the build only works with `-I`):
 
 ```bash
 node scripts/faust2wasm.js -I test/includes test/foo.dsp test/out
@@ -96,7 +96,7 @@ You can create a standalone Progressive Web Application using the command line:
 ```bash
 node scripts/faust2wasm.js test/rev.dsp test/rev -pwa
 ```
-will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `create-node.js`, `faust-pwa.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
 
 The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. 
 
@@ -105,7 +105,7 @@ A standalone polyphonic and MIDI standalone Progressive Web Application can be c
 ```bash
 node scripts/faust2wasm.js test/organ1.dsp test/organ1 -poly -pwa
 ```
-will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `effect-module.wasm`, `effect-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `organ1` folder.
+will create the same set of files, plus `mixer-module.wasm` and, since `organ1.dsp` defines an `effect`, `effect-module.wasm` and `effect-meta.json`, in the `organ1` folder.
 
 #### Creating a standalone version of a Faust DSP, with audio and MIDI devices selector
 
@@ -114,7 +114,7 @@ You can create a standalone using the command line:
 ```bash
 node scripts/faust2wasm.js test/rev.dsp test/rev -standalone
 ```
-will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
+will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `create-node.js`, `dsp-module.wasm`, `dsp-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `rev` folder. 
 
 The folder contains the necessary ressources to deploy the Faust application as a PWA on a server, to be installed and used offline. Note that audio files used by the `soundfile` primitives in the DSP code will have to be mannually added in the folder. 
 
@@ -123,7 +123,7 @@ A standalone polyphonic and MIDI standalone Progressive Web Application can be c
 ```bash
 node scripts/faust2wasm.js test/organ1.dsp test/organ1 -poly -standalone
 ```
-will create a set of files: `icon.png`, `service-worker.js`, `manifest.json`, `index.js`, `dsp-module.wasm`, `dsp-meta.json`, `effect-module.wasm`, `effect-meta.json`, `index.html`, and the `faustwasm`, `faust-ui` folders in the `organ1` folder.
+will create the same set of files, plus `mixer-module.wasm` and, since `organ1.dsp` defines an `effect`, `effect-module.wasm` and `effect-meta.json`, in the `organ1` folder.
 
 #### Generate SVG Diagrams of a Faust DSP
 
@@ -323,6 +323,14 @@ npm i --no-save playwright
 npx playwright install chromium
 npm run measure
 ```
+
+CLI tests live in `test/cli` and run the scripts in `scripts/` as real processes, checking what they leave on disk. They cover every output mode of `faust2wasm.js` (default template, `-no-template`, `-standalone`, `-pwa`, each with and without `-poly`), every `.dsp` file in `test/` -- each one compiled, then loaded back from the generated `dsp-module.wasm` and `dsp-meta.json` and rendered offline -- and the edge cases: `-I` include handling, argument parsing, failure modes, and concurrent invocations. They need no browser:
+
+```bash
+npm run test-cli
+```
+
+`npm run test-all` runs the unit tests and the CLI tests together. The CLI tests write under `test/out`, which is gitignored, and take a few seconds.
 
 `test/node` contains standalone smoke-test scripts exercising the dynamic compiler and the parameter alias API. Build the ESM bundle first, then run them directly:
 

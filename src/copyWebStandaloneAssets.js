@@ -8,6 +8,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const __filename = fileURLToPath(import.meta.url);
 
 /**
+ * A build stamp, as `YYYYMMDD-HHmm`.
+ *
+ * The service worker names its cache `<dspName>_VERSION_DATE`, so this string
+ * is what makes a redeployed application drop the assets it cached last time
+ * instead of serving them forever.
+ *
+ * @returns {string}
+ */
+const versionDate = () => {
+    const now = new Date();
+    return (
+        now.getFullYear().toString() +
+        ('0' + (now.getMonth() + 1)).slice(-2) +
+        ('0' + now.getDate()).slice(-2) +
+        '-' +
+        ('0' + now.getHours()).slice(-2) +
+        ('0' + now.getMinutes()).slice(-2)
+    );
+};
+
+/**
  * @param {string} outputDir - The output directory.
  * @param {string} dspName - The name of the DSP to be loaded.
  * @param {boolean} [poly] - Whether the DSP is polyphonic.
@@ -23,7 +44,12 @@ const copyWebStandaloneAssets = (
     fs.mkdirSync(outputDir, { recursive: true });
 
     // Define find and replace patterns
-    const findAndReplace = ['FAUST_DSP_NAME', dspName];
+    const findAndReplace = [
+        'FAUST_DSP_NAME',
+        dspName,
+        'VERSION_DATE',
+        versionDate()
+    ];
     if (poly)
         findAndReplace.push('FAUST_DSP_VOICES = 0', 'FAUST_DSP_VOICES = 16');
     if (poly && effect)
@@ -105,19 +131,13 @@ const copyWebPWAAssets = (outputDir, dspName, poly = false, effect = false) => {
     console.log(`Writing assets files.`);
     fs.mkdirSync(outputDir, { recursive: true });
 
-    // Generate VERSION_DATE
-    const now = new Date();
-    const VERSION_DATE =
-        now.getFullYear().toString() +
-        ('0' + (now.getMonth() + 1)).slice(-2) +
-        ('0' + now.getDate()).slice(-2) +
-        '-' +
-        ('0' + now.getHours()).slice(-2) +
-        ('0' + now.getMinutes()).slice(-2);
-
     // Define find and replace patterns
-    const findAndReplace = ['FAUST_DSP_NAME', dspName];
-    findAndReplace.push('VERSION_DATE', VERSION_DATE);
+    const findAndReplace = [
+        'FAUST_DSP_NAME',
+        dspName,
+        'VERSION_DATE',
+        versionDate()
+    ];
 
     if (poly)
         findAndReplace.push('FAUST_DSP_VOICES = 0', 'FAUST_DSP_VOICES = 16');
