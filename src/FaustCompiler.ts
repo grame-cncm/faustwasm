@@ -205,9 +205,11 @@ class FaustCompiler implements IFaustCompiler {
         }
 
         // If code is already compiled, return the cached factory
-        const shaKey = await sha256(
-            name + code + args + (poly ? 'poly' : 'mono')
-        );
+        // JSON rather than concatenation: `name + code + args` cannot tell
+        // ("x", "process = _; // -ftz 2", "") from
+        // ("x", "process = _; // ", "-ftz 2"), and the second silently got
+        // the first's factory -- compiled without the flag it asked for.
+        const shaKey = await sha256(JSON.stringify([name, code, args, poly]));
         if (FaustCompiler.gFactories.has(shaKey)) {
             return FaustCompiler.gFactories.get(shaKey) || null;
         } else {
