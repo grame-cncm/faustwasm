@@ -72,10 +72,12 @@ export const runCli = (script, args, options = {}) => {
  * @param {string} script
  * @param {string[]} args
  * @param {{ cwd?: string }} [options]
- * @returns {Promise<{ status: number | null, stdout: string, stderr: string }>}
+ * @returns {Promise<{ status: number | null, stdout: string, stderr: string,
+ *   startedAt: number, endedAt: number }>}
  */
 export const runCliAsync = (script, args, options = {}) =>
     new Promise((resolve) => {
+        const startedAt = Date.now();
         const child = spawn(
             process.execPath,
             [path.join(ROOT, 'scripts', `${script}.js`), ...args],
@@ -85,7 +87,12 @@ export const runCliAsync = (script, args, options = {}) =>
         let stderr = '';
         child.stdout.on('data', (chunk) => (stdout += chunk));
         child.stderr.on('data', (chunk) => (stderr += chunk));
-        child.on('close', (status) => resolve({ status, stdout, stderr }));
+        // The window each run occupied, so a caller that means to test
+        // concurrency can check the runs actually overlapped rather than
+        // trust that they did.
+        child.on('close', (status) =>
+            resolve({ status, stdout, stderr, startedAt, endedAt: Date.now() })
+        );
     });
 
 /**

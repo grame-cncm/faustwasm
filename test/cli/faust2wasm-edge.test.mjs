@@ -231,4 +231,23 @@ test('several compilations can run at the same time', async () => {
         assert.equal(run.status, 0, `run ${i} failed: ${run.stderr}`);
         assert.ok(outExists(dirs[i], 'dsp-module.wasm'));
     }
+
+    // The premise, checked rather than assumed. An earlier version of this
+    // test drove the runs through `runCli`, which is spawnSync and therefore
+    // serialises: six compilations went by one after another and the test
+    // passed without ever putting two of them in the same instant. Requiring
+    // a real overlap is what makes the rest of it mean anything.
+    const overlapping = runs.filter((run) =>
+        runs.some(
+            (other) =>
+                other !== run &&
+                other.startedAt < run.endedAt &&
+                run.startedAt < other.endedAt
+        )
+    );
+    assert.ok(
+        overlapping.length >= 2,
+        `the runs did not overlap, so nothing concurrent was tested: ` +
+            runs.map((r) => `[${r.startedAt}, ${r.endedAt}]`).join(' ')
+    );
 });

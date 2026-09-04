@@ -22,6 +22,7 @@
         "test-cli": "npm run build-esm && node --test \"test/cli/*.test.mjs\"",
         "posttest-cli": "node test/cleanup.mjs",
         "test-all": "npm run test && npm run test-cli",
+        "test-mutants": "npm run build-esm && node test/mutants.mjs",
         "measure": "npm run build-esm && node test/timing/measure.mjs",
         "postbuild": "node postbuild.js",
         "prepack": "node test/cleanup.mjs"
