@@ -100,6 +100,27 @@ const MUTANTS = [
         tests: 'test/unit/paths-agree.test.mjs'
     },
     {
+        what: 'the AudioWorklet node is created without its DSP factory',
+        file: 'src/FaustDspGenerator.ts',
+        from: '                    name: processorName,\n                    factory,\n',
+        to: '                    name: processorName,\n',
+        tests: 'test/unit/node-render.test.mjs'
+    },
+    {
+        what: 'the generated processor module leaves out the instantiator',
+        file: 'src/FaustDspGenerator.ts',
+        from: 'var ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}\n',
+        to: '',
+        tests: 'test/unit/node-render.test.mjs'
+    },
+    {
+        what: 'the ScriptProcessor callback stops computing',
+        file: 'src/FaustScriptProcessorNode.ts',
+        from: 'return this.fDSPCode.compute(this.fInputs, this.fOutputs);',
+        to: 'return true;',
+        tests: 'test/unit/node-render.test.mjs'
+    },
+    {
         what: 'the factory cache key goes back to concatenation',
         file: 'src/FaustCompiler.ts',
         from: 'const shaKey = await sha256(JSON.stringify([name, code, args, poly]));',
