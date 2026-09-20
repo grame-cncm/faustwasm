@@ -61,8 +61,11 @@ const faust2wasmFiles = async (
     const faustFs = compiler.fs();
     const inputDir = path.dirname(path.resolve(inputFile));
     // Step 2: split include flags from other args so we can remap include paths.
+    /** @param {string[]} args */
     const parseIncludeArgs = (args) => {
+        /** @type {string[]} */
         const includeDirs = [];
+        /** @type {string[]} */
         const otherArgs = [];
         for (let i = 0; i < args.length; i += 1) {
             const arg = args[i];
@@ -76,6 +79,7 @@ const faust2wasmFiles = async (
         return { includeDirs, otherArgs };
     };
     // Step 3: helpers to build the in-memory include tree.
+    /** @param {string} dir */
     const ensureFsDir = (dir) => {
         try {
             faustFs.mkdirTree(dir);
@@ -83,11 +87,16 @@ const faust2wasmFiles = async (
             // Already present, or created concurrently: either is fine.
         }
     };
+    /** @param {string} filePath */
     const isFaustSource = (filePath) => {
         const ext = path.extname(filePath).toLowerCase();
         return ext === '.lib' || ext === '.dsp';
     };
     // Step 4: mirror a host include directory into the in-memory FS.
+    /**
+     * @param {string} srcDir
+     * @param {string} destDir
+     */
     const copyIncludeDirToFs = (srcDir, destDir) => {
         if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory())
             return;
@@ -106,9 +115,11 @@ const faust2wasmFiles = async (
     };
     // Step 5: parse include args and build a unified include list.
     const { includeDirs: rawIncludeDirs, otherArgs } = parseIncludeArgs(argv);
+    /** @type {{ type: 'host' | 'fs', path: string }[]} */
     const includeDirs = [];
     const seenHostDirs = new Set();
     const seenFsDirs = new Set();
+    /** @param {string} dir */
     const addIncludeDir = (dir) => {
         if (!dir) return;
         const resolved = path.resolve(dir);
@@ -126,6 +137,7 @@ const faust2wasmFiles = async (
     addIncludeDir(inputDir);
     rawIncludeDirs.forEach(addIncludeDir);
     // Step 7: map host include dirs into /faust/user/incN in the in-memory FS.
+    /** @type {string[]} */
     const memfsIncludeDirs = [];
     let includeIndex = 0;
     for (const includeDir of includeDirs) {
