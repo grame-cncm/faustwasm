@@ -105,15 +105,17 @@ export class WasmAllocator {
 
     /**
      * Allocates a block of memory of the specified size, returning the pointer to the
-     * beginning of the block. The block is allocated at the current offset and the
-     * offset is incremented by the size of the block.
+     * beginning of the block. The block is allocated at the current offset, aligned on
+     * 8 bytes, and the offset is incremented by the size of the block.
      *
      * @param sizeInBytes The size of the block to allocate in bytes.
      * @returns The offset (pointer) to the beginning of the allocated block.
      */
     alloc(sizeInBytes: number): number {
-        // Store the current offset as the start of the new block.
-        const currentOffset = this.allocatedBytes;
+        // Store the current offset as the start of the new block, aligned on 8 bytes:
+        // blocks hold double samples and int64 values, accessed with typed arrays views
+        // whose index is the byte offset divided by the item size.
+        const currentOffset = (this.allocatedBytes + 7) & ~7;
         // Calculate the new offset after allocating the requested block.
         const newOffset = currentOffset + sizeInBytes;
         // Get the total size of the WebAssembly memory in bytes.
@@ -185,6 +187,11 @@ export class WasmAllocator {
 
 /**
  * Soundfile class to handle soundfile data in wasm memory.
+ *
+ * The structure is the one of architecture/faust/gui/Soundfile.h, laid out flat:
+ * 4 pointers (fBuffers, fLength, fSR, fOffset), then 3 int32 (fChannels, fParts, fIsDouble).
+ * The generated code reads channel 'chan' as 'chan % fChannels', so fBuffers only holds
+ * the fChannels real channels: a soundfile can be read with more channels than it has.
  */
 export class Soundfile {
     /** Maximum number of soundfile parts. */
@@ -192,7 +199,10 @@ export class Soundfile {
         return 256;
     }
 
-    /** Maximum number of channels. */
+    /**
+     * @deprecated channels are no more duplicated up to MAX_CHAN: the generated code
+     * reads channel 'chan % fChannels'.
+     */
     static get MAX_CHAN() {
         return 64;
     }
@@ -218,12 +228,15 @@ export class Soundfile {
     private readonly fIntSize: number;
     private readonly fAllocator: WasmAllocator;
 
+    /**
+     * @param _maxChan - deprecated and ignored: only the curChan real channels are allocated
+     */
     constructor(
         allocator: WasmAllocator,
         sampleSize: number,
         curChan: number,
         length: number,
-        maxChan: number,
+        _maxChan: number,
         totalParts: number
     ) {
         this.fSampleSize = sampleSize;
@@ -238,11 +251,12 @@ export class Soundfile {
         this.fAllocator = allocator;
 
         console.log(
-            `Soundfile constructor: curChan: ${curChan}, length: ${length}, maxChan: ${maxChan}, totalParts: ${totalParts}`
+            `Soundfile constructor: curChan: ${curChan}, length: ${length}, totalParts: ${totalParts}`
         );
 
-        // Allocate wasm memory for the soundfile structure
-        this.fPtr = allocator.alloc(4 * this.fPtrSize); // 4 fPtrSize: fBuffers, fLength, fSR, fOffset
+        // Allocate wasm memory for the soundfile structure:
+        // fBuffers, fLength, fSR, fOffset pointers, then fChannels, fParts, fIsDouble int32
+        this.fPtr = allocator.alloc(4 * this.fPtrSize + 3 * 4);
 
         // Use the 4 or 8 bytes size for int. The access are then adapted in copyToOut and emptyFile methods
         this.fLength = allocator.alloc(
@@ -255,7 +269,7 @@ export class Soundfile {
             Soundfile.MAX_SOUNDFILE_PARTS * this.fIntSize
         );
 
-        this.fBuffers = this.allocBuffers(curChan, length, maxChan);
+        this.fBuffers = this.allocBuffers(curChan, length);
 
         //this.displayMemory("Allocated soundfile structure 1");
 
@@ -265,6 +279,11 @@ export class Soundfile {
         HEAP32[(this.fPtr + this.fPtrSize) >> 2] = this.fLength;
         HEAP32[(this.fPtr + 2 * this.fPtrSize) >> 2] = this.fSR;
         HEAP32[(this.fPtr + 3 * this.fPtrSize) >> 2] = this.fOffset;
+        // Read by the generated code to wrap the channel index (chan % fChannels): has to be >= 1
+        HEAP32[(this.fPtr + 4 * this.fPtrSize) >> 2] = curChan;
+        HEAP32[(this.fPtr + 4 * this.fPtrSize + 4) >> 2] = totalParts;
+        HEAP32[(this.fPtr + 4 * this.fPtrSize + 8) >> 2] =
+            this.fSampleSize === 8 ? 1 : 0;
 
         for (let chan = 0; chan < curChan; chan++) {
             const buffer: number = HEAP32[(this.fBuffers >> 2) + chan];
@@ -274,12 +293,8 @@ export class Soundfile {
         //this.displayMemory("Allocated soundfile structure 2");
     }
 
-    private allocBuffers(
-        curChan: number,
-        length: number,
-        maxChan: number
-    ): number {
-        const buffers = this.fAllocator.alloc(maxChan * this.fPtrSize);
+    private allocBuffers(curChan: number, length: number): number {
+        const buffers = this.fAllocator.alloc(curChan * this.fPtrSize);
 
         console.log(`allocBuffers buffers: ${buffers}`);
 
@@ -294,15 +309,6 @@ export class Soundfile {
         }
         //this.displayMemory("Allocated soundfile buffers");
         return buffers;
-    }
-
-    shareBuffers(curChan: number, maxChan: number) {
-        // Share the same buffers for all other channels so that we have maxChan channels available
-        const HEAP32 = this.fAllocator.getInt32Array();
-        for (let chan = curChan; chan < maxChan; chan++) {
-            HEAP32[(this.fBuffers >> 2) + chan] =
-                HEAP32[(this.fBuffers >> 2) + (chan % curChan)];
-        }
     }
 
     copyToOut(
@@ -1435,11 +1441,16 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         }
     }
 
+    /**
+     * Create a soundfile holding the max number of channels of all its parts.
+     *
+     * @param _maxChan - deprecated and ignored
+     */
     createSoundfile(
         allocator: WasmAllocator,
         soundfileIdList: string[],
         soundfiles: LooseFaustDspFactory['soundfiles'],
-        maxChan = Soundfile.MAX_CHAN
+        _maxChan?: number
     ) {
         let curChan = 1; // At least one channel
         let totalLength = 0;
@@ -1471,7 +1482,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             this.fSampleSize,
             curChan,
             totalLength,
-            maxChan,
+            curChan,
             soundfileIdList.length
         );
 
@@ -1485,7 +1496,7 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
             const audioData = soundfiles?.[soundfileId];
             if (audioData) {
                 //soundfile.displayMemory("BEFORE copyToOut");
-                soundfile.copyToOut(part, maxChan, offset, audioData);
+                soundfile.copyToOut(part, curChan, offset, audioData);
                 //soundfile.displayMemory("AFTER copyToOut");
                 offset += audioData.audioBuffer[0].length;
             } else {
@@ -1506,11 +1517,6 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         }
 
         //soundfile.displayMemory("After emptyFile");
-
-        // Share the same buffers for all other channels so that we have maxChan channels available
-        soundfile.shareBuffers(curChan, maxChan);
-
-        //soundfile.displayMemory("After shareBuffers");
 
         return soundfile;
     }

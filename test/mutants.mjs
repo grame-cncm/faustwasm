@@ -133,6 +133,20 @@ const MUTANTS = [
         from: 'fs.mkdirSync(outputDir, { recursive: true });',
         to: 'if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);',
         tests: 'test/cli/faust2wasm-edge.test.mjs'
+    },
+    {
+        what: 'the soundfile fChannels field the generated code wraps channels with is not written',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: 'HEAP32[(this.fPtr + 4 * this.fPtrSize) >> 2] = curChan;',
+        to: 'HEAP32[(this.fPtr + 4 * this.fPtrSize) >> 2] = 1;',
+        tests: 'test/unit/soundfile-wrap.test.mjs'
+    },
+    {
+        what: 'wasm memory blocks are no more aligned on 8 bytes for double samples',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: 'const currentOffset = (this.allocatedBytes + 7) & ~7;',
+        to: 'const currentOffset = this.allocatedBytes;',
+        tests: 'test/unit/soundfile-wrap.test.mjs'
     }
 ];
 
