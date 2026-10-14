@@ -43,7 +43,7 @@
         "faust2wasm-ts": "scripts/faust2wasm.js"
     },
     "author": "Grame-CNCM",
-    "license": "LGPL-3.0",
+    "license": "LGPL-2.1",
     "bugs": {
         "url": "https://github.com/grame-cncm/faustwasm/issues"
     },
