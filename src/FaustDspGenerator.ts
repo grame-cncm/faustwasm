@@ -671,44 +671,45 @@ export class FaustPolyDspGenerator implements IFaustPolyDspGenerator {
             // the voice and effect are adapted, possibly clearing buffers
             if (this.effectFactory) {
                 const effectJSON = JSON.parse(this.effectFactory.json);
+                const ins = effectJSON.inputs;
+                const outs = effectJSON.outputs;
+                // The voice, the effect inputs and the effect outputs share the mixing buffers,
+                // whose width is the largest of the three counts. 'adapt' is the adaptor of
+                // poly-dsp.h getEffectCode: split (<:) when there are at least as many inputs,
+                // merge (:>) otherwise, so one count must be a multiple of the other.
+                const adaptors = `\
+bus(n) = par(i,n,_);
+pad(n,w) = bus(n), par(i,w-n,0);
+width(F) = max(outputs(F), max(${ins},${outs}));
+adapt(1,n,m) = bus(n) <: bus(m);
+adapt(0,n,m) = bus(n) :> bus(m);
+// n channels to w: split when the effect takes w inputs, padded with silent channels otherwise
+widen(1,d,n,w) = bus(n);
+widen(0,1,n,w) = adapt(1,n,w);
+widen(0,0,n,w) = pad(n,w);
+// the voice's n channels out of the w of the buffers, the silent ones dropped
+real(1,n,w) = bus(n);
+real(0,n,w) = bus(n), par(i,w-n,!);
+// the w channels to the effect's e inputs: the voice's own channels adapted to them
+narrow(1,n,w,e) = bus(w);
+narrow(0,n,w,e) = real(n == w, n, w) : adapt(n <= e, n, e);
+`;
                 const dspCode = `\
-// Voice output is forced to 2, when DSP is stereo or effect has 2 ins or 2 outs,
-// so that the effect can process the 2 channels of the voice
-adaptOut(1,1,1) = _;
-adaptOut(1,1,2) = _ <: _,0;  // The left channel only is kept
-adaptOut(1,2,1) = _ <: _,_;
-adaptOut(1,2,2) = _ <: _,_;
-adaptOut(2,1,1) = _,_;
-adaptOut(2,1,2) = _,_;
-adaptOut(2,2,1) = _,_;
-adaptOut(2,2,2) = _,_;
-adaptor(F) = adaptOut(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
+${adaptors}
+adaptor(F) = widen(outputs(F) == width(F), ${ins} == width(F), outputs(F), width(F));
 dsp_code = environment{
     ${dspCodeAux}
 };
 process = dsp_code.process : adaptor(dsp_code.process);
 `;
                 const effectCode = `\
-// Inputs
-adaptIn(1,1,1) = _;
-adaptIn(1,1,2) = _,_ :> _;  
-adaptIn(1,2,1) = _,_;
-adaptIn(1,2,2) = _,_;
-adaptIn(2,1,1) = _,_ :> _;
-adaptIn(2,1,2) = _,_ :> _;
-adaptIn(2,2,1) = _,_;
-adaptIn(2,2,2) = _,_;
-// Outputs
-adaptOut(1,1) = _ <: _,0;   // The left channel only is kept
-adaptOut(1,2) = _,_;
-adaptOut(2,1) = _ <: _,0;   // The left channel only is kept
-adaptOut(2,2) = _,_;
-adaptorIns(F) = adaptIn(outputs(F),${effectJSON.inputs},${effectJSON.outputs});
-adaptorOuts = adaptOut(${effectJSON.inputs},${effectJSON.outputs});
+${adaptors}
+adaptorIns(F) = narrow(width(F) == ${ins}, outputs(F), width(F), ${ins});
+adaptorOuts(F) = widen(${outs} == width(F), 0, ${outs}, width(F));
 dsp_code = environment{
     ${dspCodeAux}
 };
-process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
+process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts(dsp_code.process);
 `;
                 this.voiceFactory = await compiler.createPolyDSPFactory(
                     name,
@@ -723,7 +724,15 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
                         args + ' -inpl'
                     );
                 } catch (e) {
+                    // The effect cannot be adapted to the voice: the voice is rendered without it,
+                    // rather than with an effect that does not fit its buffers
                     console.warn(e);
+                    this.effectFactory = null;
+                    this.voiceFactory = await compiler.createPolyDSPFactory(
+                        name,
+                        dspCodeAux,
+                        args
+                    );
                 }
             }
         } catch (e) {
@@ -734,6 +743,8 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts;
             if (!errorMessage.includes('undefined symbol : effect')) {
                 console.warn(e);
             }
+            // An effect compiled alone but not adapted to the voice is not used
+            this.effectFactory = null;
             this.voiceFactory = await compiler.createPolyDSPFactory(
                 name,
                 dspCodeAux,
