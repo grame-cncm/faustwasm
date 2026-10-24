@@ -147,6 +147,48 @@ const MUTANTS = [
         from: 'const currentOffset = (this.allocatedBytes + 7) & ~7;',
         to: 'const currentOffset = this.allocatedBytes;',
         tests: 'test/unit/soundfile-wrap.test.mjs'
+    },
+    {
+        what: 'compute hands on the NaN and Inf a DSP produces',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: '        this.clearNonFinite();',
+        to: '',
+        tests: 'test/unit/nonfinite.test.mjs'
+    },
+    {
+        what: 'the non-finite check trusts a block whose sum is not finite',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: 'if (sum - sum === 0) continue;',
+        to: 'continue;',
+        tests: 'test/unit/nonfinite.test.mjs'
+    },
+    {
+        what: 'a poisoned DSP reports itself on every block, not once',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: 'if (found && !this.fNonFiniteReported) {',
+        to: 'if (found) {',
+        tests: 'test/unit/nonfinite.test.mjs'
+    },
+    {
+        what: 'the worklet processor keeps the non-finite report to itself',
+        file: 'src/FaustAudioWorkletProcessor.ts',
+        from: "this.port.postMessage({ type: 'nonfinite' })",
+        to: 'undefined',
+        tests: 'test/unit/nonfinite.test.mjs'
+    },
+    {
+        what: 'the non-finite guard runs without a handler: opt-in in name only',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: '        if (!this.fNonFiniteHandler) return;',
+        to: '',
+        tests: 'test/unit/nonfinite.test.mjs'
+    },
+    {
+        what: 'the AudioWorklet node never tells its processor to guard',
+        file: 'src/FaustAudioWorkletNode.ts',
+        from: "type: 'setNonFiniteHandler',",
+        to: "type: 'setNonFiniteHandlerNot',",
+        tests: 'test/unit/nonfinite.test.mjs'
     }
 ];
 
