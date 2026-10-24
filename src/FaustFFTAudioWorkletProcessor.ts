@@ -4,7 +4,8 @@ import type FaustWasmInstantiator from './FaustWasmInstantiator';
 import type {
     FaustBaseWebAudioDsp,
     FaustMonoWebAudioDsp,
-    PlotHandler
+    PlotHandler,
+    NonFiniteHandler
 } from './FaustWebAudioDsp';
 import type {
     AudioParamDescriptor,
@@ -253,6 +254,7 @@ const getFaustFFTAudioWorkletProcessor = (
         private noIFFTBuffer: Float32Array;
 
         private fPlotHandler: PlotHandler | null = null;
+        private fNonFiniteHandler: NonFiniteHandler | null = null;
         private fCachedEvents: { type: string; data: any }[] = [];
         private fBufferNum = 0;
         private soundfiles: LooseFaustDspFactory['soundfiles'] = {};
@@ -708,6 +710,14 @@ const getFaustFFTAudioWorkletProcessor = (
                     this.fDSPCode?.setPlotHandler(this.fPlotHandler);
                     break;
                 }
+                // Non-finite guard set on demand
+                case 'setNonFiniteHandler': {
+                    this.fNonFiniteHandler = msg.data
+                        ? () => this.port.postMessage({ type: 'nonfinite' })
+                        : null;
+                    this.fDSPCode?.setNonFiniteHandler(this.fNonFiniteHandler);
+                    break;
+                }
                 case 'setupWamEventHandler': {
                     this.setupWamEventHandler();
                     break;
@@ -882,6 +892,7 @@ const getFaustFFTAudioWorkletProcessor = (
             this.fDSPCode.setInputParamHandler((path, value) =>
                 this.port.postMessage({ path, value, type: 'in-param' })
             );
+            this.fDSPCode.setNonFiniteHandler(this.fNonFiniteHandler);
             this.fDSPCode.setPlotHandler(this.fPlotHandler);
             const params = this.fDSPCode.getParams();
             this.fDSPCode.start();
