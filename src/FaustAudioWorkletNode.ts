@@ -3,6 +3,7 @@ import {
     OutputParamHandler,
     ComputeHandler,
     PlotHandler,
+    NonFiniteHandler,
     UIHandler,
     MetadataHandler,
     FaustBaseWebAudioDsp,
@@ -31,6 +32,7 @@ export class FaustAudioWorkletNode<
     protected fInputHandler: InputParamHandler | null;
     protected fComputeHandler: ComputeHandler | null;
     protected fPlotHandler: PlotHandler | null;
+    protected fNonFiniteHandler: NonFiniteHandler | null;
     protected fUICallback: UIHandler;
     protected fDescriptor: FaustUIInputItem[];
     protected fCommunicator: FaustAudioWorkletNodeCommunicator;
@@ -65,6 +67,7 @@ export class FaustAudioWorkletNode<
         this.fInputHandler = null;
         this.fComputeHandler = null;
         this.fPlotHandler = null;
+        this.fNonFiniteHandler = null;
         this.fDescriptor = [];
         this.fParamAliases = {};
 
@@ -113,6 +116,8 @@ export class FaustAudioWorkletNode<
             this.fInputHandler(e.data.path, e.data.value);
         } else if (e.data.type === 'plot' && this.fPlotHandler) {
             this.fPlotHandler(e.data.value, e.data.index, e.data.events);
+        } else if (e.data.type === 'nonfinite' && this.fNonFiniteHandler) {
+            this.fNonFiniteHandler();
         }
     };
 
@@ -225,6 +230,18 @@ export class FaustAudioWorkletNode<
     }
     getPlotHandler(): PlotHandler | null {
         return this.fPlotHandler;
+    }
+
+    setNonFiniteHandler(handler: NonFiniteHandler | null) {
+        this.fNonFiniteHandler = handler;
+        // Set the non-finite guard on processor side
+        this.port.postMessage({
+            type: 'setNonFiniteHandler',
+            data: !!this.fNonFiniteHandler
+        });
+    }
+    getNonFiniteHandler(): NonFiniteHandler | null {
+        return this.fNonFiniteHandler;
     }
 
     setupWamEventHandler() {

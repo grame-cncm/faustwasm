@@ -28,6 +28,7 @@ export type PlotHandler = (
     events?: { type: string; data: any }[]
 ) => void;
 export type MetadataHandler = (key: string, value: string) => void;
+export type NonFiniteHandler = () => void;
 
 /**
  * A control write due at a known frame inside the next block.
@@ -549,6 +550,30 @@ export interface IFaustBaseWebAudioDsp {
     getPlotHandler(): PlotHandler | null;
 
     /**
+     * Set the non-finite handler, and with it the non-finite guard: while a
+     * handler is set, 'compute' replaces every NaN or infinite output sample with
+     * 0, so nothing after the DSP is poisoned and no full-scale click reaches the
+     * output, and the handler is called the first time it happens. Without one,
+     * nothing is checked and the output is exactly what the DSP computed -- the
+     * guard is opt-in, like 'dsp_me_checker' on the C++ side.
+     *
+     * The DSP's own state usually stays broken (a filter or a delay line does not
+     * recover from a NaN), so the handler is the host's cue to say which DSP it
+     * was. It is called once per DSP instance, not once per block; a host that
+     * only wants the output cleared can pass a handler that does nothing.
+     *
+     * @param handler - the non-finite handler, or null to turn the guard off
+     */
+    setNonFiniteHandler(handler: NonFiniteHandler | null): void;
+
+    /**
+     * Get the non-finite handler.
+     *
+     * @return the current non-finite handler
+     */
+    getNonFiniteHandler(): NonFiniteHandler | null;
+
+    /**
      * Return instance number of audio inputs.
      *
      * @return the instance number of audio inputs
@@ -829,6 +854,10 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
     protected fOutputHandler: OutputParamHandler | null = null;
     protected fInputHandler: InputParamHandler | null = null;
     protected fComputeHandler: ComputeHandler | null = null;
+
+    // Told once when the DSP first produces a non-finite output sample
+    protected fNonFiniteHandler: NonFiniteHandler | null = null;
+    protected fNonFiniteReported = false;
 
     // To handle MIDI events plot
     protected fPlotHandler: PlotHandler | null = null;
@@ -1597,6 +1626,53 @@ export class FaustBaseWebAudioDsp implements IFaustBaseWebAudioDsp {
         return this.fPlotHandler;
     }
 
+    setNonFiniteHandler(handler: NonFiniteHandler | null) {
+        this.fNonFiniteHandler = handler;
+    }
+    getNonFiniteHandler() {
+        return this.fNonFiniteHandler;
+    }
+
+    /**
+     * With a non-finite handler set, replace every non-finite sample of the block
+     * just computed with 0, and report the first one to the handler.
+     *
+     * A control the compiler cannot know -- a Q, a divisor -- can make Faust code
+     * divide by zero. The NaN stays in the DSP's recursive state for good, and
+     * handed on it would poison every stateful node after this one for good too.
+     * Called on the DSP's own output channels, before they are copied or handed
+     * to an output callback, so every path out of 'compute' is covered.
+     */
+    protected clearNonFinite() {
+        // Opt-in: without a handler the output is left exactly as computed
+        if (!this.fNonFiniteHandler) return;
+        let found = false;
+        const outputs = this.getNumOutputs();
+        for (let chan = 0; chan < outputs; chan++) {
+            const dspOutput = this.fOutChannels[chan];
+            // Fast path, one add per sample: the sum of a block is finite when
+            // every sample is. (A sum that overflowed only costs the slow pass
+            // below, which then finds nothing.) x - x is 0 for a finite x, and
+            // NaN for NaN and for either infinity.
+            let sum = 0;
+            for (let frame = 0; frame < dspOutput.length; frame++) {
+                sum += dspOutput[frame];
+            }
+            if (sum - sum === 0) continue;
+            for (let frame = 0; frame < dspOutput.length; frame++) {
+                const sample = dspOutput[frame];
+                if (sample - sample !== 0) {
+                    dspOutput[frame] = 0;
+                    found = true;
+                }
+            }
+        }
+        if (found && !this.fNonFiniteReported) {
+            this.fNonFiniteReported = true;
+            this.fNonFiniteHandler();
+        }
+    }
+
     getNumInputs() {
         return -1;
     }
@@ -2049,6 +2125,9 @@ export class FaustMonoWebAudioDsp
 
         // Update bargraph
         this.updateOutputs();
+
+        // No NaN or Inf leaves the DSP
+        this.clearNonFinite();
 
         let forPlot = this.fOutChannels;
         if (typeof output === 'function') {
@@ -2851,6 +2930,9 @@ export class FaustPolyWebAudioDsp
 
         // Update bargraph
         this.updateOutputs();
+
+        // No NaN or Inf leaves the DSP
+        this.clearNonFinite();
 
         if (output !== undefined) {
             // Copy outputs
