@@ -2344,11 +2344,11 @@ export class FaustPolyWebAudioDsp
         this.setBufferOffset(offset);
         this.setMixingOffset(offset, count);
         this.fVoiceTable.forEach((voice) => {
-            if (voice.fCurNote === FaustWebAudioDspVoice.kFreeVoice) return;
             if (this.fStolen.length && this.fStolen.indexOf(voice) !== -1)
                 return;
-            // Compute current note
+            // Advance free voices too, so their smoothers follow control changes.
             voice.compute(count, this.fAudioInputs, this.fAudioMixing);
+            if (voice.fCurNote === FaustWebAudioDspVoice.kFreeVoice) return;
             // Mix it in result
             const level = this.fInstance.mixerAPI.mixCheckVoice(
                 count,
