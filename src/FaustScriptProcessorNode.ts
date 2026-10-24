@@ -7,7 +7,8 @@ import type {
     InputParamHandler,
     MetadataHandler,
     OutputParamHandler,
-    PlotHandler
+    PlotHandler,
+    NonFiniteHandler
 } from './FaustWebAudioDsp';
 
 /**
@@ -177,6 +178,13 @@ export class FaustScriptProcessorNode<
     }
     getPlotHandler() {
         return this.fDSPCode.getPlotHandler();
+    }
+
+    setNonFiniteHandler(handler: NonFiniteHandler | null) {
+        this.fDSPCode.setNonFiniteHandler(handler);
+    }
+    getNonFiniteHandler() {
+        return this.fDSPCode.getNonFiniteHandler();
     }
 
     getNumInputs() {

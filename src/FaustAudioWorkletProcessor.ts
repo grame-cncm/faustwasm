@@ -600,6 +600,15 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                     }
                     break;
                 }
+                // Non-finite guard set on demand
+                case 'setNonFiniteHandler': {
+                    this.fDSPCode.setNonFiniteHandler(
+                        msg.data
+                            ? () => this.port.postMessage({ type: 'nonfinite' })
+                            : null
+                    );
+                    break;
+                }
                 case 'setupWamEventHandler': {
                     this.setupWamEventHandler();
                     break;
