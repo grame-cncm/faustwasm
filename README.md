@@ -282,6 +282,25 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 })();
 ```
 
+### Smoothing controls in polyphonic instruments
+
+Idle polyphonic voices are not computed, so a control smoothed with `si.smoo` can retain an old value until the voice is reused. For controls that should take their current value when a note starts, use [`si.polySmooth`](https://faustlibraries.grame.fr/libs/signals/#sipolysmooth) with the instrument's `gate`:
+
+```faust
+import("stdfaust.lib");
+
+freq = nentry("freq", 440, 20, 20000, 1);
+gain = nentry("gain", 1, 0, 1, 0.01);
+gate = button("gate");
+level = hslider("level", 1, 0, 1, 0.01)
+    : si.polySmooth(gate, 0.999, 32);
+
+process = os.osc(freq) * gain
+    * en.adsr(0.01, 0.1, 0.8, 0.2, gate) * level <: _, _;
+```
+
+Here, `0.999` is the smoothing coefficient, and `32` is the number of samples before smoothing resumes after the gate rises. Later control changes during a held note are still smoothed.
+
 ### Sample-accurate scheduling
 
 Every control method on a Faust AudioWorklet node takes an optional `time` argument as its last parameter: `setParamValue(path, value, time)`, `keyOn(channel, pitch, velocity, time)`, `keyOff(channel, pitch, velocity, time)`, `midiMessage(data, time)`, `ctrlChange(channel, ctrl, value, time)`, `pitchWheel(channel, wheel, time)`. `time` is in AudioContext seconds — the same clock as `audioCtx.currentTime` and `AudioParam.setValueAtTime` — and the action lands on the exact sample that instant names, inside the audio block that contains it. The unit is the second (a JavaScript double), the granularity is the sample: the processor converts it with `Math.round(time * sampleRate)` to a frame on the audio clock, so an instant is honoured to the nearest sample (about 21 µs at 48 kHz):
