@@ -1,6 +1,6 @@
 {
     "name": "@grame/faustwasm",
-    "version": "0.19.1",
+    "version": "0.19.2",
     "description": "WebAssembly version of Faust Compiler",
     "main": "dist/cjs/index.js",
     "types": "dist/esm/index.d.ts",
@@ -51,7 +51,7 @@
     "devDependencies": {
         "@aws-crypto/sha256-js": "^5.2.0",
         "@eslint/js": "^9.39.1",
-        "@shren/faust-ui": "^1.1.16",
+        "@grame/faust-ui": "^1.2.0",
         "@types/node": "^20.12.7",
         "@webaudiomodules/api": "^2.0.0-alpha.6",
         "@webaudiomodules/sdk-parammgr": "^0.0.13",

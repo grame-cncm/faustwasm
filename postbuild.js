@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // @ts-ignore
 const __filename = fileURLToPath(import.meta.url);
 
-const faustUiDistPath = path.join(__dirname, "./node_modules/@shren/faust-ui/dist/esm");
+const faustUiDistPath = path.join(__dirname, "./node_modules/@grame/faust-ui/dist/esm");
 const faustUiDistDest = path.join(__dirname, "./assets/standalone/faust-ui");
 const faustUiDistDest2 = path.join(__dirname, "./test/faustlive-wasm/faust-ui");
 
@@ -28,7 +28,7 @@ try {
 
 cpSync(faustUiDistPath, faustUiDistDest);
 cpSync(faustUiDistPath, faustUiDistDest2);
-const faustUiDts = `export * from "@shren/faust-ui";\n`;
+const faustUiDts = `export * from "@grame/faust-ui";\n`;
 fs.writeFileSync(path.join(faustUiDistDest, "index.d.ts"), faustUiDts);
 fs.writeFileSync(path.join(faustUiDistDest2, "index.d.ts"), faustUiDts);
 
