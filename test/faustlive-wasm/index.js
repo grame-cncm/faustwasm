@@ -473,7 +473,8 @@ const deleteDSP = () => {
         DSP.disconnect(audio_context.destination);
         DSP.stopSensors();
         DSP.destroy();
-        faustUIRoot.innerHTML = "";
+        // Stops listening to the window and empties faustUIRoot
+        faustUI.destroy();
         DSP = null;
         faustUI = null;
     }
