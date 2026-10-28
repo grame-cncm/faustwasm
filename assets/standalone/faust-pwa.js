@@ -79,6 +79,9 @@ export class FaustPWA {
         // Keyboard to MIDI handing
         this.fKeyboard2MIDI = null;
 
+        /** @type {import("./faust-ui/index").FaustUI | null} */
+        this.fFaustUI = null;
+
         /**
          * Registers the service worker.
          */
@@ -329,7 +332,7 @@ export class FaustPWA {
             if (!this.fFaustNode) throw new Error("Faust DSP not compiled");
 
             // Create the Faust UI
-            await createFaustUI(this.fOptions.uiContainer, this.fFaustNode);
+            this.fFaustUI = await createFaustUI(this.fOptions.uiContainer, this.fFaustNode);
 
             this.dispatch('created', {
                 workletName: result.workletName,
@@ -351,6 +354,13 @@ export class FaustPWA {
         // Cleanup MIDI and Sensors
         this.stop();
         this.fFaustNode.destroy();
+
+        // Remove the UI listeners on the window, and the container createFaustUI appended
+        if (this.fFaustUI) {
+            this.fFaustUI.destroy();
+            this.fFaustUI.DOMroot.remove();
+            this.fFaustUI = null;
+        }
         this.dispatch('destroy', {});
     }
 

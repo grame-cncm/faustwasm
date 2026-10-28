@@ -167,7 +167,8 @@ async function connectToAudioInput(audioContext, id, faustNode, oldInputStreamNo
 /**
  * Creates a Faust UI for a Faust audio node.
  * 
- * @param {FaustAudioWorkletNode} faustNode 
+ * @param {FaustAudioWorkletNode} faustNode
+ * @returns {Promise<import("./faust-ui/index").FaustUI>} the UI, rendered in a container appended to divFaustUI
  */
 async function createFaustUI(divFaustUI, faustNode) {
     const { FaustUI } = await import("./faust-ui/index.js");
@@ -192,6 +193,7 @@ async function createFaustUI(divFaustUI, faustNode) {
     $container.style.minWidth = `${faustUI.minWidth}px`;
     $container.style.minHeight = `${faustUI.minHeight}px`;
     faustUI.resize();
+    return faustUI;
 };
 
 /**
