@@ -147,6 +147,13 @@ const MUTANTS = [
         from: 'const currentOffset = (this.allocatedBytes + 7) & ~7;',
         to: 'const currentOffset = this.allocatedBytes;',
         tests: 'test/unit/soundfile-wrap.test.mjs'
+    },
+    {
+        what: 'a vel or velocity control is collected only when its path ends in both',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: "item.endsWith('/vel') || item.endsWith('/velocity')",
+        to: "item.endsWith('/vel') && item.endsWith('/velocity')",
+        tests: 'test/unit/voice-velocity.test.mjs'
     }
 ];
 
