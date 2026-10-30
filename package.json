@@ -42,6 +42,18 @@
         "faust2svg-ts": "scripts/faust2svg.js",
         "faust2wasm-ts": "scripts/faust2wasm.js"
     },
+    "files": [
+        "dist/cjs",
+        "dist/cjs-bundle",
+        "dist/esm",
+        "dist/esm-bundle",
+        "libfaust-wasm",
+        "assets",
+        "scripts",
+        "src/*.js",
+        "/fileutils.js",
+        "COPYING.txt"
+    ],
     "author": "Grame-CNCM",
     "license": "LGPL-2.1",
     "bugs": {

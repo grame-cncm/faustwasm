@@ -14,7 +14,7 @@ Guidance for AI coding agents working in this repository.
   - `FaustAudioWorkletProcessor.ts` / `FaustAudioWorkletNode.ts` — the AudioWorklet pair; timed events queue on the processor side.
   - `FaustFFTAudioWorkletProcessor.ts` — FFT variant (block-granular control, not sample-accurate, by design).
 - `scripts/` — CLI tools (`faust2wasm-ts`, `faust2svg-ts`, …) declared in `package.json` `bin`.
-- `dist/` — build output (esbuild). Gitignored, so a fresh clone has none: build before running anything that imports it (the test scripts do it for you). It is *not* in `.npmignore`, so it is what the npm package actually ships. Do not edit by hand; rebuild instead.
+- `dist/` — build output (esbuild). Gitignored, so a fresh clone has none: build before running anything that imports it (the test scripts do it for you). Its four build directories are in the `files` list of `package.json`, so they are what the npm package actually ships, as they stand on disk: `npm publish` does not rebuild. Do not edit by hand; rebuild instead.
 - `test/` — see below.
 
 ## Build, test, lint
@@ -47,6 +47,7 @@ npm run measure    # sample-accuracy measurement in headless Chromium
 
 - Formatting is prettier's; run `npm run lint` before committing.
 - No new runtime dependencies without explicit maintainer approval; the package is meant to stay lean.
+- What gets published is the `files` whitelist in `package.json`, not an ignore list. A new file that `scripts/` needs at runtime has to be added there, or the CLI tools break once installed even though every test in this repo passes. Check with `npm pack --dry-run`. Root-level entries need a leading `/`: a bare `fileutils.js` also matches `dist/fileutils.js`.
 - `FaustAudioWorkletProcessor` code runs on the audio thread: no allocation in the per-block path (buffers and event arrays are reused), no throwing out of `process` (a throw kills the node for good).
 - Timed events must keep these invariants: events taken off the queue are always applied, even when `compute` returns early; timestamps are finite whole frames; a panic (CC 120/123, `instanceClear`, `stop`, `destroy`) flushes pending events.
 - Polyphony: voice stealing picks the voice with the smallest global allocation date (`fDate` on `FaustPolyWebAudioDsp`); stolen voices render their crossfade over the whole block. Regression tests in `test/unit/voice-steal.test.mjs` and `voice-legato.test.mjs`.
