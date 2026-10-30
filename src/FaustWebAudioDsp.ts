@@ -2218,7 +2218,7 @@ export class FaustWebAudioDspVoice {
                 this.fKeyLabel.push(pathTable[item]);
             } else if (item.endsWith('/gain')) {
                 this.fGainLabel.push(pathTable[item]);
-            } else if (item.endsWith('/vel') && item.endsWith('/velocity')) {
+            } else if (item.endsWith('/vel') || item.endsWith('/velocity')) {
                 this.fVelLabel.push(pathTable[item]);
             }
         });
