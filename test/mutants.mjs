@@ -217,6 +217,20 @@ const MUTANTS = [
         from: "type: 'setNonFiniteHandler',",
         to: "type: 'setNonFiniteHandlerNot',",
         tests: 'test/unit/nonfinite.test.mjs'
+    },
+    {
+        what: 'a note-off that finds no voice is only logged, its handler never called',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: '            this.fKeyOffMissHandler(channel, pitch);',
+        to: '',
+        tests: 'test/unit/node-render.test.mjs'
+    },
+    {
+        what: 'the worklet processor keeps the missed note-off to itself',
+        file: 'src/FaustAudioWorkletProcessor.ts',
+        from: "type: 'keyoff-miss',",
+        to: "type: 'keyoff-missNot',",
+        tests: 'test/unit/node-render.test.mjs'
     }
 ];
 

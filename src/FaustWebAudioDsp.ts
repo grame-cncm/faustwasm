@@ -31,6 +31,8 @@ export type MetadataHandler = (key: string, value: string) => void;
 export type NonFiniteHandler = () => void;
 /** Receives the number of voices still sounding when it changes. */
 export type ActiveVoicesHandler = (count: number) => void;
+/** Receives a note-off that found no playing voice: its channel and pitch. */
+export type KeyOffMissHandler = (channel: number, pitch: number) => void;
 
 /**
  * A control write due at a known frame inside the next block.
@@ -865,6 +867,16 @@ export interface IFaustPolyWebAudioDsp extends IFaustBaseWebAudioDsp {
      * at the end of the block in which it changed.
      */
     getNumActiveVoices(): number;
+
+    /**
+     * Call `handler` with the channel and pitch of each note-off that finds no
+     * playing voice, instead of logging it to the console. Such a note-off
+     * means the host and the DSP disagree about which notes are held (the voice
+     * was stolen, or the note-on never arrived): where a hanging or a cut note
+     * starts. `null` restores the console message.
+     */
+    setKeyOffMissHandler(handler: KeyOffMissHandler | null): void;
+    getKeyOffMissHandler(): KeyOffMissHandler | null;
 }
 /** As `IFaustMonoWebAudioNode`, with the notes timestamped too. */
 export interface IFaustPolyWebAudioNode
@@ -2517,6 +2529,7 @@ export class FaustPolyWebAudioDsp
     /** The count last given to `fActiveVoicesHandler`. */
     private fActiveVoices = 0;
     private fActiveVoicesHandler: ActiveVoicesHandler | null = null;
+    private fKeyOffMissHandler: KeyOffMissHandler | null = null;
 
     /**
      * Render one slice: every live voice into the sum, then the effect.
@@ -3256,6 +3269,8 @@ export class FaustPolyWebAudioDsp
         const voice = this.getPlayingVoice(channel, pitch);
         if (voice !== FaustWebAudioDspVoice.kNoVoice) {
             this.fVoiceTable[voice].keyOff();
+        } else if (this.fKeyOffMissHandler) {
+            this.fKeyOffMissHandler(channel, pitch);
         } else {
             console.log('Playing pitch = %d not found\n', pitch);
         }
@@ -3292,5 +3307,12 @@ export class FaustPolyWebAudioDsp
     }
     getActiveVoicesHandler() {
         return this.fActiveVoicesHandler;
+    }
+
+    setKeyOffMissHandler(handler: KeyOffMissHandler | null) {
+        this.fKeyOffMissHandler = handler;
+    }
+    getKeyOffMissHandler() {
+        return this.fKeyOffMissHandler;
     }
 }

@@ -10,7 +10,8 @@ import {
     MetadataHandler,
     OutputParamHandler,
     PlotHandler,
-    NonFiniteHandler
+    NonFiniteHandler,
+    KeyOffMissHandler
 } from './FaustWebAudioDsp';
 import { AudioParamDescriptor, FaustUIItem } from './types';
 
@@ -335,6 +336,12 @@ export class FaustPolyOfflineProcessor
     // The DSP renders on this thread: the count is always current
     getNumActiveVoices() {
         return this.fDSPCode.getNumActiveVoices();
+    }
+    setKeyOffMissHandler(handler: KeyOffMissHandler | null) {
+        this.fDSPCode.setKeyOffMissHandler(handler);
+    }
+    getKeyOffMissHandler() {
+        return this.fDSPCode.getKeyOffMissHandler();
     }
 }
 

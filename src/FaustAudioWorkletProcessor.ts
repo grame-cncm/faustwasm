@@ -879,6 +879,20 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                 this.allNotesOff(e.data.data);
                 return;
             }
+            if (e.data.type === 'setKeyOffMissHandler') {
+                // Set on demand, like the non-finite guard
+                this.fDSPCode.setKeyOffMissHandler(
+                    e.data.data
+                        ? (channel, pitch) =>
+                              this.port.postMessage({
+                                  type: 'keyoff-miss',
+                                  channel,
+                                  pitch
+                              })
+                        : null
+                );
+                return;
+            }
             super.handleMessageAux(e);
         };
 

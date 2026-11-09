@@ -354,6 +354,68 @@ for (const [kind, sp] of KINDS) {
         );
     });
 
+    test(`${kind} reports a note-off that finds no voice to its handler`, async () => {
+        const { generator, voiceFactory, mixerModule } = await polyGenerator(
+            'nodemiss',
+            INSTRUMENT
+        );
+        const context = audioContext();
+        const node = await generator.createNode(
+            context,
+            VOICES,
+            'nodemiss',
+            voiceFactory,
+            mixerModule,
+            generator.effectFactory,
+            sp,
+            BLOCK
+        );
+        assert.ok(node, 'createNode returned nothing');
+        const misses = [];
+        node.setKeyOffMissHandler((channel, pitch) =>
+            misses.push([channel, pitch])
+        );
+        // What the DSP logs, and what an AudioWorklet processor posts
+        const logged = [];
+        const log = console.log;
+        console.log = (...args) => logged.push(args.join(' '));
+        const posted = [];
+        if ('port' in node)
+            node.port.addEventListener('message', (e) => {
+                if (e.data.type === 'keyoff-miss') posted.push(e.data.pitch);
+            });
+        const notFound = () => logged.filter((l) => l.includes('not found'));
+
+        try {
+            node.keyOn(0, 60, 100);
+            renderNode(node, BLOCK);
+            node.keyOff(0, 62, 0);
+            renderNode(node, BLOCK);
+            assert.deepEqual(misses, [[0, 62]], `${kind}: the unplayed pitch`);
+            assert.deepEqual(notFound(), [], `${kind}: not logged as well`);
+
+            node.keyOff(0, 60, 0);
+            renderNode(node, BLOCK);
+            assert.deepEqual(
+                misses,
+                [[0, 62]],
+                `${kind}: a held note is no miss`
+            );
+
+            // Without a handler the console message is back, and nothing is posted
+            node.setKeyOffMissHandler(null);
+            const before = posted.length;
+            node.keyOff(0, 65, 0);
+            renderNode(node, BLOCK);
+            assert.deepEqual(misses, [[0, 62]], `${kind}: handler removed`);
+            assert.equal(notFound().length, 1, `${kind}: logged again`);
+            assert.equal(posted.length, before, `${kind}: nothing posted`);
+            assert.equal(node.getKeyOffMissHandler(), null);
+        } finally {
+            console.log = log;
+        }
+    });
+
     test(`${kind} receives the MIDI channel its metadata gives`, async () => {
         const { generator, voiceFactory, mixerModule } = await polyGenerator(
             'nodechannel',

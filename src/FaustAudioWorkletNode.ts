@@ -4,6 +4,7 @@ import {
     ComputeHandler,
     PlotHandler,
     NonFiniteHandler,
+    KeyOffMissHandler,
     UIHandler,
     MetadataHandler,
     FaustBaseWebAudioDsp,
@@ -477,9 +478,13 @@ export class FaustPolyAudioWorkletNode
         throw e;
     };
 
-    private handleActiveVoices = (e: MessageEvent) => {
+    private fKeyOffMissHandler: KeyOffMissHandler | null = null;
+
+    private handlePolyMessage = (e: MessageEvent) => {
         if (e.data.type === 'active-voices')
             this.fNumActiveVoices = e.data.value;
+        else if (e.data.type === 'keyoff-miss' && this.fKeyOffMissHandler)
+            this.fKeyOffMissHandler(e.data.channel, e.data.pitch);
     };
 
     constructor(
@@ -502,7 +507,7 @@ export class FaustPolyAudioWorkletNode
             FaustBaseWebAudioDsp.parseUI(this.fJSONEffect.ui, this.fUICallback);
         }
 
-        this.port.addEventListener('message', this.handleActiveVoices);
+        this.port.addEventListener('message', this.handlePolyMessage);
     }
 
     // Public API
@@ -519,6 +524,19 @@ export class FaustPolyAudioWorkletNode
     // changes: this is its value at the end of the latest such block
     getNumActiveVoices() {
         return this.fNumActiveVoices;
+    }
+
+    // The voices live on the audio thread: it posts each miss, and only once
+    // asked to (the console message stays the default)
+    setKeyOffMissHandler(handler: KeyOffMissHandler | null) {
+        this.fKeyOffMissHandler = handler;
+        this.port.postMessage({
+            type: 'setKeyOffMissHandler',
+            data: !!handler
+        });
+    }
+    getKeyOffMissHandler() {
+        return this.fKeyOffMissHandler;
     }
 
     getMeta() {

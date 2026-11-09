@@ -315,6 +315,18 @@ meter();
 
 With an AudioWorklet node, the voices live on the audio thread: the processor reports their number at the end of each block in which it changed, and the node returns the latest report. ScriptProcessor nodes and offline processors count them directly. It matches `getNumActiveVoices()` of the C++ polyphonic architecture (`faust/dsp/poly-dsp.h`).
 
+### Note-offs that find no voice
+
+A note-off for a pitch that no voice is playing is logged to the console (`Playing pitch = 62 not found`). It means the host and the DSP disagree about which notes are held: the voice was stolen for a newer note, or the note-on never arrived. That is where a hanging or a cut note starts, so a host may want to hear of it instead of the console. Polyphonic nodes and offline processors have a `setKeyOffMissHandler()` method; while a handler is set it receives the channel and pitch of each such note-off, and nothing is logged:
+
+```JavaScript
+node.setKeyOffMissHandler((channel, pitch) => {
+    console.warn(`note-off ${pitch} on channel ${channel + 1} found no voice`);
+});
+```
+
+An AudioWorklet node asks its processor to post each miss and calls the handler when the message arrives; `null` restores the console message. After `allNotesOff`, the note-offs a host still sends for its held notes find no voice either, and are reported the same way. A stolen voice itself is still only logged (`Steal playing voice`): the handler hears of it at the stolen note's note-off. The C++ polyphonic architecture (`faust/dsp/poly-dsp.h`) prints the same message to `stderr`.
+
 ### Sample-accurate scheduling
 
 Every control method on a Faust AudioWorklet node takes an optional `time` argument as its last parameter: `setParamValue(path, value, time)`, `keyOn(channel, pitch, velocity, time)`, `keyOff(channel, pitch, velocity, time)`, `midiMessage(data, time)`, `ctrlChange(channel, ctrl, value, time)`, `pitchWheel(channel, wheel, time)`. `time` is in AudioContext seconds — the same clock as `audioCtx.currentTime` and `AudioParam.setValueAtTime` — and the action lands on the exact sample that instant names, inside the audio block that contains it. The unit is the second (a JavaScript double), the granularity is the sample: the processor converts it with `Math.round(time * sampleRate)` to a frame on the audio clock, so an instant is honoured to the nearest sample (about 21 µs at 48 kHz):
