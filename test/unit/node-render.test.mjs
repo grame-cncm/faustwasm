@@ -5,8 +5,8 @@
  * processor, the offline processor, the node's message wire. Nobody put the
  * pieces together, because the two node classes only exist inside a browser:
  * they extend `AudioWorkletNode` and `ScriptProcessorNode`, and the worklet
- * half of the pair is normally built by serialising classes into a blob and
- * loading it into another thread. So the one path every user takes --
+ * half of the pair is normally a pre-built module source, put into a blob and
+ * loaded into another thread. So the one path every user takes --
  * `createNode`, then let the audio thread call it -- was the one path with no
  * test, and "the node comes back but renders silence" is exactly the failure
  * that shape of gap hides.
@@ -14,8 +14,8 @@
  * `web-audio.mjs` supplies a Web Audio API of plain objects, including an
  * `addModule` that evaluates the generated processor source in this process.
  * What is exercised here is therefore the real thing on both sides of the
- * port: the real `createNode`, the real serialisation of the DSP classes into
- * the processor module, the real node, and the real processor.
+ * port: the real `createNode`, the real pre-built processor module, the real
+ * node, and the real processor.
  *
  * Rendering silence is the failure being watched for, so every test asserts
  * something audible, and the two generator cases pin the samples exactly

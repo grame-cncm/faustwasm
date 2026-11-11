@@ -6,7 +6,7 @@ export default defineConfig(
   eslint.configs.recommended,
   tseslint.configs.recommended,
   {
-    ignores: ["**/dist", "**/test", "**/libfaust-wasm.js"],
+    ignores: ["**/dist", "**/test", "**/libfaust-wasm.js", "src/generated"],
   },
   {
     languageOptions: {

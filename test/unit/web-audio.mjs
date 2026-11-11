@@ -248,10 +248,10 @@ export class FakeAudioContext {
             /**
              * Run a module in this process instead of in a worklet thread.
              *
-             * The URL is the blob `createNode` built out of the class sources
-             * it serialised, so this is the generated processor code itself,
-             * evaluated as a script -- the step that turns a class body with a
-             * missing dependency into a failure. Wrapped in a function so its
+             * The URL is the blob `createNode` built from the pre-built
+             * processor source, so this is the processor code itself,
+             * evaluated as a script -- the step that turns a free reference
+             * into a failure. Wrapped in a function so its
              * top-level declarations stay local and a second module can be
              * added without colliding with the first.
              */
