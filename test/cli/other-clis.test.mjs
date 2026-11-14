@@ -44,6 +44,25 @@ test('faust2svg writes a process diagram', () => {
     assert.match(svg, /<\/svg>/);
 });
 
+test('faust2svg -sst writes steppable diagrams', () => {
+    // -sst <n> (implies -svg): each wire carries its values for n samples, held in a
+    // JSON data element, with the player that steps through them
+    const dir = outDir('svg-step');
+    runCliOk('faust2svg', ['test/mono.dsp', dir, '-sst', '8']);
+    const svg = readOut(dir, 'process.svg');
+    const data = svg.match(
+        /<script type="application\/json" class="faust-svg-step-data">(.*?)<\/script>/s
+    );
+    assert.ok(data, 'expected the step data element');
+    const d = JSON.parse(data[1]);
+    assert.equal(d.n, 8);
+    assert.ok(d.ctx.length >= 1);
+    const use = d.ctx[0];
+    assert.ok(use.out.length > 0, 'expected the outputs of process');
+    for (const k of use.out) assert.equal(use.s[k].v.length, 8);
+    assert.match(svg, /<script type="text\/javascript" class="faust-svg-step">/);
+});
+
 test('faust2svg writes one file per subdiagram', () => {
     const dir = outDir('svg-subdiagrams');
     runCliOk('faust2svg', ['test/mono.dsp', dir]);

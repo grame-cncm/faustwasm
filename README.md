@@ -282,6 +282,17 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 })();
 ```
 
+### Steppable diagrams
+
+With `-sst <n>` in the arguments of `FaustSvgDiagrams.from`, the diagrams show, on each wire, the value of its signal for samples 0 to n-1, computed by the compiler, with a player to step through them (arrow keys, a table of values over time, a guess mode). `-ssi <expr>` gives the test signal fed to the inputs (a Faust expression, an impulse by default), `-ssc label=value@n` changes a control from a sample on, `-sso <s>` starts at sample s. `FaustSvgDiagrams.display` shows a diagram in a page, starts its player and follows its links to the sub-diagrams:
+
+```js
+const svgs = new FaustSvgDiagrams(compiler).from("main", code, "-sst 32");
+FaustSvgDiagrams.display(document.getElementById("diagram"), svgs);
+```
+
+It works for plain diagrams too, following their links. The player is evaluated with `new Function`, which a page with a strict Content Security Policy must allow (`'unsafe-eval'`). `test/web/svg-step.html` is an example.
+
 ### Smoothing controls in polyphonic instruments
 
 Idle polyphonic voices are not computed, so a control smoothed with `si.smoo` can retain an old value until the voice is reused. For controls that should take their current value when a note starts, use [`si.polySmooth`](https://faustlibraries.grame.fr/libs/signals/#sipolysmooth) with the instrument's `gate`:
