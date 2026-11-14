@@ -284,14 +284,38 @@ process = ba.pulsen(1, 10000) : pm.djembe(60, 0.3, 0.4, 1);
 
 ### Steppable diagrams
 
-With `-sst <n>` in the arguments of `FaustSvgDiagrams.from`, the diagrams show, on each wire, the value of its signal for samples 0 to n-1, computed by the compiler, with a player to step through them (arrow keys, a table of values over time, a guess mode). `-ssi <expr>` gives the test signal fed to the inputs (a Faust expression, an impulse by default), `-ssc label=value@n` changes a control from a sample on, `-sso <s>` starts at sample s. `FaustSvgDiagrams.display` shows a diagram in a page, starts its player and follows its links to the sub-diagrams:
+With `-sst <n>` in the arguments of `FaustSvgDiagrams.from`, the diagrams show, on each wire, the value of its signal for samples 0 to n-1, computed by the compiler, with a player to step through them: arrow keys, a table of values over time, a guess mode. `FaustSvgDiagrams.display` shows a diagram in a page, starts its player and follows its links to the sub-diagrams:
 
 ```js
 const svgs = new FaustSvgDiagrams(compiler).from("main", code, "-sst 32");
 FaustSvgDiagrams.display(document.getElementById("diagram"), svgs);
 ```
 
-It works for plain diagrams too, following their links. The player is evaluated with `new Function`, which a page with a strict Content Security Policy must allow (`'unsafe-eval'`). `test/web/svg-step.html` is an example.
+These options go with `-sst`:
+
+| Option | Meaning |
+|---|---|
+| `-sst <n>` | steppable diagrams, samples 0 to n-1 (implies `-svg`) |
+| `-ssi <expr>` | the test signal fed to the inputs of `process`: a Faust expression with no input and 1 output (copied to every input) or one output per input, evaluated with the definitions of the program, so it can use them and the libraries it imports. Default `1-1'`, an impulse. Examples: `-ssi 1` (a step), `-ssi os.osc(440)`, `-ssi 1-1',0.5` (two inputs) |
+| `-ssc <label>=<value>[@<n>]` | sets a control (button, checkbox, slider, nentry, by its label) to a value from sample n on (0 by default); repeat it for several changes, e.g. `-ssc gate=1@3 -ssc gate=0@8` presses a button from sample 3 to 7 |
+| `-sso <s>` | shows samples s to s+n-1 instead of 0 to n-1; the first s samples are computed too, so a large offset is slow |
+
+The other diagram options apply too: `-f <n>` (folding threshold; `-f 0` folds every named block into its own file, which a small example needs to show sub-diagrams), `-fc <n>`, `-sn`, `-sd`, `-sc`... The values are computed at 44100 Hz, with the controls at their default values unless `-ssc` changes them.
+
+`from` splits its argument string at every space and handles no quotes, unlike a shell: write `-ssc gate=1@3`, not `-ssc "gate=1@3"`, and give `-ssi` an expression without spaces (`1-1',0.5`). The command line
+
+```
+faust -sst 16 -f 0 -ssi 1 -ssc "gate=1@3" -ssc "gate=0@8" demo.dsp
+```
+
+is thus, with faustwasm:
+
+```js
+const svgs = new FaustSvgDiagrams(compiler).from("demo", code, "-sst 16 -f 0 -ssi 1 -ssc gate=1@3 -ssc gate=0@8");
+FaustSvgDiagrams.display(document.getElementById("diagram"), svgs);
+```
+
+`display` works for plain diagrams too, following their links. The player is evaluated with `new Function`, which a page with a strict Content Security Policy must allow (`'unsafe-eval'`). `test/web/svg-step.html` is an example.
 
 ### Smoothing controls in polyphonic instruments
 
