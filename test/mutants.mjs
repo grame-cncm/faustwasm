@@ -252,6 +252,13 @@ const MUTANTS = [
         from: '            soundfiles,\n            stopLevel\n        );',
         to: '            soundfiles\n        );',
         tests: 'test/unit/node-render.test.mjs'
+    },
+    {
+        what: 'the PWA only registers its service worker on a load event that has passed',
+        file: 'assets/standalone/faust-pwa.js',
+        from: 'if (document.readyState === "complete") register();\n            else window.addEventListener',
+        to: 'window.addEventListener',
+        tests: 'test/cli/pwa-service-worker.test.mjs'
     }
 ];
 

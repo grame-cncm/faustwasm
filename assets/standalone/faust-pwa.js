@@ -86,11 +86,15 @@ export class FaustPWA {
          * Registers the service worker.
          */
         if ("serviceWorker" in navigator) {
-            window.addEventListener("load", () => {
+            const register = () => {
                 navigator.serviceWorker.register("./service-worker.js")
                     .then(reg => console.log("Service Worker registered", reg))
                     .catch(err => console.log("Service Worker registration failed", err));
-            });
+            };
+            // index.js imports this module dynamically, so the load event has
+            // usually fired already: a listener alone would never run.
+            if (document.readyState === "complete") register();
+            else window.addEventListener("load", register);
         }
     }
 
