@@ -315,6 +315,23 @@ meter();
 
 With an AudioWorklet node, the voices live on the audio thread: the processor reports their number at the end of each block in which it changed, and the node returns the latest report. ScriptProcessor nodes and offline processors count them directly. It matches `getNumActiveVoices()` of the C++ polyphonic architecture (`faust/dsp/poly-dsp.h`).
 
+### Freeing released voices sooner
+
+A released voice is computed until its level falls under -90 dB, then its slot is free again. A host that considers a higher level inaudible can give its own threshold, the *stop level*, and get the CPU back sooner. It is the `stopLevel` of the `processorOptions` of `createNode`, for an AudioWorklet node as for a ScriptProcessor one, and the last argument of `createOfflineProcessor`:
+
+```JavaScript
+// Voices are freed under -60 dB
+const node = await generator.createNode(
+    audioContext, 16, "synth", undefined, undefined, undefined, false, 1024, undefined,
+    { stopLevel: 0.001 }
+);
+const processor = await generator.createOfflineProcessor(
+    sampleRate, 1024, 16, undefined, undefined, undefined, undefined, 0.001
+);
+```
+
+The stop level is a linear amplitude, `10^(dB/20)`, compared to the RMS level of the voice on each block, over all its output channels. It has to be in `]0, 0.01]`, that is at most -40 dB: any other value is refused with a warning in the console, and -90 dB is used. It is set when the node is created and cannot be changed afterwards. It matches the `stoplevel` argument of `mydsp_poly` in the C++ polyphonic architecture (`faust/dsp/poly-dsp.h`).
+
 ### Sample-accurate scheduling
 
 Every control method on a Faust AudioWorklet node takes an optional `time` argument as its last parameter: `setParamValue(path, value, time)`, `keyOn(channel, pitch, velocity, time)`, `keyOff(channel, pitch, velocity, time)`, `midiMessage(data, time)`, `ctrlChange(channel, ctrl, value, time)`, `pitchWheel(channel, wheel, time)`. `time` is in AudioContext seconds — the same clock as `audioCtx.currentTime` and `AudioParam.setValueAtTime` — and the action lands on the exact sample that instant names, inside the audio block that contains it. The unit is the second (a JavaScript double), the granularity is the sample: the processor converts it with `Math.round(time * sampleRate)` to a frame on the audio clock, so an instant is honoured to the nearest sample (about 21 µs at 48 kHz):

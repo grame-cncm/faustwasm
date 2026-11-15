@@ -2518,6 +2518,9 @@ export class FaustPolyWebAudioDsp
     private fActiveVoices = 0;
     private fActiveVoicesHandler: ActiveVoicesHandler | null = null;
 
+    /** The level under which a released voice is freed (see the constructor). */
+    private fStopLevel = FaustWebAudioDspVoice.VOICE_STOP_LEVEL;
+
     /**
      * Render one slice: every live voice into the sum, then the effect.
      *
@@ -2656,16 +2659,32 @@ export class FaustPolyWebAudioDsp
         }
     }
 
+    /**
+     * @param stopLevel - the level under which a released voice is freed, as a
+     * linear amplitude (10^(dB/20)). It is compared to the RMS level of the
+     * voice, measured on each block over all its output channels. Defaults to
+     * `FaustWebAudioDspVoice.VOICE_STOP_LEVEL` (-90 dB). The accepted range is
+     * ]0, 0.01], that is up to -40 dB included: any other value is rejected
+     * with a warning, and the default is used. Same as the `stoplevel` of
+     * `mydsp_poly` in the C++ poly-dsp.h.
+     */
     constructor(
         instance: FaustPolyDspInstance,
         sampleRate: number,
         sampleSize: number,
         bufferSize: number,
-        soundfiles: LooseFaustDspFactory['soundfiles']
+        soundfiles: LooseFaustDspFactory['soundfiles'],
+        stopLevel: number = FaustWebAudioDspVoice.VOICE_STOP_LEVEL
     ) {
         super(sampleSize, bufferSize, soundfiles);
         this.fInstance = instance;
         this.fSampleRate = sampleRate;
+
+        // A -40 dB bound covers all practical cases. Written so that NaN, and
+        // anything that is not a number, fails the test.
+        if (typeof stopLevel === 'number' && stopLevel > 0 && stopLevel <= 0.01)
+            this.fStopLevel = stopLevel;
+        else console.warn(`Invalid stop level ${stopLevel}, using default`);
 
         // Create JSON for voice
         this.fJSONDsp = JSON.parse(this.fInstance.voiceJSON);
@@ -3043,7 +3062,7 @@ export class FaustPolyWebAudioDsp
         this.fVoiceTable.forEach((voice) => {
             if (
                 voice.fCurNote === FaustWebAudioDspVoice.kReleaseVoice &&
-                voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL
+                voice.fLevel < this.fStopLevel
             ) {
                 voice.fCurNote = FaustWebAudioDspVoice.kFreeVoice;
             }

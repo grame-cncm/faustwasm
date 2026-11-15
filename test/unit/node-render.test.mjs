@@ -63,6 +63,23 @@ process = os.osc(hslider("freq", 440, 20, 3000, 1))
         * hslider("gain", 0.5, 0, 1, 0.01)
         * (button("gate") : en.adsr(0.01, 0.1, 0.9, 0.2));`;
 
+/**
+ * An instrument whose release is an exponential decay of time constant 0.1 s:
+ * it crosses -40 dB then -90 dB about half a second apart, where the linear
+ * release of INSTRUMENT crosses both within a few blocks.
+ */
+const DECAYING = `import("stdfaust.lib");
+process = os.osc(hslider("freq", 440, 20, 3000, 1))
+        * hslider("gain", 0.5, 0, 1, 0.01)
+        * (button("gate") : si.smooth(ba.tau2pole(0.1)));`;
+
+/**
+ * How long after a note off of DECAYING to look: at velocity 100 the voice is
+ * under -40 dB after about 0.4 s and under -90 dB after about 1 s.
+ */
+const BETWEEN_THRESHOLDS = BLOCK * Math.ceil((0.7 * SAMPLE_RATE) / BLOCK);
+const PAST_BOTH_THRESHOLDS = BLOCK * Math.ceil((0.6 * SAMPLE_RATE) / BLOCK);
+
 /** One input into a stereo reverb: silent until it is fed. */
 const EFFECT = 'import("stdfaust.lib"); process = _ <: dm.freeverb_demo;';
 
@@ -354,6 +371,47 @@ for (const [kind, sp] of KINDS) {
         );
     });
 
+    test(`${kind} frees a released voice at the stop level it is given`, async () => {
+        const { generator, voiceFactory, mixerModule } = await polyGenerator(
+            'nodestoplevel',
+            DECAYING
+        );
+        const context = audioContext();
+        /** @param {Record<string, any>} [processorOptions] */
+        const create = async (processorOptions) => {
+            const node = await generator.createNode(
+                context,
+                VOICES,
+                'nodestoplevel',
+                voiceFactory,
+                mixerModule,
+                generator.effectFactory,
+                sp,
+                BLOCK,
+                undefined,
+                processorOptions
+            );
+            assert.ok(node, 'createNode returned nothing');
+            return node;
+        };
+        // The same note on both, released at the same time
+        const byDefault = await create();
+        const sooner = await create({ stopLevel: 0.01 });
+        for (const node of [byDefault, sooner]) {
+            node.keyOn(0, 60, 100);
+            renderNode(node, FRAMES);
+            assert.equal(node.getNumActiveVoices(), 1, `${kind} playing`);
+            node.keyOff(0, 60, 0);
+            renderNode(node, BETWEEN_THRESHOLDS);
+        }
+        // Between -40 dB and -90 dB: only the node given -40 dB let go
+        assert.equal(byDefault.getNumActiveVoices(), 1, `${kind} at -90 dB`);
+        assert.equal(sooner.getNumActiveVoices(), 0, `${kind} at -40 dB`);
+
+        renderNode(byDefault, PAST_BOTH_THRESHOLDS);
+        assert.equal(byDefault.getNumActiveVoices(), 0, `${kind} under -90 dB`);
+    });
+
     test(`${kind} receives the MIDI channel its metadata gives`, async () => {
         const { generator, voiceFactory, mixerModule } = await polyGenerator(
             'nodechannel',
@@ -402,3 +460,39 @@ for (const [kind, sp] of KINDS) {
         assert.equal(voices(), 0, `${kind}: channel 1 is received again`);
     });
 }
+
+test('the offline processor frees a released voice at the stop level it is given', async () => {
+    const { generator, voiceFactory, mixerModule } = await polyGenerator(
+        'offlinestoplevel',
+        DECAYING
+    );
+    /** @param {number} [stopLevel] */
+    const create = async (stopLevel) => {
+        const processor = await generator.createOfflineProcessor(
+            SAMPLE_RATE,
+            BLOCK,
+            VOICES,
+            voiceFactory,
+            mixerModule,
+            generator.effectFactory,
+            undefined,
+            stopLevel
+        );
+        assert.ok(processor, 'the offline processor has to exist');
+        return processor;
+    };
+    const byDefault = await create();
+    const sooner = await create(0.01);
+    for (const processor of [byDefault, sooner]) {
+        processor.keyOn(0, 60, 100);
+        processor.render([], FRAMES);
+        assert.equal(processor.getNumActiveVoices(), 1, 'playing');
+        processor.keyOff(0, 60, 0);
+        processor.render([], BETWEEN_THRESHOLDS);
+    }
+    assert.equal(byDefault.getNumActiveVoices(), 1, 'offline at -90 dB');
+    assert.equal(sooner.getNumActiveVoices(), 0, 'offline at -40 dB');
+
+    byDefault.render([], PAST_BOTH_THRESHOLDS);
+    assert.equal(byDefault.getNumActiveVoices(), 0, 'offline under -90 dB');
+});

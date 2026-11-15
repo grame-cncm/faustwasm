@@ -217,6 +217,41 @@ const MUTANTS = [
         from: "type: 'setNonFiniteHandler',",
         to: "type: 'setNonFiniteHandlerNot',",
         tests: 'test/unit/nonfinite.test.mjs'
+    },
+    {
+        what: 'a released voice is freed at -90 dB whatever stop level was given',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: 'voice.fLevel < this.fStopLevel',
+        to: 'voice.fLevel < FaustWebAudioDspVoice.VOICE_STOP_LEVEL',
+        tests: 'test/unit/voice-stop-level.test.mjs'
+    },
+    {
+        what: 'a stop level above -40 dB is accepted',
+        file: 'src/FaustWebAudioDsp.ts',
+        from: 'stopLevel > 0 && stopLevel <= 0.01',
+        to: 'stopLevel > 0 && stopLevel <= 1',
+        tests: 'test/unit/voice-stop-level.test.mjs'
+    },
+    {
+        what: 'the AudioWorklet processor drops the stop level of its options',
+        file: 'src/FaustAudioWorkletProcessor.ts',
+        from: '                soundfiles,\n                stopLevel\n',
+        to: '                soundfiles\n',
+        tests: 'test/unit/node-render.test.mjs'
+    },
+    {
+        what: 'the ScriptProcessor node drops the stop level of its options',
+        file: 'src/FaustDspGenerator.ts',
+        from: '                soundfiles,\n                processorOptions.stopLevel\n',
+        to: '                soundfiles\n',
+        tests: 'test/unit/node-render.test.mjs'
+    },
+    {
+        what: 'the offline processor drops the stop level it is given',
+        file: 'src/FaustDspGenerator.ts',
+        from: '            soundfiles,\n            stopLevel\n        );',
+        to: '            soundfiles\n        );',
+        tests: 'test/unit/node-render.test.mjs'
     }
 ];
 

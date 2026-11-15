@@ -87,6 +87,11 @@ export interface FaustPolyAudioWorkletProcessorOptions extends FaustAudioWorklet
     mixerModule: WebAssembly.Module;
     voices: number;
     effectFactory?: LooseFaustDspFactory;
+    /**
+     * The level under which a released voice is freed, as a linear amplitude
+     * (see the `FaustPolyWebAudioDsp` constructor). -90 dB when left out.
+     */
+    stopLevel?: number;
 }
 
 // Dynamic AudioWorkletProcessor code generator
@@ -824,7 +829,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                 mixerModule,
                 voices,
                 effectFactory,
-                sampleSize
+                sampleSize,
+                stopLevel
             } = options.processorOptions;
 
             const instance = FaustWasmInstantiator.createSyncPolyDSPInstance(
@@ -844,7 +850,8 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                 sampleRate,
                 sampleSize,
                 128,
-                soundfiles
+                soundfiles,
+                stopLevel
             );
 
             // Setup port message handling

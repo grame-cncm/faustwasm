@@ -253,7 +253,9 @@ export interface IFaustPolyDspGenerator extends GeneratorSupportingSoundfiles {
      * @param effectFactory - the Faust factory for the effect, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
      * @param sp - whether to compile a ScriptProcessorNode or an AudioWorkletNode
      * @param bufferSize - the buffer size in frames to be used in ScriptProcessorNode only, since AudioWorkletNode always uses 128 frames
-     * @param processorOptions - Additional AudioWorklet Processor options
+     * @param processorOptions - Additional AudioWorklet Processor options. Its `stopLevel`, used by the ScriptProcessorNode too,
+     * is the level under which a released voice is freed: a linear amplitude (10^(dB/20)) in ]0, 0.01], compared to the RMS level
+     * of the voice on each block. It defaults to -90 dB, as any value outside that range does.
      * @returns the compiled WebAudio node or 'null' if failure
      */
     createNode(
@@ -278,6 +280,8 @@ export interface IFaustPolyDspGenerator extends GeneratorSupportingSoundfiles {
      * @param mixerModule - the wasm Mixer module (loaded from 'mixer32.wasm' or 'mixer64.wasm' files)
      * @param effectFactory - the Faust factory for the effect, either obtained with a compiler (createDSPFactory) or loaded from files (loadDSPFactory)
      * @param context - if this exists, will be used to fetch soundfiles online
+     * @param stopLevel - the level under which a released voice is freed: a linear amplitude (10^(dB/20)) in ]0, 0.01],
+     * compared to the RMS level of the voice on each block. It defaults to -90 dB, as any value outside that range does.
      * @returns the compiled processor or 'null' if failure
      */
     createOfflineProcessor(
@@ -287,7 +291,8 @@ export interface IFaustPolyDspGenerator extends GeneratorSupportingSoundfiles {
         voiceFactory?: LooseFaustDspFactory,
         mixerModule?: WebAssembly.Module,
         effectFactory?: LooseFaustDspFactory | null,
-        context?: BaseAudioContext
+        context?: BaseAudioContext,
+        stopLevel?: number
     ): Promise<IFaustPolyOfflineProcessor | null>;
 
     /**
@@ -796,7 +801,7 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts(dsp_code.
         bufferSize = 1024,
         processorName = (voiceFactory?.shaKey || '') +
             (effectFactory?.shaKey || '') || `${name}_poly`,
-        processorOptions = {}
+        processorOptions: Record<string, any> = {}
     ): Promise<
         SP extends true
             ? FaustPolyScriptProcessorNode | null
@@ -835,12 +840,14 @@ process = adaptorIns(dsp_code.process) : dsp_code.effect : adaptorOuts(dsp_code.
                 ...effectFactory?.soundfiles,
                 ...voiceFactory.soundfiles
             };
+            // The AudioWorklet processor reads the same option
             const polyDsp = new FaustPolyWebAudioDsp(
                 instance,
                 context.sampleRate,
                 sampleSize,
                 bufferSize,
-                soundfiles
+                soundfiles,
+                processorOptions.stopLevel
             );
 
             const sp = context.createScriptProcessor(
@@ -963,7 +970,8 @@ ${polyProcessorSource}
         voiceFactory = this.voiceFactory as LooseFaustDspFactory,
         mixerModule = this.mixerModule,
         effectFactory = this.effectFactory as LooseFaustDspFactory | null,
-        context?: BaseAudioContext
+        context?: BaseAudioContext,
+        stopLevel?: number
     ) {
         if (!voiceFactory)
             throw new Error(
@@ -1003,7 +1011,8 @@ ${polyProcessorSource}
             sampleRate,
             sampleSize,
             bufferSize,
-            soundfiles
+            soundfiles,
+            stopLevel
         );
         return new FaustPolyOfflineProcessor(polyDsp, bufferSize);
     }
