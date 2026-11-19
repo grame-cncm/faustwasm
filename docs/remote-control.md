@@ -1138,11 +1138,13 @@ WebRTC, repliée sur le relais, curseur appliqué sur l'hôte en mode horodaté
 (`?delay=40`). **Non vérifié : un vrai téléphone sur le Wi-Fi**, donc ni HTTPS avec
 certificat, ni capteurs réels, ni latence radio.
 
-Limite constatée, hors de cette couche : `getParamValue` d'un nœud AudioWorklet
-lit son `AudioParam`, que les écritures faites sur le thread audio (capteurs,
-MIDI) ne mettent pas à jour. Les valeurs initiales envoyées dans `welcome` pour
-un paramètre piloté par capteur peuvent donc être en retard ; la
-synchronisation (`sync`) les corrige au changement suivant.
+Défaut constaté en vérifiant, hors de cette couche, corrigé sur `master`
+(« AudioWorklet node: getParamValue reports values written on the audio
+thread ») : `getParamValue` d'un nœud AudioWorklet lisait son `AudioParam`, que
+les écritures faites sur le thread audio (correspondance des capteurs, MIDI)
+ne mettent pas à jour ; les valeurs initiales envoyées dans `welcome` pour un
+paramètre piloté par capteur pouvaient donc être en retard. Le nœud retient
+désormais ces écritures et les rend dans `getParamValue`.
 
 ## 17. Plan de mise en œuvre
 
