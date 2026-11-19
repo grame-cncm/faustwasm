@@ -15,6 +15,7 @@ import {
     type FaustRemoteHostMessage,
     type FaustRemoteMode,
     type FaustRemoteRejectCode,
+    type FaustRemoteSensorPolicy,
     type FaustRemoteWelcomeMessage
 } from './protocol';
 import { FaustRemoteClock } from './clock';
@@ -146,6 +147,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
     #outValues: number[] = [];
     #voices = 0;
     #group: string | undefined;
+    #sensorPolicy: FaustRemoteSensorPolicy = 'shared';
 
     #seq = 0;
     readonly #lastSeq = new Map<number, number>();
@@ -452,6 +454,11 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         return this.#group;
     }
 
+    /** What the host does with several remote controls' sensors. */
+    get sensorPolicy() {
+        return this.#sensorPolicy;
+    }
+
     /** Voices sounding on the host, for a polyphonic DSP. */
     getNumActiveVoices() {
         return this.#voices;
@@ -648,6 +655,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         this.#outValues = [...welcome.outputValues];
         this.#voices = welcome.voices;
         this.#group = welcome.group;
+        this.#sensorPolicy = welcome.sensors ?? 'shared';
         this.#delay = welcome.delay ?? 0;
         this.#setState('open');
         const ping = () => {

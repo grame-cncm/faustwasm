@@ -27,5 +27,6 @@ export {
 export {
     PROTOCOL_VERSION,
     type FaustRemoteMode,
-    type FaustRemoteRejectCode
+    type FaustRemoteRejectCode,
+    type FaustRemoteSensorPolicy
 } from './protocol';

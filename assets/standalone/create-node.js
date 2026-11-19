@@ -11,6 +11,18 @@
  */
 
 /**
+ * The URL of a file generated next to this module.
+ *
+ * Resolved against this module rather than the page, which is the same for
+ * a page next to it and lets a page elsewhere use it: the remote control in
+ * `remote/` plays the DSP generated at the top.
+ *
+ * @param {string} path - Relative to this module.
+ * @returns {string}
+ */
+const asset = (path) => new URL(path, import.meta.url).href;
+
+/**
  * Compile a standalone `.wasm` asset into a WebAssembly module.
  *
  * `WebAssembly.compileStreaming(fetch(url))` is preferred because it lets the
@@ -66,10 +78,10 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0, s
 
     // Load DSP metadata from JSON
     /** @type {FaustDspMeta} */
-    const dspMeta = await (await fetch("./dsp-meta.json")).json();
+    const dspMeta = await (await fetch(asset("./dsp-meta.json"))).json();
 
     // Compile the DSP module from WebAssembly binary data
-    const dspModule = await compileWasmModule("./dsp-module.wasm");
+    const dspModule = await compileWasmModule(asset("./dsp-module.wasm"));
 
     // Create an object representing Faust DSP with metadata and module
     /** @type {FaustDspDistribution} */
@@ -82,11 +94,11 @@ const createFaustNode = async (audioContext, dspName = "template", voices = 0, s
     if (voices > 0) {
 
         // Try to load optional mixer and effect modules
-        faustDsp.mixerModule = await compileWasmModule("./mixer-module.wasm");
+        faustDsp.mixerModule = await compileWasmModule(asset("./mixer-module.wasm"));
 
         if (FAUST_DSP_HAS_EFFECT) {
-            faustDsp.effectMeta = await (await fetch("./effect-meta.json")).json();
-            faustDsp.effectModule = await compileWasmModule("./effect-module.wasm");
+            faustDsp.effectMeta = await (await fetch(asset("./effect-meta.json"))).json();
+            faustDsp.effectModule = await compileWasmModule(asset("./effect-module.wasm"));
         }
 
         // Keep both backends behind the same closure so fallback recreates the

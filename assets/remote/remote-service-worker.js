@@ -31,8 +31,25 @@ const RESOURCES = [
 /** @type {ServiceWorkerGlobalScope} */
 const scope = self;
 
-/** The absolute URLs of `RESOURCES`. */
-const cached = new Set(RESOURCES.map((resource) => new URL(resource, scope.location.href).href));
+/**
+ * What "Play locally" loads: the DSP generated at the top, and faustwasm.
+ * Cached when first used, not at install, so that a remote control that
+ * never plays locally does not download them. Some only exist for a
+ * polyphonic DSP or one with an effect.
+ */
+const LOCAL_RESOURCES = [
+    "../dsp-meta.json",
+    "../dsp-module.wasm",
+    "../mixer-module.wasm",
+    "../effect-meta.json",
+    "../effect-module.wasm",
+    "../faustwasm/index.js"
+];
+
+/** The absolute URLs of the files this worker answers for. */
+const cached = new Set(
+    [...RESOURCES, ...LOCAL_RESOURCES].map((resource) => new URL(resource, scope.location.href).href)
+);
 
 scope.addEventListener("install", (event) => {
     event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(RESOURCES)));

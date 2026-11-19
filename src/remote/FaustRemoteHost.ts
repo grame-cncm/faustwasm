@@ -3,12 +3,7 @@ import type {
     InputParamHandler,
     OutputParamHandler
 } from '../FaustWebAudioDsp';
-import FaustSensors, { Axis } from '../FaustSensors';
-import type {
-    FaustUIDescriptor,
-    FaustUIInputItem,
-    FaustUIItem
-} from '../types';
+import type { FaustUIInputItem } from '../types';
 import {
     PROTOCOL_VERSION,
     parseClientMessage,
@@ -25,6 +20,12 @@ import { listenRelay, type FaustRelayOptions } from './relay';
 import { answerPeers, type FaustRTCOptions } from './rtc';
 import type { FaustSignaling } from './signaling';
 import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
+import {
+    sensorTargets,
+    topLevelGroups,
+    type Group,
+    type SensorTarget
+} from './sensors';
 import { inputRange, isRemoteOff, readUI } from './ui';
 
 /**
@@ -121,19 +122,6 @@ export interface FaustRemoteHostOptions {
     sensorWindow?: number;
 }
 
-/** A control a sensor axis drives, with the DSP's curve for it. */
-interface SensorTarget {
-    readonly path: string;
-    readonly axis: Axis;
-    readonly convert: (value: number) => number;
-}
-
-/** A top-level group of the DSP, for `assign: 'groups'`. */
-interface Group {
-    readonly label: string;
-    readonly paths: ReadonlySet<string>;
-}
-
 /** `stream` bytes queued past which a remote control is skipped for a tick. */
 const STREAM_HIGH_WATER = 4096;
 
@@ -208,8 +196,8 @@ export class FaustRemoteHost extends EventTarget {
             'token' | 'assign' | 'expose' | 'playoutDelay'
         >;
     /** Controls driven by each sensor, for the `assigned` policy. */
-    readonly #accTargets: SensorTarget[] = [];
-    readonly #gyrTargets: SensorTarget[] = [];
+    readonly #accTargets: SensorTarget[];
+    readonly #gyrTargets: SensorTarget[];
     /** Top-level groups, for `assign: 'groups'`. */
     readonly #groups: Group[];
     readonly #session = randomId(8);
@@ -276,15 +264,9 @@ export class FaustRemoteHost extends EventTarget {
         // controls' to drive
         this.#remoteAcc = ui.hasAcc;
         this.#remoteGyr = ui.hasGyr;
-        for (const item of ui.inputs) {
-            if (isRemoteOff(item)) continue;
-            for (const meta of item.meta ?? []) {
-                if (meta.acc)
-                    this.#accTargets.push(sensorTarget(item, meta.acc));
-                if (meta.gyr)
-                    this.#gyrTargets.push(sensorTarget(item, meta.gyr));
-            }
-        }
+        const targets = sensorTargets(ui.inputs);
+        this.#accTargets = targets.acc;
+        this.#gyrTargets = targets.gyr;
         this.#groups = topLevelGroups(node.getMeta().ui);
         this.#outputs = ui.outputs.map((item) => item.address);
         this.#outputs.forEach((path, k) => this.#outputIndex.set(path, k));
@@ -539,7 +521,8 @@ export class FaustRemoteHost extends EventTarget {
             delay: this.#timed()
                 ? this.#options.playoutDelay! * 1000
                 : undefined,
-            group: client.group?.label
+            group: client.group?.label,
+            sensors: this.#options.sensorPolicy
         });
         this.dispatchEvent(new CustomEvent('join', { detail: info }));
     }
@@ -1013,50 +996,6 @@ export class FaustRemoteHost extends EventTarget {
 }
 
 const finite = (value: number) => (Number.isFinite(value) ? value : 0);
-
-/**
- * The control a sensor axis drives, from its `[acc:...]` or `[gyr:...]`
- * metadata: "axis curve amin amid amax", read as the DSP reads it, and the
- * same curve, from `FaustSensors` (internal to the package, bundled here,
- * not exported).
- */
-const sensorTarget = (item: FaustUIInputItem, spec: string): SensorTarget => {
-    const [axis, curve, amin, amid, amax] = spec.trim().split(' ').map(Number);
-    const converter = FaustSensors.buildHandler(
-        FaustSensors.convertToCurve(curve),
-        amin,
-        amid,
-        amax,
-        item.min ?? 0,
-        item.init ?? 0,
-        item.max ?? 1
-    );
-    return {
-        path: item.address,
-        axis: FaustSensors.convertToAxis(axis),
-        convert: (value) => converter.uiToFaust(value)
-    };
-};
-
-/**
- * The groups directly under the DSP's top group, with the addresses of the
- * controls each holds, however deep: what `assign: 'groups'` hands out.
- */
-const topLevelGroups = (ui: FaustUIDescriptor): Group[] => {
-    const paths = (item: FaustUIItem): string[] =>
-        'items' in item ? item.items.flatMap(paths) : [item.address];
-    return ui.flatMap((root) =>
-        root.items
-            .filter(
-                (item): item is Extract<FaustUIItem, { items: unknown }> =>
-                    'items' in item
-            )
-            .map((group) => ({
-                label: group.label,
-                paths: new Set(paths(group))
-            }))
-    );
-};
 
 /** Keep the set of notes a remote control holds in step with its MIDI. */
 const trackNotes = (notes: Set<number>, data: number[]) => {

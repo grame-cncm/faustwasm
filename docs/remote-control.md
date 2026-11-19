@@ -1559,7 +1559,7 @@ the WebSocket relay, the server could be a Node process alone.
 
 ### 16 quater.7. Plan
 
-1. **Local monitoring**: the local node ↔ remote control bridge in
+1. *(Done.)* **Local monitoring**: the local node ↔ remote control bridge in
    `client.js`, and "Play locally" in the generated remote control (which
    then also loads `faustwasm` and the DSP's wasm, cached by its service
    worker). The most useful and least risky step.
@@ -1570,6 +1570,38 @@ the WebSocket relay, the server could be a Node process alone.
    must carry the audio track; changing it later means renegotiating over
    the control channel), no sound through the relay, one encoded track per
    phone.
+
+Step 1, as implemented: `FaustLocalSound(dsp, node)` (`src/remote/local.ts`,
+in `client.js` and `index.js`) has the control part of a node's API, so a UI
+is built on it as on a node, and it shows the local node's state, what one
+hears. A change made here goes to the local node at once, then to the host;
+a change made elsewhere (host, another phone, the host's correction of a
+refused change) reaches the local node; bargraphs come from the local node.
+This phone's sensors drive the local node at once, with the DSP's curves
+(the shared `src/remote/sensors.ts`, `FaustSensors` bundled, still not
+exported), on the controls that are this phone's to drive, which the host's
+sensor policy decides and now announces in `welcome` (`sensors`): all of
+them under `shared`, those of its group under `assigned` with
+`assign: 'groups'`, none under `mean`, where the right value is the host's
+mean. Values coming back for those controls are then ignored, so that the
+local gesture and the network do not fight over them. `client.js` grows from
+40 to 59 kB (unminified) with those curves.
+
+In the generated remote control, "Play locally" is ticked before
+**Connect**, whose tap starts the audio (as iOS requires); the local node is
+made once and kept across reconnections, and paused while the page is
+hidden. `create-node.js` now resolves `dsp-meta.json` and the wasm files
+against itself rather than the page (the same for the pages next to it), so
+that the remote control in `remote/` plays the DSP generated at the top. Its
+service worker caches those files when first used, not at install.
+
+Checked on real nodes of both kinds: the phone sounds a change before any
+message has left, the host after delivery, and a local tilt gives the value
+the node's own mapping gives. Checked in Chromium on a generated app with the
+host's audio off: the remote control's bargraph, which only its local DSP
+can compute, follows its slider (1668 Hz gives 0.834 for `freq / 2000`). Not
+checked: on a phone, where the load of the DSP and the audio latency are to
+be measured.
 
 ## 17. Implementation plan
 

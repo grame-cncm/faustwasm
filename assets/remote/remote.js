@@ -13,10 +13,18 @@
  * Hidden (screen locked, app in the background), the remote control says
  * goodbye, which releases what it held on the host; shown again, it
  * reconnects.
+ *
+ * "Play locally" also runs the DSP on this device, with its own sound, kept
+ * in step with the host (FaustRemoteDsp + FaustLocalSound): one hears one's
+ * own gestures with no network delay. It is the DSP computed here with the
+ * host's settings, not the host's sound.
  */
 
+// Set to > 0 if the DSP is polyphonic
+const FAUST_DSP_VOICES = 0;
 const DSP_NAME = "FAUST_DSP_NAME";
 const SESSION_KEY = `faust-remote:${DSP_NAME}`;
+const LOCAL_KEY = `faust-remote-local:${DSP_NAME}`;
 // The signaling server and relay it was built for, if not the server of this page (-signal)
 const FAUST_SIGNAL_URL = "";
 // STUN servers, for a host on another network (-stun)
@@ -76,8 +84,8 @@ const setStatus = (text) => ($("status").textContent = text);
 const showError = (error) => ($("error").textContent = error ? String(error?.message ?? error) : "");
 
 (async () => {
-    const { createFaustUI, requestPermissions } = await import("../create-node.js");
-    const { FaustRemoteDsp, createHttpSignaling } = await import("../faustwasm-remote/client.js");
+    const { createFaustNode, createFaustUI, requestPermissions } = await import("../create-node.js");
+    const { FaustRemoteDsp, FaustLocalSound, createHttpSignaling } = await import("../faustwasm-remote/client.js");
 
     const session = findSession();
     if (!session || session.error) {
@@ -95,6 +103,28 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     let rtts = [];
     /** "WebRTC" or "relay": how the current connection goes. */
     let transport = "";
+    /** The local sound: its context, its node once made, and the bridge to the remote control. */
+    let local = null;
+    /** @type {import("../faustwasm-remote/client.js").FaustLocalSound | null} */
+    let control = null;
+
+    try {
+        $("check-local").checked = localStorage.getItem(LOCAL_KEY) === "1";
+    } catch { /* storage unavailable */ }
+
+    const describe = () =>
+        `connected (${transport})${dsp?.group ? `, group ${dsp.group}` : ""}${control ? ", playing locally" : ""}`;
+
+    /** The local node, made once and kept across reconnections. */
+    const localNode = async () => {
+        if (!local.node) {
+            const { faustNode } = await createFaustNode(local.context, DSP_NAME, FAUST_DSP_VOICES);
+            if (!faustNode) throw new Error("the DSP could not be created on this device");
+            faustNode.connect(local.context.destination);
+            local.node = faustNode;
+        }
+        return local.node;
+    };
 
     const connect = async () => {
         if (connecting || dsp?.state === "open") return;
@@ -123,15 +153,23 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
             });
             dsp.addEventListener("statechange", () => {
                 if (dsp?.state !== "closed") return;
+                control?.close();
+                control = null;
                 setStatus("disconnected");
                 // Lost while wanted and visible: try again
                 if (wanted && document.visibilityState === "visible") setTimeout(connect, 2000);
             });
+            // With local sound, the UI drives the bridge: the local node and
+            // the remote control together
+            control?.close();
+            control = local ? new FaustLocalSound(dsp, await localNode()) : null;
+            const target = control ?? dsp;
             $("div-faust-ui").replaceChildren();
-            await createFaustUI($("div-faust-ui"), dsp);
-            dsp.startSensors();
-            setStatus(`connected (${transport})${dsp.group ? `, group ${dsp.group}` : ""}`);
+            await createFaustUI($("div-faust-ui"), target);
+            target.startSensors();
+            setStatus(describe());
             $("button-connect").hidden = true;
+            $("label-local").hidden = true;
         } catch (error) {
             setStatus("not connected");
             showError(error);
@@ -142,8 +180,18 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     };
 
     // A tap: iOS grants the motion sensors only from a user gesture
+    // Audio too: started by this tap, or iOS keeps it silent
     $("button-connect").onclick = async () => {
         wanted = true;
+        const playLocally = $("check-local").checked;
+        try {
+            localStorage.setItem(LOCAL_KEY, playLocally ? "1" : "0");
+        } catch { /* storage unavailable */ }
+        if (playLocally && !local) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            local = { context: new AudioCtx({ latencyHint: "interactive" }), node: null };
+            local.context.resume();
+        }
         await requestPermissions();
         connect();
     };
@@ -151,7 +199,9 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") {
             dsp?.close("hidden");
+            local?.context.suspend();
         } else if (wanted) {
+            local?.context.resume();
             connect();
         }
     });
@@ -159,9 +209,6 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     setInterval(() => {
         if (dsp?.state !== "open" || rtts.length === 0) return;
         const sorted = [...rtts].sort((a, b) => a - b);
-        setStatus(
-            `connected (${transport})${dsp.group ? `, group ${dsp.group}` : ""}, ` +
-                `round trip ${sorted[Math.floor(sorted.length / 2)].toFixed(1)} ms`
-        );
+        setStatus(`${describe()}, round trip ${sorted[Math.floor(sorted.length / 2)].toFixed(1)} ms`);
     }, 1000);
 })().catch(showError);

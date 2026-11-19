@@ -153,6 +153,7 @@ Variants:
 
 - **Timed mode**: open the host as [http://localhost:8443/?delay=40](http://localhost:8443/?delay=40). Values from the remote controls are then applied 40 ms after they were sent, as regularly as they were sent, instead of when the network delivers them.
 - **Relay fallback**: in the remote control tab's console, run `window.RTCPeerConnection = undefined` before clicking **Connect**. The status then reads `connected (relay)`: the messages go through the server.
+- **Local sound**: tick **Play locally** on the remote control before clicking **Connect**. The remote control then also runs the DSP itself, with its own sound, kept in step with the host: one hears one's own gestures with no network delay, and the others' changes as they arrive. It is the DSP computed on the phone with the host's settings, not the host's sound (oscillators are not in phase, noises differ); the phone downloads `faustwasm` and the DSP's wasm for it. In code, `new FaustLocalSound(dsp, localNode)` (in `client.js`) bridges a `FaustRemoteDsp` and a node of the same DSP, and a faust-ui interface is built on it as on a node.
 
 Several phones can control the host at once. By default they share every control, and every phone's sensors drive the same `[acc:]`/`[gyr:]` controls (the latest reading wins). Options in the host page's URL change that:
 

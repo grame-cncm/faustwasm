@@ -70,6 +70,8 @@ test('a polyphonic build makes a polyphonic host', () => {
     const polyDir = outDir('remote-app-poly');
     runCliOk('faust2wasm', ['test/mono.dsp', polyDir, '-remote', '-poly']);
     assert.match(readOut(polyDir, 'index.js'), /FAUST_DSP_VOICES = 16/);
+    // Playing locally, the remote control makes a polyphonic node too
+    assert.match(readOut(polyDir, 'remote/index.js'), /FAUST_DSP_VOICES = 16/);
     assert.ok(fs.existsSync(path.join(polyDir, 'mixer-module.wasm')));
 });
 
@@ -137,6 +139,9 @@ test('the service worker answers for its files and leaves signaling alone', () =
     assert.equal(fetchEvent('../faustwasm-remote/host.js'), false);
     assert.equal(fetchEvent('/signal/room/events/peer'), false);
     assert.equal(fetchEvent('/signal/room/send', 'POST'), false);
+    // What playing locally loads, cached when first used
+    assert.equal(fetchEvent('../dsp-module.wasm'), true);
+    assert.equal(fetchEvent('../faustwasm/index.js'), true);
     // The host page is not the remote control's to cache
     assert.equal(fetchEvent('../index.js'), false);
 });
@@ -187,4 +192,15 @@ test('-signal and -stun refuse what they cannot use', () => {
         assert.equal(result.status, 1, args.join(' '));
         assert.match(result.stdout + result.stderr, message, args.join(' '));
     }
+});
+
+test('the remote control can play the DSP locally, from the files at the top', () => {
+    const remote = readOut(dir, 'remote/index.js');
+    assert.match(remote, /FaustLocalSound/);
+    assert.match(remote, /createFaustNode/);
+    assert.match(readOut(dir, 'remote/index.html'), /id="check-local"/);
+    // create-node.js finds the DSP next to itself, whichever page loads it
+    const createNode = readOut(dir, 'create-node.js');
+    assert.match(createNode, /new URL\(path, import\.meta\.url\)/);
+    assert.doesNotMatch(createNode, /fetch\("\.\/dsp-meta\.json"\)/);
 });

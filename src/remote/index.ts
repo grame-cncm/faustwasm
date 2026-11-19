@@ -31,7 +31,8 @@ export {
 export {
     PROTOCOL_VERSION,
     type FaustRemoteMode,
-    type FaustRemoteRejectCode
+    type FaustRemoteRejectCode,
+    type FaustRemoteSensorPolicy
 } from './protocol';
 export {
     answerPeers,
@@ -49,3 +50,4 @@ export {
 } from './signaling';
 export { connectRelay, listenRelay, type FaustRelayOptions } from './relay';
 export { qrCodeSvg, type FaustQrCodeOptions } from './qr';
+export { FaustLocalSound, type FaustLocalNode } from './local';

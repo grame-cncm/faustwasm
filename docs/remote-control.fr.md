@@ -1573,7 +1573,7 @@ WebSocket, le serveur pourrait être un simple processus Node.
 
 ### 16 quater.7. Plan
 
-1. **Écoute locale** : le pont nœud local ↔ télécommande dans `client.js`,
+1. *(Fait.)* **Écoute locale** : le pont nœud local ↔ télécommande dans `client.js`,
    et « Play locally » dans la télécommande générée (qui charge alors aussi
    `faustwasm` et le wasm du DSP, mis en cache par son service worker).
    L'étape la plus utile et la moins risquée.
@@ -1584,6 +1584,41 @@ WebSocket, le serveur pourrait être un simple processus Node.
    connexion (l'offre doit porter la piste audio ; la changer ensuite demande
    une renégociation par le canal de contrôle), pas de son par le relais, une
    piste encodée par téléphone.
+
+L'étape 1, telle que réalisée : `FaustLocalSound(dsp, node)`
+(`src/remote/local.ts`, dans `client.js` et `index.js`) a la partie contrôle
+de l'API d'un nœud, si bien qu'une interface se construit dessus comme sur un
+nœud, et elle montre l'état du nœud local, ce qu'on entend. Un changement fait
+ici va au nœud local tout de suite, puis à l'hôte ; un changement fait
+ailleurs (l'hôte, un autre téléphone, la correction par l'hôte d'un
+changement refusé) atteint le nœud local ; les bargraphs viennent du nœud
+local. Les capteurs du téléphone pilotent le nœud local tout de suite, avec
+les courbes du DSP (le module commun `src/remote/sensors.ts`, `FaustSensors`
+intégré, toujours pas exporté), sur les contrôles qui sont à ce téléphone,
+ce que décide la politique de capteurs de l'hôte, maintenant annoncée dans
+`welcome` (`sensors`) : tous avec `shared`, ceux de son groupe avec
+`assigned` et `assign: 'groups'`, aucun avec `mean`, où la bonne valeur est
+la moyenne de l'hôte. Les valeurs qui reviennent pour ces contrôles sont
+alors ignorées, pour que le geste local et le réseau ne se les disputent pas.
+`client.js` passe de 40 à 59 Ko (non minifié) avec ces courbes.
+
+Dans la télécommande générée, « Play locally » se coche avant **Connect**,
+dont le toucher démarre l'audio (comme iOS l'exige) ; le nœud local est créé
+une fois et gardé d'une reconnexion à l'autre, et mis en pause quand la page
+est masquée. `create-node.js` résout désormais `dsp-meta.json` et les
+fichiers wasm par rapport à lui-même plutôt qu'à la page (c'est la même chose
+pour les pages qui sont à côté), pour que la télécommande, dans `remote/`,
+joue le DSP généré à la racine. Son service worker met ces fichiers en cache
+à la première utilisation, pas à l'installation.
+
+Vérifié sur de vrais nœuds des deux sortes : le téléphone fait entendre un
+changement avant qu'aucun message ne soit parti, l'hôte après la livraison,
+et une inclinaison locale donne la valeur que donne la correspondance du
+nœud lui-même. Vérifié dans Chromium sur une application générée, l'audio de
+l'hôte coupé : le bargraph de la télécommande, que seul son DSP local peut
+calculer, suit son curseur (1668 Hz donne 0,834 pour `freq / 2000`). Non
+vérifié : sur un téléphone, où la charge du DSP et la latence audio sont à
+mesurer.
 
 ## 17. Plan de mise en œuvre
 

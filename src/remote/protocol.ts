@@ -13,6 +13,9 @@
  * business.
  */
 
+/** What a host does with the sensors of several remote controls. */
+export type FaustRemoteSensorPolicy = 'shared' | 'mean' | 'assigned';
+
 /** Bumped on any change a peer of the previous version would misread. */
 export const PROTOCOL_VERSION = 1;
 
@@ -134,6 +137,8 @@ export interface FaustRemoteWelcomeMessage {
     delay?: number;
     /** The group of controls the host gave this remote control (`assign: 'groups'`). */
     group?: string;
+    /** What the host does with several remote controls' sensors (its `sensorPolicy`). */
+    sensors?: FaustRemoteSensorPolicy;
 }
 
 export interface FaustRemoteRejectMessage {
@@ -314,7 +319,11 @@ export const parseHostMessage = (
                 m.rates !== null &&
                 isNumber((m.rates as Fields).out) &&
                 isOptional(m.delay, isNumber) &&
-                isOptional(m.group, isString)
+                isOptional(m.group, isString) &&
+                isOptional(
+                    m.sensors,
+                    (x) => x === 'shared' || x === 'mean' || x === 'assigned'
+                )
                 ? (m as unknown as FaustRemoteWelcomeMessage)
                 : null;
         case 'reject':

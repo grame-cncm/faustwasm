@@ -399,6 +399,20 @@ const MUTANTS = [
         from: "return { alpha, beta: circular('beta'), gamma };",
         to: "return { alpha: recent.reduce((sum, gyr) => sum + gyr.alpha, 0) / recent.length, beta: circular('beta'), gamma };",
         tests: 'test/unit/remote-sensors.test.mjs'
+    },
+    {
+        what: 'playing locally, a change made here waits for the network to be heard',
+        file: 'src/remote/local.ts',
+        from: '        this.#node.setParamValue(address, value);\n',
+        to: '',
+        tests: 'test/unit/remote-local.test.mjs'
+    },
+    {
+        what: 'playing locally, values coming back fight the local sensors',
+        file: 'src/remote/local.ts',
+        from: 'if (!this.#local.has(path)) node.setParamValue(path, value);',
+        to: 'node.setParamValue(path, value);',
+        tests: 'test/unit/remote-local.test.mjs'
     }
 ];
 

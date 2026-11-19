@@ -40,8 +40,12 @@ const {
     FaustMonoDspGenerator,
     FaustPolyDspGenerator
 } = await import('../../dist/esm/index.js');
-const { FaustRemoteHost, FaustRemoteDsp, createLoopbackTransports } =
-    await import('../../dist/remote/index.js');
+const {
+    FaustRemoteHost,
+    FaustRemoteDsp,
+    FaustLocalSound,
+    createLoopbackTransports
+} = await import('../../dist/remote/index.js');
 
 /**
  * Silent until the gate opens or the device tilts; the bargraph shows what
@@ -273,6 +277,46 @@ process = player(1) + player(2) : *(0.2);`;
 
         for (const phone of phones) phone.close();
         host.close();
+    });
+
+        test(`playing locally on ${kind}, the phone hears itself before the host does`, async () => {
+        const host = await monoNode('remotelocal');
+        const local = await monoNode('remotelocal');
+        const { host: remoteHost, dsp } = await remoteControl(host);
+        const control = new FaustLocalSound(dsp, local);
+        await settle();
+        assert.equal(isAudible(renderNode(local, FRAMES)), false, 'local, gate shut');
+
+        control.setParamValue('gate', 1);
+        // No message has travelled yet: the phone already sounds, the host not
+        assert.equal(isAudible(renderNode(local, FRAMES)), true, 'heard here at once');
+        assert.equal(isAudible(renderNode(host, FRAMES)), false, 'not yet on the host');
+        await settle();
+        assert.equal(isAudible(renderNode(host, FRAMES)), true, 'then on the host');
+
+        // A change made on the host reaches the phone
+        host.setParamValue('/remotelocal/freq', 1000);
+        renderNode(host, BLOCK);
+        await settle();
+        renderNode(local, BLOCK);
+        assert.equal(local.getParamValue('/remotelocal/freq'), 1000);
+
+        // The phone's tilt, mapped here with the DSP's own curve
+        const reference = await monoNode('remotelocal');
+        reference.propagateAcc({ x: 5, y: 0, z: 0 }, false);
+        renderNode(reference, BLOCK);
+        control.propagateAcc({ x: 5, y: 0, z: 0 }, false);
+        renderNode(local, BLOCK);
+        const expected = reference.getParamValue('/remotelocal/tilt');
+        assert.ok(expected > 0, 'the tilt has to move the control');
+        assert.ok(
+            Math.abs(local.getParamValue('/remotelocal/tilt') - expected) < 1e-6,
+            `tilt ${local.getParamValue('/remotelocal/tilt')}, the node's own mapping gives ${expected}`
+        );
+
+        control.close();
+        dsp.close();
+        remoteHost.close();
     });
 
         test(`a note held by a vanished remote control dies away on ${kind}`, async () => {
