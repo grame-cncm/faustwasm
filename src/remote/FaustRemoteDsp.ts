@@ -17,6 +17,8 @@ import {
     type FaustRemoteRejectCode,
     type FaustRemoteWelcomeMessage
 } from './protocol';
+import { FaustRemoteClock } from './clock';
+import { connectRelay, type FaustRelayOptions } from './relay';
 import { callHost, type FaustRTCOptions } from './rtc';
 import type { FaustSignaling } from './signaling';
 import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
@@ -96,8 +98,8 @@ export type FaustRemoteDspState = 'connecting' | 'open' | 'closed';
 
 /** `stream` bytes queued past which a continuous value is not sent. */
 const STREAM_HIGH_WATER = 4096;
-/** Round trips kept to estimate the latency. */
-const RTT_WINDOW = 16;
+/** Pings sent at once when the host wants timestamps, to know its clock soon. */
+const CLOCK_BURST = 4;
 
 const now = () => globalThis.performance.now();
 
@@ -152,8 +154,11 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
 
     #pingTimer: ReturnType<typeof setInterval> | null = null;
     #pingSeq = 0;
-    readonly #rtts: number[] = [];
-    #rtt = NaN;
+    readonly #clock = new FaustRemoteClock();
+    /** The host's playout delay in ms; 0 when it applies values as they come. */
+    #delay = 0;
+    /** The `time` of each continuous input's last value, for its resend. */
+    readonly #lastTime = new Map<number, number | undefined>();
 
     #outputHandler: OutputParamHandler | null = null;
     #inputHandler: InputParamHandler | null = null;
@@ -206,6 +211,23 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         } finally {
             signaling.close();
         }
+    }
+
+    /**
+     * Connect to a host through the WebSocket relay of the server at `url`,
+     * then introduce this remote control as `connect` does: the fallback
+     * when `connectRTC` cannot open a connection.
+     *
+     * @param url - the server's origin, e.g. `location.origin`
+     */
+    static async connectRelay(
+        url: string,
+        room: string,
+        options: FaustRemoteDspOptions & { token: string },
+        relay: FaustRelayOptions = {}
+    ): Promise<FaustRemoteDsp> {
+        const transport = await connectRelay(url, room, options.token, relay);
+        return FaustRemoteDsp.connect(transport, options);
     }
 
     static async connect(
@@ -263,12 +285,34 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
 
     /** Shortest recent round trip to the host, in milliseconds; NaN before the first. */
     get rtt() {
-        return this.#rtt;
+        return this.#clock.rtt;
     }
 
     /** The recent round trips, in milliseconds, oldest first. */
     get rttSamples() {
-        return [...this.#rtts];
+        return this.#clock.rtts;
+    }
+
+    /**
+     * The host's clock minus this one's, in milliseconds, as estimated from
+     * the pings; null before the first answer.
+     */
+    get clockOffset() {
+        return this.#clock.offset;
+    }
+
+    /** The host's playout delay in milliseconds; 0 if it has none. */
+    get playoutDelay() {
+        return this.#delay;
+    }
+
+    /**
+     * Now, in the host's clock, if the host wants timestamps and its clock is
+     * known; otherwise undefined, and the host applies the value on arrival.
+     */
+    #stamp() {
+        const offset = this.#clock.offset;
+        return this.#delay > 0 && offset !== null ? now() + offset : undefined;
     }
 
     /** Say goodbye to the host and close the connection. */
@@ -288,16 +332,18 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         if (i === undefined || !item || !Number.isFinite(value)) return;
         this.#values.set(address, value);
         if (this.#state !== 'open') return;
+        const time = this.#stamp();
         if (isDiscrete(item) || this.#options.gestureEnd <= 0) {
             // A lost button release would leave a note sounding
-            this.#send({ type: 'param', i, value });
+            this.#send({ type: 'param', i, value, time });
             return;
         }
         this.#seq += 1;
         const seq = this.#seq;
         this.#lastSeq.set(i, seq);
+        this.#lastTime.set(i, time);
         if (this.#transport.bufferedAmount('stream') <= STREAM_HIGH_WATER)
-            this.#send({ type: 'param', i, value, seq }, 'stream');
+            this.#send({ type: 'param', i, value, seq, time }, 'stream');
         // The stream may drop the last value of the gesture, which nothing
         // would replace: send it again, reliably, once the control rests
         const pending = this.#gestureTimers.get(i);
@@ -310,7 +356,9 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
                     type: 'param',
                     i,
                     value: this.#values.get(address)!,
-                    seq: this.#lastSeq.get(i)
+                    seq: this.#lastSeq.get(i),
+                    // Its own moment, so the host plays it where it belongs
+                    time: this.#lastTime.get(i)
                 });
             }, this.#options.gestureEnd)
         );
@@ -401,7 +449,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
     midiMessage(data: number[] | Uint8Array) {
         const bytes = Array.from(data);
         if (this.#state !== 'open' || !isChannelVoiceMessage(bytes)) return;
-        this.#send({ type: 'midi', data: bytes });
+        this.#send({ type: 'midi', data: bytes, time: this.#stamp() });
     }
     keyOn(channel: number, pitch: number, velocity: number) {
         this.midiMessage([0x90 | (channel & 0xf), pitch, velocity]);
@@ -451,7 +499,18 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
             return;
         this.#lastAcc = [x, y, z];
         this.#seq += 1;
-        this.#send({ type: 'acc', x, y, z, invert, seq: this.#seq }, 'stream');
+        this.#send(
+            {
+                type: 'acc',
+                x,
+                y,
+                z,
+                invert,
+                seq: this.#seq,
+                time: this.#stamp()
+            },
+            'stream'
+        );
     }
 
     /** Send a raw orientation reading; see `propagateAcc`. */
@@ -472,7 +531,14 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         this.#lastGyr = [alpha, beta, gamma];
         this.#seq += 1;
         this.#send(
-            { type: 'gyr', alpha, beta, gamma, seq: this.#seq },
+            {
+                type: 'gyr',
+                alpha,
+                beta,
+                gamma,
+                seq: this.#seq,
+                time: this.#stamp()
+            },
             'stream'
         );
     }
@@ -568,15 +634,23 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         this.#outputs = welcome.outputs;
         this.#outValues = [...welcome.outputValues];
         this.#voices = welcome.voices;
+        this.#delay = welcome.delay ?? 0;
         this.#setState('open');
-        if (this.#options.pingInterval > 0) {
-            this.#pingTimer = unref(
-                setInterval(() => {
-                    this.#pingSeq += 1;
-                    this.#send({ type: 'ping', s: this.#pingSeq, t0: now() });
-                }, this.#options.pingInterval)
-            );
-        }
+        const ping = () => {
+            this.#pingSeq += 1;
+            this.#send({ type: 'ping', s: this.#pingSeq, t0: now() });
+        };
+        // Timestamps need the host's clock: a few pings now, and keep pinging
+        // to follow the drift, whatever `pingInterval` says
+        const interval =
+            this.#options.pingInterval > 0
+                ? this.#options.pingInterval
+                : this.#delay > 0
+                  ? 1000
+                  : 0;
+        if (this.#delay > 0)
+            for (let n = 0; n < CLOCK_BURST; n += 1) setTimeout(ping, n * 20);
+        if (interval > 0) this.#pingTimer = unref(setInterval(ping, interval));
     }
 
     #receive(channel: FaustRemoteChannel, text: string) {
@@ -630,9 +704,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
             case 'pong': {
                 const t3 = now();
                 const rtt = t3 - message.t0 - (message.t2 - message.t1);
-                this.#rtts.push(rtt);
-                if (this.#rtts.length > RTT_WINDOW) this.#rtts.shift();
-                this.#rtt = Math.min(...this.#rtts);
+                this.#clock.add(message.t0, message.t1, message.t2, t3);
                 this.dispatchEvent(new CustomEvent('rtt', { detail: rtt }));
                 return;
             }

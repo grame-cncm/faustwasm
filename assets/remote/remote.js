@@ -3,7 +3,8 @@
  *
  * No DSP runs here and no wasm is loaded: the interface is built from the
  * description the host sends, and every control, sensor reading included,
- * goes to the host over WebRTC.
+ * goes to the host over WebRTC, or through the server's relay where WebRTC
+ * cannot connect.
  *
  * The host's link carries the session in its fragment (`#room=…&token=…`,
  * never sent to a server). It is kept in localStorage, so the app installed
@@ -64,6 +65,8 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     let connecting = false;
     /** @type {number[]} */
     let rtts = [];
+    /** "WebRTC" or "relay": how the current connection goes. */
+    let transport = "";
 
     const connect = async () => {
         if (connecting || dsp?.state === "open") return;
@@ -71,10 +74,20 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
         setStatus("connecting");
         showError(null);
         try {
-            dsp = await FaustRemoteDsp.connectRTC(
-                createHttpSignaling(location.origin, session.room, session.token, { role: "remote" }),
-                { token: session.token }
-            );
+            let via = "WebRTC";
+            try {
+                dsp = await FaustRemoteDsp.connectRTC(
+                    createHttpSignaling(location.origin, session.room, session.token, { role: "remote" }),
+                    { token: session.token },
+                    { timeout: 8000 }
+                );
+            } catch (error) {
+                // WebRTC cannot connect on this network: through the server
+                console.warn("WebRTC failed, using the relay:", error.message);
+                via = "relay";
+                dsp = await FaustRemoteDsp.connectRelay(location.origin, session.room, { token: session.token });
+            }
+            transport = via;
             rtts = [];
             dsp.addEventListener("rtt", (event) => {
                 rtts.push(event.detail);
@@ -89,7 +102,7 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
             $("div-faust-ui").replaceChildren();
             await createFaustUI($("div-faust-ui"), dsp);
             dsp.startSensors();
-            setStatus("connected");
+            setStatus(`connected (${transport})`);
             $("button-connect").hidden = true;
         } catch (error) {
             setStatus("not connected");
@@ -118,6 +131,6 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     setInterval(() => {
         if (dsp?.state !== "open" || rtts.length === 0) return;
         const sorted = [...rtts].sort((a, b) => a - b);
-        setStatus(`connected, round trip ${sorted[Math.floor(sorted.length / 2)].toFixed(1)} ms`);
+        setStatus(`connected (${transport}), round trip ${sorted[Math.floor(sorted.length / 2)].toFixed(1)} ms`);
     }, 1000);
 })().catch(showError);

@@ -336,6 +336,27 @@ const MUTANTS = [
         from: 'if (event.request.method !== "GET" || !cached.has(url.href)) return;',
         to: 'if (event.request.method !== "GET") return;',
         tests: 'test/cli/remote-app.test.mjs'
+    },
+    {
+        what: 'a vanished remote control is released before what it had scheduled',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: '? client.lastScheduled + 0.001',
+        to: '? undefined',
+        tests: 'test/unit/remote-timed.test.mjs'
+    },
+    {
+        what: 'timestamps a little ahead of the host clock are clamped to now',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: 'const age = Math.max(-delay, (now() - time) / 1000);',
+        to: 'const age = Math.max(0, (now() - time) / 1000);',
+        tests: 'test/unit/remote-timed.test.mjs'
+    },
+    {
+        what: 'a stopped relay listener tries again',
+        file: 'src/remote/relay.ts',
+        from: 'if (retry) clearTimeout(retry);',
+        to: '',
+        tests: 'test/unit/remote-server.test.mjs'
     }
 ];
 

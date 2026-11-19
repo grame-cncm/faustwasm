@@ -1019,7 +1019,7 @@ Q7
 
 ## 16 bis. État de la mise en œuvre
 
-P0, P1 et P2 sont réalisées sur la branche `remote-control`.
+P0, P1, P2 et P3 sont réalisées sur la branche `remote-control`.
 
 P0
 :   `src/remote/` : protocole, `FaustRemoteHost`, `FaustRemoteDsp`, transport
@@ -1074,6 +1074,55 @@ et la PWA télécommande dans `out/remote/`, qui réutilise `../create-node.js`,
 - Une télécommande peut se connecter avant que l'audio de l'hôte soit
   activé ; ses écritures sont appliquées dès que l'`AudioContext` tourne.
 
+P3
+:   Mode horodaté (`playoutDelay`, `src/remote/clock.ts`) et repli par relais
+    WebSocket (`src/remote/relay.ts`, relais dans le serveur). Les politiques
+    exclusive et répartie et les notes par télécommande existaient depuis P0.
+    Tests `remote-timed` et relais dans `remote-server`.
+
+Mode horodaté, tel qu'implémenté (la section 10.3 décrivait la conversion
+côté hôte ; elle est faite côté télécommande, plus simple) :
+
+- La télécommande estime l'écart d'horloge (`FaustRemoteClock` : l'échange au
+  plus court aller-retour parmi les 16 derniers) et envoie `time` déjà dans
+  l'horloge `performance.now()` de l'hôte. Elle n'horodate que si `welcome`
+  annonce un `delay` ; elle envoie alors une salve de quatre pings pour
+  connaître l'horloge au plus tôt.
+- L'hôte applique à `currentTime + délai − âge` : à l'échantillon près pour
+  les paramètres et le MIDI (écritures horodatées du nœud), par un minuteur
+  pour les capteurs, que le nœud ne sait pas programmer. Un horodatage un peu
+  en avance (erreur d'estimation de l'horloge, la même pour tous les messages)
+  est conservé, borné à deux fois le délai ; le ramener à « maintenant »
+  recréait de la gigue. Un message plus en retard que le délai est appliqué à
+  l'arrivée.
+- À la déconnexion, les relâchements sont programmés après la dernière valeur
+  programmée de cette télécommande : sinon un « gate = 1 » encore en attente
+  passerait après le relâchement et la note resterait tenue.
+- Page hôte générée : `index.html?delay=40` pour 40 ms.
+
+Gigue mesurée sur le transport en mémoire, latence tirée entre 0 et 40 ms,
+100 notes envoyées toutes les 10 ms ; écart entre l'espacement d'application
+et l'espacement d'envoi :
+
+```csv "Gigue avant et après le délai de lecture"
+Mode, Médiane (ms), p95 (ms), Max (ms)
+Immédiat, 9.15, 23.27, 29.28
+Délai de 80 ms, 0.00, 0.02, 0.06
+```
+
+C'est la couche logicielle seule, sur une horloge commune : sur un vrai
+réseau s'y ajoutent l'erreur et la dérive de l'estimation d'horloge, à
+mesurer avec un téléphone.
+
+Relais WebSocket : `GET /relay/<room>` passé en WebSocket (RFC 6455 écrit à
+la main, messages texte seulement), premier message `{ token, role, id }`,
+puis préfixe `id\n` ajouté par le serveur. `FaustRemoteHost.listenRelay` et
+`FaustRemoteDsp.connectRelay` ; la télécommande générée essaie WebRTC (8 s)
+puis le relais, et affiche lequel elle utilise. Le relais passe par TCP : une
+perte retarde tout ce qui suit, sur les deux canaux. `listen` et `listenRelay`
+rendent leur fonction d'arrêt (pour « New session ») ; arrêter le relais
+déconnecte les télécommandes qui passaient par lui.
+
 Vérifié dans un navigateur (Chromium intégré, deux onglets en localhost) :
 connexion par le serveur, paramètres et bouton appliqués sur l'hôte, bargraph
 de retour, accéléromètre simulé appliqué puis synchronisé, 8 connexions de suite
@@ -1084,7 +1133,9 @@ ensuite. Une application générée par `-remote` a été vérifiée de la même
 chargé côté télécommande, déconnexion quand la page est masquée et
 reconnexion quand elle redevient visible). Le service worker n'a pas pu y être
 vérifié : ce navigateur intégré refuse tout enregistrement de service worker ;
-il est testé sous Node. **Non vérifié : un vrai téléphone sur le Wi-Fi**, donc ni HTTPS avec
+il est testé sous Node. P3 vérifié de même : télécommande générée privée de
+WebRTC, repliée sur le relais, curseur appliqué sur l'hôte en mode horodaté
+(`?delay=40`). **Non vérifié : un vrai téléphone sur le Wi-Fi**, donc ni HTTPS avec
 certificat, ni capteurs réels, ni latence radio.
 
 Limite constatée, hors de cette couche : `getParamValue` d'un nœud AudioWorklet

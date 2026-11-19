@@ -45,6 +45,17 @@ export interface FaustLoopbackOptions {
         message: string,
         from: 0 | 1
     ) => boolean;
+    /**
+     * Milliseconds each message takes, for a network that jitters. `ctl`
+     * stays in order -- a late message holds back the ones behind it, as on
+     * a reliable channel -- and `stream` does not. Without it, messages
+     * arrive in the next microtask.
+     */
+    latency?: (
+        channel: FaustRemoteChannel,
+        message: string,
+        from: 0 | 1
+    ) => number;
 }
 
 /**
@@ -61,6 +72,37 @@ export const createLoopbackTransports = (
     const maxMessageSize = options.maxMessageSize ?? SAFE_MESSAGE_SIZE;
     let closed = false;
     const ends: FaustRemoteTransport[] = [];
+    /** When the last `ctl` message of each end arrives, to keep them in order. */
+    const ctlArrival = [0, 0];
+    /**
+     * The `ctl` deliveries of each end, chained: two timers due within the
+     * same millisecond may fire in either order, and an ordered channel
+     * cannot let them.
+     */
+    const ctlQueue: Promise<void>[] = [Promise.resolve(), Promise.resolve()];
+    const sleepUntil = (at: number) =>
+        new Promise<void>((resolve) =>
+            setTimeout(resolve, Math.max(0, at - globalThis.performance.now()))
+        );
+    const deliver = (
+        self: 0 | 1,
+        channel: FaustRemoteChannel,
+        message: string
+    ) => {
+        const receive = () => ends[1 - self].onmessage?.(channel, message);
+        if (!options.latency) return queueMicrotask(receive);
+        const now = globalThis.performance.now();
+        let at = now + Math.max(0, options.latency(channel, message, self));
+        if (channel === 'ctl') {
+            at = Math.max(at, ctlArrival[self]);
+            ctlArrival[self] = at;
+            ctlQueue[self] = ctlQueue[self]
+                .then(() => sleepUntil(at))
+                .then(receive);
+        } else {
+            setTimeout(receive, at - now);
+        }
+    };
     const make = (self: 0 | 1): FaustRemoteTransport => ({
         maxMessageSize,
         onmessage: null,
@@ -75,12 +117,16 @@ export const createLoopbackTransports = (
             }
             if (options.deliver && !options.deliver(channel, message, self))
                 return;
-            queueMicrotask(() => ends[1 - self].onmessage?.(channel, message));
+            deliver(self, channel, message);
         },
         close(reason = 'closed') {
             if (closed) return;
             closed = true;
-            queueMicrotask(() => ends.forEach((end) => end.onclose?.(reason)));
+            const end = () => ends.forEach((end) => end.onclose?.(reason));
+            // After what is still on its way
+            const wait = Math.max(...ctlArrival) - globalThis.performance.now();
+            if (options.latency && wait > 0) setTimeout(end, wait + 1);
+            else queueMicrotask(end);
         }
     });
     ends.push(make(0), make(1));

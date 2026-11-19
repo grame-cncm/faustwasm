@@ -228,3 +228,91 @@ test('a whole session is established through the server', async () => {
     assert.deepEqual(node.writesTo(GATE), [1]);
     assert.equal(FakeRTCPeerConnection.refused, 0);
 });
+
+// -------------------------------------------------------------------- relay
+
+test('a whole session goes through the relay when WebRTC is out of reach', async () => {
+    const name = room();
+    const node = new FakeNode();
+    const host = new FaustRemoteHost(node, { token: 'secret', outputRate: 1e6 });
+    toClose.push(host);
+    host.listenRelay(base, name, 'secret', { retry: 50 });
+    await settle(100);
+
+    const dsp = await FaustRemoteDsp.connectRelay(base, name, {
+        token: 'secret',
+        pingInterval: 0,
+        gestureEnd: 0
+    });
+    toClose.push(dsp);
+    // The welcome, over 125 bytes, took the 16-bit length of the framing
+    assert.ok(dsp.getJSON().length > 125);
+    /** @type {number[]} */
+    const levels = [];
+    dsp.setOutputParamHandler((path, value) => levels.push(value));
+    dsp.setParamValue(GATE, 1);
+    await settle();
+    assert.deepEqual(node.writesTo(GATE), [1]);
+    node.emit('/t/level', 0.5);
+    await settle();
+    assert.equal(levels.at(-1), 0.5);
+
+    // The remote control's connection drops: the host releases the gate
+    dsp.close();
+    await settle();
+    assert.deepEqual(node.writesTo(GATE), [1, 0]);
+    assert.deepEqual(host.clients, []);
+});
+
+test('a relayed connection that drops is released without a goodbye', async () => {
+    const name = room();
+    const node = new FakeNode();
+    const host = new FaustRemoteHost(node, { token: 'secret' });
+    toClose.push(host);
+    host.listenRelay(base, name, 'secret', { retry: 50 });
+    await settle(100);
+    const { connectRelay } = await import('../../dist/remote/index.js');
+    const transport = await connectRelay(base, name, 'secret');
+    const dsp = await FaustRemoteDsp.connect(transport, {
+        token: 'secret',
+        pingInterval: 0,
+        gestureEnd: 0
+    });
+    dsp.setParamValue(GATE, 1);
+    await settle();
+    // The socket closes under the remote control: no 'bye' is sent
+    transport.close();
+    await settle();
+    assert.deepEqual(node.writesTo(GATE), [1, 0]);
+});
+
+test('the relay refuses a wrong token, and a room without a relaying host', async () => {
+    const name = room();
+    const host = new FaustRemoteHost(new FakeNode(), { token: 'secret' });
+    toClose.push(host);
+    host.listenRelay(base, name, 'secret', { retry: 50 });
+    await settle(100);
+    await assert.rejects(
+        FaustRemoteDsp.connectRelay(base, name, { token: 'guess' }),
+        /refused/
+    );
+    await assert.rejects(
+        FaustRemoteDsp.connectRelay(base, room(), { token: 'secret' }),
+        /refused/
+    );
+    // Another host cannot take the room with another token; stopped while it
+    // waits to try again, it tries no more
+    const { listenRelay } = await import('../../dist/remote/index.js');
+    const errors = [];
+    const stop = listenRelay(base, name, 'other', () => {}, { retry: 50 }, (error) => {
+        errors.push(error);
+        setTimeout(stop, 5);
+    });
+    await settle(300);
+    assert.equal(errors.length, 1);
+});
+
+test('the relay answers no plain HTTP request on its path', async () => {
+    const response = await fetch(`${base}/relay/someroom`);
+    assert.equal(response.status, 404);
+});

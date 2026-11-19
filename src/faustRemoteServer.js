@@ -16,17 +16,26 @@
  *   `message.peer`; from any other id, delivered to the host with `peer` set to
  *   the sender's id, so a remote control can only speak for itself.
  *
+ * Relay, for networks where WebRTC does not connect: a WebSocket on
+ * `/relay/<room>`. Its first message authenticates, `{ token, role, id }`;
+ * the server answers `ok` or closes. Then a remote control's messages go to
+ * the room's host prefixed with the remote control's id and a newline, and
+ * the host's go, by that prefix, to the remote control it names; a lone `!`
+ * after the prefix says that end has closed. Same token rule as signaling: a
+ * relaying host registers the room as `POST host` does.
+ *
  * Messages for an id whose stream is not open yet are kept (the last 64, for a
  * minute), so a remote control may post its offer before its stream is up.
  * The server reads nothing in them but `peer`, and keeps nothing once they are
  * delivered.
  */
 import { Buffer } from 'buffer';
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
-import { clearInterval, setInterval } from 'timers';
+import { clearInterval, clearTimeout, setInterval, setTimeout } from 'timers';
 import { URL } from 'url';
 
 const MAX_BODY = 64 * 1024;
@@ -63,6 +72,8 @@ const CONTENT_TYPES = {
  * @property {string} token
  * @property {string | null} host
  * @property {Map<string, Peer>} peers
+ * @property {WebSocketPeer | null} relayHost
+ * @property {Map<string, WebSocketPeer>} relayRemotes
  */
 
 /**
@@ -104,6 +115,136 @@ const readJSON = (req) =>
         });
         req.on('error', reject);
     });
+
+const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+const MAX_FRAME = 1024 * 1024;
+
+/**
+ * @typedef {object} WebSocketPeer
+ * @property {(text: string) => void} send
+ * @property {() => void} close
+ * @property {((text: string) => void) | null} onmessage
+ * @property {(() => void) | null} onclose
+ */
+
+/**
+ * The server end of a WebSocket (RFC 6455), text messages only: enough for
+ * the relay, without a dependency. Fragmented messages are reassembled,
+ * pings answered, anything over `MAX_FRAME` closes the connection.
+ *
+ * @param {http.IncomingMessage} req
+ * @param {import('stream').Duplex} socket
+ * @returns {WebSocketPeer | null} null if the request is no WebSocket upgrade
+ */
+const acceptWebSocket = (req, socket) => {
+    const key = req.headers['sec-websocket-key'];
+    if (
+        typeof key !== 'string' ||
+        (req.headers.upgrade ?? '').toLowerCase() !== 'websocket'
+    )
+        return null;
+    const accept = createHash('sha1')
+        .update(key + WEBSOCKET_GUID)
+        .digest('base64');
+    socket.write(
+        'HTTP/1.1 101 Switching Protocols\r\n' +
+            'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
+            `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
+    );
+    let closed = false;
+    /** @type {WebSocketPeer} */
+    const peer = {
+        onmessage: null,
+        onclose: null,
+        send(text) {
+            if (!closed) socket.write(frame(0x1, Buffer.from(text, 'utf8')));
+        },
+        close() {
+            if (closed) return;
+            closed = true;
+            socket.end(frame(0x8, Buffer.alloc(0)));
+            peer.onclose?.();
+        }
+    };
+    /**
+     * @param {number} opcode
+     * @param {Buffer} payload
+     */
+    const frame = (opcode, payload) => {
+        const length = payload.length;
+        const head =
+            length < 126
+                ? Buffer.from([0x80 | opcode, length])
+                : length < 65536
+                  ? Buffer.from([0x80 | opcode, 126, length >> 8, length & 255])
+                  : Buffer.concat([
+                        Buffer.from([0x80 | opcode, 127]),
+                        (() => {
+                            const b = Buffer.alloc(8);
+                            b.writeBigUInt64BE(BigInt(length));
+                            return b;
+                        })()
+                    ]);
+        return Buffer.concat([head, payload]);
+    };
+    let buffer = Buffer.alloc(0);
+    /** @type {Buffer[]} */
+    let fragments = [];
+    socket.on('data', (/** @type {Buffer} */ chunk) => {
+        buffer = Buffer.concat([buffer, chunk]);
+        for (;;) {
+            if (buffer.length < 2) return;
+            const fin = (buffer[0] & 0x80) !== 0;
+            const opcode = buffer[0] & 0x0f;
+            const masked = (buffer[1] & 0x80) !== 0;
+            let length = buffer[1] & 0x7f;
+            let offset = 2;
+            if (length === 126) {
+                if (buffer.length < 4) return;
+                length = buffer.readUInt16BE(2);
+                offset = 4;
+            } else if (length === 127) {
+                if (buffer.length < 10) return;
+                const big = buffer.readBigUInt64BE(2);
+                length = big > BigInt(MAX_FRAME) ? MAX_FRAME + 1 : Number(big);
+                offset = 10;
+            }
+            // A client must mask what it sends (RFC 6455, 5.1)
+            if (!masked || length > MAX_FRAME) return peer.close();
+            if (buffer.length < offset + 4 + length) return;
+            const mask = buffer.subarray(offset, offset + 4);
+            const payload = Buffer.from(
+                buffer.subarray(offset + 4, offset + 4 + length)
+            );
+            for (let i = 0; i < payload.length; i += 1)
+                payload[i] ^= mask[i & 3];
+            buffer = buffer.subarray(offset + 4 + length);
+            if (opcode === 0x8) return peer.close();
+            if (opcode === 0x9) {
+                if (!closed) socket.write(frame(0xa, payload));
+                continue;
+            }
+            if (opcode === 0xa) continue;
+            if (opcode === 0x1 || opcode === 0x0) {
+                fragments.push(payload);
+                if (!fin) continue;
+                const text = Buffer.concat(fragments).toString('utf8');
+                fragments = [];
+                peer.onmessage?.(text);
+                continue;
+            }
+            // Binary or unknown: not ours
+            return peer.close();
+        }
+    });
+    socket.on('close', () => {
+        if (closed) return;
+        closed = true;
+        peer.onclose?.();
+    });
+    socket.on('error', () => socket.destroy());
+    return peer;
+};
 
 /**
  * Create the server; call `listen` on it.
@@ -169,7 +310,13 @@ export const createFaustRemoteServer = ({ root, cert, key }) => {
             if (room && room.token !== token)
                 return reply(res, 403, 'room taken');
             if (!room) {
-                room = { token, host: null, peers: new Map() };
+                room = {
+                    token,
+                    host: null,
+                    peers: new Map(),
+                    relayHost: null,
+                    relayRemotes: new Map()
+                };
                 rooms.set(roomName, room);
             }
             room.host = body.id;
@@ -273,9 +420,124 @@ export const createFaustRemoteServer = ({ root, cert, key }) => {
         );
     };
 
-    return cert && key
-        ? https.createServer({ cert, key }, handle)
-        : http.createServer(handle);
+    /**
+     * The relay: authenticate the first message, then forward.
+     *
+     * @param {WebSocketPeer} ws
+     * @param {string} roomName
+     */
+    const relay = (ws, roomName) => {
+        /** @type {Room | null} */
+        let room = null;
+        let id = '';
+        let role = '';
+        const timeout = setTimeout(() => ws.close(), 10000);
+        ws.onmessage = (text) => {
+            if (room) return forward(text);
+            clearTimeout(timeout);
+            let hello;
+            try {
+                hello = JSON.parse(text);
+            } catch {
+                return ws.close();
+            }
+            const { token } = hello ?? {};
+            id = hello?.id;
+            role = hello?.role;
+            if (typeof token !== 'string' || !token || typeof id !== 'string')
+                return ws.close();
+            if (!/^[\w-]{1,64}$/.test(id)) return ws.close();
+            let candidate = rooms.get(roomName);
+            if (role === 'host') {
+                if (candidate && candidate.token !== token) return ws.close();
+                if (!candidate) {
+                    candidate = {
+                        token,
+                        host: null,
+                        peers: new Map(),
+                        relayHost: null,
+                        relayRemotes: new Map()
+                    };
+                    rooms.set(roomName, candidate);
+                }
+                candidate.relayHost?.close();
+                candidate.relayHost = ws;
+            } else if (role === 'remote') {
+                if (
+                    !candidate ||
+                    candidate.token !== token ||
+                    !candidate.relayHost
+                )
+                    return ws.close();
+                candidate.relayRemotes.get(id)?.close();
+                candidate.relayRemotes.set(id, ws);
+            } else return ws.close();
+            room = candidate;
+            ws.send('ok');
+        };
+        /** @param {string} text */
+        const forward = (text) => {
+            if (!room) return;
+            if (role === 'remote') {
+                room.relayHost?.send(`${id}\n${text}`);
+                return;
+            }
+            const cut = text.indexOf('\n');
+            if (cut <= 0) return;
+            const target = room.relayRemotes.get(text.slice(0, cut));
+            const payload = text.slice(cut + 1);
+            if (!target) return;
+            if (payload === '!') target.close();
+            else target.send(payload);
+        };
+        ws.onclose = () => {
+            clearTimeout(timeout);
+            if (!room) return;
+            if (role === 'remote') {
+                if (room.relayRemotes.get(id) !== ws) return;
+                room.relayRemotes.delete(id);
+                room.relayHost?.send(`${id}\n!`);
+            } else if (room.relayHost === ws) {
+                room.relayHost = null;
+                for (const remote of [...room.relayRemotes.values()])
+                    remote.close();
+                room.relayRemotes.clear();
+            }
+        };
+    };
+
+    const server =
+        cert && key
+            ? https.createServer({ cert, key }, handle)
+            : http.createServer(handle);
+    // Upgraded sockets leave the HTTP server's books: `close()` would wait
+    // for them forever, so it closes them itself
+    /** @type {Set<import('stream').Duplex>} */
+    const upgraded = new Set();
+    const closeServer = server.close.bind(server);
+    server.close = (callback) => {
+        for (const socket of upgraded) socket.destroy();
+        return closeServer(callback);
+    };
+    server.on('upgrade', (req, socket) => {
+        upgraded.add(socket);
+        socket.on('close', () => upgraded.delete(socket));
+        let match;
+        try {
+            match = new URL(req.url ?? '/', 'http://localhost').pathname.match(
+                /^\/relay\/([^/]+)$/
+            );
+        } catch {
+            match = null;
+        }
+        const ws = match ? acceptWebSocket(req, socket) : null;
+        if (!match || !ws) {
+            socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+            return;
+        }
+        relay(ws, decodeURIComponent(match[1]));
+    });
+    return server;
 };
 
 export default createFaustRemoteServer;

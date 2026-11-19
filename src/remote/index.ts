@@ -45,3 +45,4 @@ export {
     type FaustSignalMessage,
     type FaustSignaling
 } from './signaling';
+export { connectRelay, listenRelay, type FaustRelayOptions } from './relay';

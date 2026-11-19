@@ -16,6 +16,7 @@ import {
     type FaustRemoteMode,
     type FaustRemoteRejectCode
 } from './protocol';
+import { listenRelay, type FaustRelayOptions } from './relay';
 import { answerPeers, type FaustRTCOptions } from './rtc';
 import type { FaustSignaling } from './signaling';
 import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
@@ -46,6 +47,8 @@ export type FaustRemoteHostTarget = Pick<
 > & {
     /** Polyphonic nodes only. */
     getNumActiveVoices?(): number;
+    /** The node's context: its clock is what timestamped values are played on. */
+    readonly context?: { readonly currentTime: number };
 };
 
 /** A remote control, as the host's events and `clients` show it. */
@@ -81,6 +84,14 @@ export interface FaustRemoteHostOptions {
     maxMessageRate?: number;
     /** Milliseconds during which a write is not echoed to its writer. Default 500. */
     echoWindow?: number;
+    /**
+     * Seconds by which timestamped values are delayed, so that they are
+     * applied as regularly as they were sent, whatever the network did to
+     * them in between. `null` (the default) applies every value on arrival.
+     * Parameters and MIDI are then applied on the exact sample; sensor
+     * readings, which a node cannot schedule, by a timer, to a few ms.
+     */
+    playoutDelay?: number | null;
 }
 
 /** `stream` bytes queued past which a remote control is skipped for a tick. */
@@ -102,6 +113,10 @@ interface Client {
     readonly held: Set<number>;
     /** Notes it holds, as `channel << 8 | pitch`. */
     readonly notes: Set<number>;
+    /** The latest context time a value of this remote control is scheduled for. */
+    lastScheduled: number;
+    /** Sensor readings waiting for their time. */
+    readonly timers: Set<ReturnType<typeof setTimeout>>;
     /** Bargraph values as this remote control last received them. */
     outSent: Float64Array;
     lastMessageAt: number;
@@ -138,9 +153,15 @@ const unref = <T>(timer: T): T => {
 export class FaustRemoteHost extends EventTarget {
     readonly #node: FaustRemoteHostTarget;
     readonly #options: Required<
-        Omit<FaustRemoteHostOptions, 'token' | 'assign' | 'expose'>
+        Omit<
+            FaustRemoteHostOptions,
+            'token' | 'assign' | 'expose' | 'playoutDelay'
+        >
     > &
-        Pick<FaustRemoteHostOptions, 'token' | 'assign' | 'expose'>;
+        Pick<
+            FaustRemoteHostOptions,
+            'token' | 'assign' | 'expose' | 'playoutDelay'
+        >;
     readonly #session = randomId(8);
     readonly #json: string;
     #hash: Promise<string> | null = null;
@@ -234,13 +255,51 @@ export class FaustRemoteHost extends EventTarget {
     /**
      * Answer the WebRTC offers of remote controls arriving through a
      * signaling channel, and accept each connection that opens. Stops on
-     * `close()`.
+     * `close()`, or when the returned function is called (connections
+     * already open stay).
      */
     listen(signaling: FaustSignaling, options: FaustRTCOptions = {}) {
-        if (this.#closed) return;
-        this.#listeners.push(
+        if (this.#closed) return () => {};
+        return this.#track(
             answerPeers(
                 signaling,
+                (transport) => this.accept(transport),
+                options,
+                (error) => this.#error(error)
+            )
+        );
+    }
+
+    /** Keep a listener's stop for `close()`, and return it, also forgotten when called. */
+    #track(stop: () => void) {
+        this.#listeners.push(stop);
+        return () => {
+            const index = this.#listeners.indexOf(stop);
+            if (index !== -1) this.#listeners.splice(index, 1);
+            stop();
+        };
+    }
+
+    /**
+     * Accept remote controls through the WebSocket relay of the server at
+     * `url`, for those that cannot connect over WebRTC. Use it along with
+     * `listen`: a remote control tries WebRTC first. Stops on `close()`, or
+     * when the returned function is called.
+     *
+     * @param url - the server's origin, e.g. `location.origin`
+     */
+    listenRelay(
+        url: string,
+        room: string,
+        token: string,
+        options: FaustRelayOptions = {}
+    ) {
+        if (this.#closed) return () => {};
+        return this.#track(
+            listenRelay(
+                url,
+                room,
+                token,
                 (transport) => this.accept(transport),
                 options,
                 (error) => this.#error(error)
@@ -264,6 +323,8 @@ export class FaustRemoteHost extends EventTarget {
             written: new Map(),
             held: new Set(),
             notes: new Set(),
+            lastScheduled: -Infinity,
+            timers: new Set(),
             outSent: new Float64Array(this.#outputs.length),
             lastMessageAt: now(),
             windowStart: now(),
@@ -387,7 +448,10 @@ export class FaustRemoteHost extends EventTarget {
             ),
             outputValues: Array.from(this.#outValues),
             voices: this.#voices,
-            rates: { out: this.#options.outputRate }
+            rates: { out: this.#options.outputRate },
+            delay: this.#timed()
+                ? this.#options.playoutDelay! * 1000
+                : undefined
         });
         this.dispatchEvent(new CustomEvent('join', { detail: info }));
     }
@@ -407,27 +471,38 @@ export class FaustRemoteHost extends EventTarget {
                     if (value !== 0) client.held.add(message.i);
                     else client.held.delete(message.i);
                 }
-                this.#node.setParamValue(item.address, value);
+                this.#node.setParamValue(
+                    item.address,
+                    value,
+                    this.#when(client, message.time)
+                );
                 return;
             }
             case 'acc': {
                 if (!this.#node.hasAccInput || !this.#mayDrive(client)) return;
                 if (!this.#fresh(client, 'acc', message.seq)) return;
                 const { x, y, z, invert } = message;
-                this.#node.propagateAcc({ x, y, z }, invert);
+                this.#later(client, message.time, () =>
+                    this.#node.propagateAcc({ x, y, z }, invert)
+                );
                 return;
             }
             case 'gyr': {
                 if (!this.#node.hasGyrInput || !this.#mayDrive(client)) return;
                 if (!this.#fresh(client, 'gyr', message.seq)) return;
                 const { alpha, beta, gamma } = message;
-                this.#node.propagateGyr({ alpha, beta, gamma });
+                this.#later(client, message.time, () =>
+                    this.#node.propagateGyr({ alpha, beta, gamma })
+                );
                 return;
             }
             case 'midi': {
                 if (!this.#mayDrive(client)) return;
                 trackNotes(client.notes, message.data);
-                this.#node.midiMessage(message.data);
+                this.#node.midiMessage(
+                    message.data,
+                    this.#when(client, message.time)
+                );
                 return;
             }
             case 'ping':
@@ -446,6 +521,54 @@ export class FaustRemoteHost extends EventTarget {
                 // Already open: a second hello changes nothing
                 return;
         }
+    }
+
+    #timed() {
+        const delay = this.#options.playoutDelay;
+        return (
+            delay !== null &&
+            delay !== undefined &&
+            delay > 0 &&
+            this.#node.context !== undefined
+        );
+    }
+
+    /**
+     * The context time to apply a timestamped value at: its own moment, as
+     * many seconds later as the playout delay says, whatever the network
+     * took. Undefined -- now -- without a playout delay, without a timestamp,
+     * or when the network took longer than the delay.
+     *
+     * `time` is in the host's clock (the remote control converted it): the
+     * message's age is read against `performance.now()`, and only that age is
+     * carried over to the context's clock.
+     */
+    #when(client: Client, time: number | undefined) {
+        if (!this.#timed() || time === undefined) return undefined;
+        const context = this.#node.context!;
+        const delay = this.#options.playoutDelay!;
+        // A stamp a little ahead of now is the clock estimate's error, the
+        // same for every message: kept, so the spacing is kept. Bounded, so
+        // that no stamp schedules a value more than twice the delay ahead.
+        const age = Math.max(-delay, (now() - time) / 1000);
+        const at = context.currentTime + delay - age;
+        if (at <= context.currentTime) return undefined;
+        client.lastScheduled = Math.max(client.lastScheduled, at);
+        return at;
+    }
+
+    /** Run `apply` at a timestamped value's time, by a timer: for sensor readings. */
+    #later(client: Client, time: number | undefined, apply: () => void) {
+        const at = this.#when(client, time);
+        if (at === undefined) return apply();
+        const timer = setTimeout(
+            () => {
+                client.timers.delete(timer);
+                apply();
+            },
+            (at - this.#node.context!.currentTime) * 1000
+        );
+        client.timers.add(timer);
     }
 
     /** `exclusive`: only the first remote control to have joined drives. */
@@ -629,16 +752,29 @@ export class FaustRemoteHost extends EventTarget {
      */
     #drop(client: Client, reason: string, sayBye: boolean) {
         if (client.closing) return;
+        for (const timer of client.timers) clearTimeout(timer);
+        client.timers.clear();
         if (client.open) {
+            // After whatever of this remote control is still scheduled: a
+            // release played before the press it releases would leave the
+            // note on
+            const currentTime = this.#node.context?.currentTime ?? 0;
+            const after =
+                client.lastScheduled > currentTime
+                    ? client.lastScheduled + 0.001
+                    : undefined;
             for (const i of client.held) {
                 const heldElsewhere = this.#open().some(
                     (other) => other !== client && other.held.has(i)
                 );
                 if (!heldElsewhere)
-                    this.#node.setParamValue(this.#inputs[i].address, 0);
+                    this.#node.setParamValue(this.#inputs[i].address, 0, after);
             }
             for (const note of client.notes)
-                this.#node.midiMessage([0x80 | (note >> 8), note & 0x7f, 0]);
+                this.#node.midiMessage(
+                    [0x80 | (note >> 8), note & 0x7f, 0],
+                    after
+                );
             client.held.clear();
             client.notes.clear();
         }

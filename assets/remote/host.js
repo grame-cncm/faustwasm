@@ -3,12 +3,14 @@
  *
  * The DSP runs here and its sound comes out of this machine. Remote controls
  * (the PWA in `remote/`) connect to it over WebRTC, after a signaling exchange
- * through the server that serves this page: `faust-remote-server-ts`.
+ * through the server that serves this page: `faust-remote-server-ts`; or,
+ * where WebRTC cannot connect, through that server's relay.
  *
  * The session (room and token) is kept in localStorage, so a remote control
  * installed on a phone finds the same session after this page is reloaded.
- * "New session" makes another one, which disconnects nobody already connected
- * but turns away the remote controls that only know the old link.
+ * "New session" makes another one, which turns away the remote controls that
+ * only know the old link. Those connected over WebRTC stay connected; those
+ * going through the relay are disconnected, since the relay is per session.
  */
 
 // Set to > 0 if the DSP is polyphonic
@@ -52,8 +54,15 @@ const showError = (error) => ($("error").textContent = String(error?.message ?? 
     // The local UI first: the host chains the handlers it finds on the node
     await createFaustUI($("div-faust-ui"), faustNode);
 
-    const host = new FaustRemoteHost(faustNode, {});
+    // `?delay=40` on this page's URL: values from the remote controls are
+    // played 40 ms after they were sent, as regularly as they were sent,
+    // instead of when the network delivers them
+    const delay = Number(new URLSearchParams(location.search).get("delay"));
+    const host = new FaustRemoteHost(faustNode, {
+        playoutDelay: delay > 0 ? delay / 1000 : null
+    });
     let signaling = null;
+    let stopListening = [];
 
     const showClients = () => {
         const ids = host.clients.map((client) => client.id);
@@ -65,6 +74,7 @@ const showError = (error) => ($("error").textContent = String(error?.message ?? 
 
     /** Listen for remote controls in a session, and show its link. */
     const open = async (session) => {
+        stopListening.forEach((stop) => stop());
         signaling?.close();
         // The token the remote controls must present, in `hello` as to the server
         host.setToken(session.token);
@@ -73,7 +83,11 @@ const showError = (error) => ($("error").textContent = String(error?.message ?? 
             onerror: (error) => console.warn("signaling:", error.message)
         });
         await signaling.ready;
-        host.listen(signaling);
+        // WebRTC, and the server's relay for the networks where it fails
+        stopListening = [
+            host.listen(signaling),
+            host.listenRelay(location.origin, session.room, session.token)
+        ];
         const url = new URL("remote/index.html", location.href);
         url.hash = `room=${session.room}&token=${session.token}`;
         const link = document.createElement("a");

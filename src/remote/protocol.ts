@@ -44,6 +44,11 @@ export interface FaustRemoteParamMessage {
     value: number;
     /** Present on writes that may arrive out of order. */
     seq?: number;
+    /**
+     * When it happened, in the host's clock (milliseconds of its
+     * `performance.now()`); sent when the host asks for a playout delay.
+     */
+    time?: number;
 }
 
 export interface FaustRemoteAccMessage {
@@ -54,6 +59,11 @@ export interface FaustRemoteAccMessage {
     /** The platform of the remote control, not the host's, decides this. */
     invert: boolean;
     seq?: number;
+    /**
+     * When it happened, in the host's clock (milliseconds of its
+     * `performance.now()`); sent when the host asks for a playout delay.
+     */
+    time?: number;
 }
 
 export interface FaustRemoteGyrMessage {
@@ -62,11 +72,21 @@ export interface FaustRemoteGyrMessage {
     beta: number;
     gamma: number;
     seq?: number;
+    /**
+     * When it happened, in the host's clock (milliseconds of its
+     * `performance.now()`); sent when the host asks for a playout delay.
+     */
+    time?: number;
 }
 
 export interface FaustRemoteMidiMessage {
     type: 'midi';
     data: number[];
+    /**
+     * When it happened, in the host's clock (milliseconds of its
+     * `performance.now()`); sent when the host asks for a playout delay.
+     */
+    time?: number;
 }
 
 export interface FaustRemotePingMessage {
@@ -107,6 +127,11 @@ export interface FaustRemoteWelcomeMessage {
     outputValues: number[];
     voices: number;
     rates: { out: number };
+    /**
+     * The host's playout delay in milliseconds, when it has one: the remote
+     * control then stamps its messages with `time`.
+     */
+    delay?: number;
 }
 
 export interface FaustRemoteRejectMessage {
@@ -224,7 +249,8 @@ export const parseClientMessage = (
         case 'param':
             return isIndex(m.i) &&
                 isNumber(m.value) &&
-                isOptional(m.seq, isIndex)
+                isOptional(m.seq, isIndex) &&
+                isOptional(m.time, isNumber)
                 ? (m as unknown as FaustRemoteParamMessage)
                 : null;
         case 'acc':
@@ -232,18 +258,20 @@ export const parseClientMessage = (
                 isNumber(m.y) &&
                 isNumber(m.z) &&
                 typeof m.invert === 'boolean' &&
-                isOptional(m.seq, isIndex)
+                isOptional(m.seq, isIndex) &&
+                isOptional(m.time, isNumber)
                 ? (m as unknown as FaustRemoteAccMessage)
                 : null;
         case 'gyr':
             return isNumber(m.alpha) &&
                 isNumber(m.beta) &&
                 isNumber(m.gamma) &&
-                isOptional(m.seq, isIndex)
+                isOptional(m.seq, isIndex) &&
+                isOptional(m.time, isNumber)
                 ? (m as unknown as FaustRemoteGyrMessage)
                 : null;
         case 'midi':
-            return isChannelVoiceMessage(m.data)
+            return isChannelVoiceMessage(m.data) && isOptional(m.time, isNumber)
                 ? (m as unknown as FaustRemoteMidiMessage)
                 : null;
         case 'ping':
@@ -282,7 +310,8 @@ export const parseHostMessage = (
                 isIndex(m.voices) &&
                 typeof m.rates === 'object' &&
                 m.rates !== null &&
-                isNumber((m.rates as Fields).out)
+                isNumber((m.rates as Fields).out) &&
+                isOptional(m.delay, isNumber)
                 ? (m as unknown as FaustRemoteWelcomeMessage)
                 : null;
         case 'reject':

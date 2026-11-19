@@ -108,6 +108,20 @@ export class FakeNode {
         this.hasAccInput = true;
         this.hasGyrInput = true;
         this.voices = 0;
+        /**
+         * Every write with the context time it was scheduled for (undefined:
+         * at once) and the moment it reached the node, in ms.
+         * @type {{ path: string, value: number, time: number | undefined, at: number }[]}
+         */
+        this.timed = [];
+        /** @type {{ data: number[], time: number | undefined, at: number }[]} */
+        this.timedMidi = [];
+        /** A context on the same clock as `performance.now()`. */
+        this.context = {
+            get currentTime() {
+                return performance.now() / 1000;
+            }
+        };
         /** @type {((path: string, value: number) => void) | null} */
         this.outputHandler = null;
         /** @type {((path: string, value: number) => void) | null} */
@@ -119,9 +133,10 @@ export class FakeNode {
     getMeta() {
         return this.meta;
     }
-    /** @param {string} path @param {number} value */
-    setParamValue(path, value) {
+    /** @param {string} path @param {number} value @param {number} [time] */
+    setParamValue(path, value, time) {
         this.writes.push([path, value]);
+        this.timed.push({ path, value, time, at: performance.now() });
         this.values.set(path, value);
         this.inputHandler?.(path, Math.fround(value));
     }
@@ -142,8 +157,9 @@ export class FakeNode {
         return this.inputHandler;
     }
     /** @param {number[] | Uint8Array} data */
-    midiMessage(data) {
+    midiMessage(data, time) {
         this.midi.push(Array.from(data));
+        this.timedMidi.push({ data: Array.from(data), time, at: performance.now() });
     }
     propagateAcc({ x, y, z }, invert) {
         this.acc.push([x, y, z, invert]);
