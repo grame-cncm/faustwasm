@@ -125,6 +125,56 @@ node scripts/faust2wasm.js test/organ1.dsp test/organ1 -poly -standalone
 ```
 will create the same set of files, plus `mixer-module.wasm` and, since `organ1.dsp` defines an `effect`, `effect-module.wasm` and `effect-meta.json`, in the `organ1` folder.
 
+#### Creating a remote-controlled application (experimental)
+
+A Faust DSP can run on one machine (the *host*, the one connected to the speakers) and be controlled from phones (the *remote controls*): buttons, sliders, and sensors through the `[acc:]`/`[gyr:]` metadata, over WebRTC. See [docs/remote-control.md](docs/remote-control.md) for the design.
+
+```bash
+node scripts/faust2wasm.js mydsp.dsp out -remote
+```
+writes the host page at the top of `out` (`index.html`, `index.js`, `create-node.js`, the compiled DSP, and the `faustwasm`, `faust-ui` folders), the remote control PWA in `out/remote` (no DSP file: its interface comes from the host), and the remote control library in `out/faustwasm-remote`. Add `-poly` for a polyphonic host. The folder is served by `faust-remote-server-ts` (`scripts/faust-remote-server.js`), which also relays the signaling between the host and its remote controls, and their messages when WebRTC cannot connect.
+
+The generated pages need `npm run build` to have been run: it builds the remote control library and copies `faustwasm` and `faust-ui` into `assets/standalone`.
+
+##### Testing on one machine
+
+`localhost` is a secure context, so no certificate is needed:
+
+```bash
+npm run build
+node scripts/faust2wasm.js mydsp.dsp /tmp/remote-app -remote
+node scripts/faust-remote-server.js /tmp/remote-app -port 8443
+```
+
+1. Open [http://localhost:8443/](http://localhost:8443/): the host page. Click **Activate audio**.
+2. Open the *Remote control* link it shows, in another tab or browser, and click **Connect**. The status reads `connected (WebRTC)` with the round trip time; moving a control there moves it on the host.
+
+Variants:
+
+- **Timed mode**: open the host as [http://localhost:8443/?delay=40](http://localhost:8443/?delay=40). Values from the remote controls are then applied 40 ms after they were sent, as regularly as they were sent, instead of when the network delivers them.
+- **Relay fallback**: in the remote control tab's console, run `window.RTCPeerConnection = undefined` before clicking **Connect**. The status then reads `connected (relay)`: the messages go through the server.
+
+The repository also has manual pages where the DSP can be edited in the page: serve the repository root with `node scripts/faust-remote-server.js . -port 8443` and open [http://localhost:8443/test/web/remote/host.html](http://localhost:8443/test/web/remote/host.html).
+
+##### Testing with a phone
+
+Phones need HTTPS for their motion sensors and for installing a PWA, so the server needs a certificate the phone trusts. With [mkcert](https://github.com/FiloSottile/mkcert) (`brew install mkcert` or `sudo port install mkcert`), and the address of the host machine on the local network (`ipconfig getifaddr en0` on macOS) in place of `192.168.1.20`:
+
+```bash
+mkcert -install
+mkcert -cert-file cert.pem -key-file key.pem 192.168.1.20 localhost
+node scripts/faust-remote-server.js /tmp/remote-app -port 8443 -cert cert.pem -key key.pem
+```
+
+The phone must trust mkcert's authority, `rootCA.pem` in the folder `mkcert -CAROOT` prints. On iOS, send it to the phone (AirDrop), install the profile, then enable it in Settings > General > About > Certificate Trust Settings. On Android, Settings > Security > Install a certificate > CA certificate.
+
+1. On the host machine, open the host page **by its address**, `https://192.168.1.20:8443/`, not by `localhost`: the link it shows is built from that address, and the phone cannot reach `localhost`. Click **Activate audio**.
+2. Open the *Remote control* link on the phone, on the same Wi-Fi network, and tap **Connect**. On iOS, this tap is when the motion sensor permission is asked.
+3. Tilt the phone: a slider with `[acc:]` metadata follows. Bargraphs move, and the status shows the round trip time over the real network.
+4. Add the remote control to the home screen to try the installed PWA: it finds its host again when launched, without the link.
+
+On its first run, macOS may ask whether to allow incoming connections for `node`: allow them.
+
 #### Generate SVG Diagrams of a Faust DSP
 
 For example:
@@ -410,7 +460,7 @@ npx playwright install chromium
 npm run measure
 ```
 
-CLI tests live in `test/cli` and run the scripts in `scripts/` as real processes, checking what they leave on disk. They cover every output mode of `faust2wasm.js` (default template, `-no-template`, `-standalone`, `-pwa`, each with and without `-poly`), every `.dsp` file in `test/` -- each one compiled, then loaded back from the generated `dsp-module.wasm` and `dsp-meta.json` and rendered offline -- and the edge cases: `-I` include handling, argument parsing, failure modes, and concurrent invocations. `faust2svg`, `faust2cmajor` and `faust2sndfile` are covered too, the latter by reading `-sr`, `-bd` and `-c` back out of the generated WAV header. They need no browser:
+CLI tests live in `test/cli` and run the scripts in `scripts/` as real processes, checking what they leave on disk. They cover every output mode of `faust2wasm.js` (default template, `-no-template`, `-standalone`, `-pwa`, `-remote`, each with and without `-poly`), every `.dsp` file in `test/` -- each one compiled, then loaded back from the generated `dsp-module.wasm` and `dsp-meta.json` and rendered offline -- and the edge cases: `-I` include handling, argument parsing, failure modes, and concurrent invocations. `faust2svg`, `faust2cmajor` and `faust2sndfile` are covered too, the latter by reading `-sr`, `-bd` and `-c` back out of the generated WAV header. They need no browser:
 
 ```bash
 npm run test-cli
@@ -424,6 +474,8 @@ npm run test-cli
 npm run build
 python3 -m http.server 8000
 ```
+
+The remote control pages, `test/web/remote/host.html` and `remote.html`, need the signaling of `scripts/faust-remote-server.js` instead of a plain file server: see [Testing on one machine](#testing-on-one-machine).
 
 ### Projects examples
 
