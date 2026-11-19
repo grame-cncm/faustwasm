@@ -259,6 +259,20 @@ const MUTANTS = [
         from: 'if (document.readyState === "complete") register();\n            else window.addEventListener',
         to: 'window.addEventListener',
         tests: 'test/cli/pwa-service-worker.test.mjs'
+    },
+    {
+        what: 'an AudioWorklet node keeps a sensor value over its own later write',
+        file: 'src/FaustAudioWorkletNode.ts',
+        from: 'delete this.fAudioThreadValues[resolved];',
+        to: '',
+        tests: 'test/unit/node-param-value.test.mjs'
+    },
+    {
+        what: 'the processor reports every write as coming from the node',
+        file: 'src/FaustAudioWorkletProcessor.ts',
+        from: 'fromNode: this.fNodeWrite',
+        to: 'fromNode: true',
+        tests: 'test/unit/node-param-value.test.mjs'
     }
 ];
 

@@ -39,6 +39,18 @@ export class FaustAudioWorkletNode<
     protected fDescriptor: FaustUIInputItem[];
     protected fCommunicator: FaustAudioWorkletNodeCommunicator;
     protected fParamAliases: Record<string, string>;
+    /**
+     * Values the DSP was given on the audio thread -- by a sensor mapping or
+     * a MIDI controller -- after the node last wrote the same parameter.
+     * Those writes do not touch the `AudioParam`, so `getParamValue` answers
+     * from here first. A write of the node clears its entry.
+     *
+     * Last write wins in the order the node learns of them: a sensor write
+     * the processor applied just before a `setParamValue` it had not yet
+     * received, but reported after that call, is taken as the newer one
+     * until the next write of either.
+     */
+    protected fAudioThreadValues: Record<string, number> = {};
     #hasAccInput = false;
     #hasGyrInput = false;
 
@@ -118,8 +130,10 @@ export class FaustAudioWorkletNode<
     protected handleMessageAux = (e: MessageEvent) => {
         if (e.data.type === 'out-param' && this.fOutputHandler) {
             this.fOutputHandler(e.data.path, e.data.value);
-        } else if (e.data.type === 'in-param' && this.fInputHandler) {
-            this.fInputHandler(e.data.path, e.data.value);
+        } else if (e.data.type === 'in-param') {
+            if (e.data.fromNode === false)
+                this.fAudioThreadValues[e.data.path] = e.data.value;
+            this.fInputHandler?.(e.data.path, e.data.value);
         } else if (e.data.type === 'plot' && this.fPlotHandler) {
             this.fPlotHandler(e.data.value, e.data.index, e.data.events);
         } else if (e.data.type === 'nonfinite' && this.fNonFiniteHandler) {
@@ -372,6 +386,8 @@ export class FaustAudioWorkletNode<
         const param = this.parameters.get(resolved);
         if (param)
             param.setValueAtTime(value, time ?? this.context.currentTime);
+        // The node's write supersedes whatever the audio thread wrote before
+        delete this.fAudioThreadValues[resolved];
         this.port.postMessage({
             type: 'param',
             data: { path: resolved, value },
@@ -379,8 +395,11 @@ export class FaustAudioWorkletNode<
         });
     }
     getParamValue(path: string) {
-        // Get value of AudioParam
         const resolved = this.fParamAliases[path] || path;
+        // Written on the audio thread since the node last wrote it
+        if (resolved in this.fAudioThreadValues)
+            return this.fAudioThreadValues[resolved];
+        // Otherwise the AudioParam: the node's own writes, automation included
         const param = this.parameters.get(resolved);
         return param ? param.value : 0;
     }
@@ -402,10 +421,12 @@ export class FaustAudioWorkletNode<
     }
 
     init() {
+        this.fAudioThreadValues = {};
         this.port.postMessage({ type: 'init' });
     }
 
     instanceInit() {
+        this.fAudioThreadValues = {};
         this.port.postMessage({ type: 'instanceInit' });
     }
 
@@ -418,6 +439,7 @@ export class FaustAudioWorkletNode<
     }
 
     instanceResetUserInterface() {
+        this.fAudioThreadValues = {};
         this.port.postMessage({ type: 'instanceResetUserInterface' });
     }
 

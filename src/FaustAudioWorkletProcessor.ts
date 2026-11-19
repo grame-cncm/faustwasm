@@ -231,6 +231,13 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
             : FaustMonoWebAudioDsp;
 
         protected paramValuesCache: Record<string, number> = {};
+        /**
+         * Set while the DSP applies a write that came from the node -- a
+         * `param` message or an `AudioParam` -- so that its `in-param` echo
+         * can say so. Writes made here on their own (a sensor mapping, a
+         * MIDI controller) are the ones the node cannot know about.
+         */
+        protected fNodeWrite = false;
 
         /**
          * Port messages waiting for the block they were timestamped for.
@@ -732,7 +739,9 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
         }
 
         protected setParamValue(path: string, value: number) {
+            this.fNodeWrite = true;
             this.fDSPCode.setParamValue(path, value);
+            this.fNodeWrite = false;
             this.paramValuesCache[path] = value;
         }
 
@@ -803,7 +812,12 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                 this.port.postMessage({ path, value, type: 'out-param' })
             );
             this.fDSPCode.setInputParamHandler((path, value) =>
-                this.port.postMessage({ path, value, type: 'in-param' })
+                this.port.postMessage({
+                    path,
+                    value,
+                    type: 'in-param',
+                    fromNode: this.fNodeWrite
+                })
             );
 
             this.fDSPCode.start();
@@ -863,7 +877,12 @@ const getFaustAudioWorkletProcessor = <Poly extends boolean = false>(
                 this.port.postMessage({ path, value, type: 'out-param' })
             );
             this.fDSPCode.setInputParamHandler((path, value) =>
-                this.port.postMessage({ path, value, type: 'in-param' })
+                this.port.postMessage({
+                    path,
+                    value,
+                    type: 'in-param',
+                    fromNode: this.fNodeWrite
+                })
             );
             // The node reads the count from these messages, sent only when it
             // changes, at the end of the block
