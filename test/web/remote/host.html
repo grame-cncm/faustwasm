@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Faust remote control: host</title>
+        <link rel="stylesheet" href="../../../assets/standalone/faust-ui/index.css">
+        <style>
+            body { font-family: sans-serif; margin: 12px; }
+            textarea { width: 100%; max-width: 720px; font-family: monospace; }
+            #pairing a { word-break: break-all; }
+            #ui { height: 340px; border: 1px solid #ccc; margin-top: 8px; }
+            #error { color: #a12a12; }
+        </style>
+    </head>
+    <body>
+        <h1>Host</h1>
+        <p>The DSP runs here; remote controls connect over WebRTC. Serve the repository root with
+            <code>node scripts/faust-remote-server.js .</code> (add <code>-cert</code> and <code>-key</code>
+            for a phone), after <code>npm run build</code>.</p>
+        <textarea id="code" rows="9">import("stdfaust.lib");
+freq = hslider("freq", 440, 50, 2000, 1) : si.smoo;
+tilt = hslider("tilt [acc: 0 0 -10 0 10]", 0, 0, 1, 0.01) : si.smoo;
+turn = hslider("turn [gyr: 2 0 -90 0 90]", 0.5, 0, 1, 0.01) : si.smoo;
+gate = button("gate");
+level = (gate + tilt) : min(1);
+process = os.osc(freq * (0.5 + turn)) * level * 0.3
+        : attach(_, level : hbargraph("level", 0, 1));</textarea><br>
+        <button id="start">Start</button>
+        <pre id="error"></pre>
+        <div id="pairing"></div>
+        <div id="clients"></div>
+        <div id="ui"></div>
+        <script type="module" src="host.js"></script>
+    </body>
+</html>

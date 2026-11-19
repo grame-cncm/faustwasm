@@ -762,7 +762,12 @@ export interface FaustSignaling {
 }
 
 /** Client du serveur de signalisation HTTP + SSE fourni. */
-export function createHttpSignaling(url: string, room: string, peer: string, token: string): FaustSignaling;
+export function createHttpSignaling(
+    url: string,
+    room: string,
+    token: string,
+    options: { role: 'host' | 'remote'; id?: string; onerror?: (error: Error) => void }
+): FaustSignaling & { readonly ready: Promise<void> };
 
 export interface FaustRemoteHostOptions {
     token?: string;
@@ -836,7 +841,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
 Avec ce mandataire, la télécommande réutilise le code existant tel quel :
 
 ```js
-const signaling = createHttpSignaling(location.origin, room, peerId, token);
+const signaling = createHttpSignaling(location.origin, room, token, { role: "remote" });
 const dsp = await FaustRemoteDsp.connectRTC(signaling, { token });
 const faustUI = await createFaustUI(divFaustUI, dsp);  // inchangé
 await requestPermissions();                              // geste utilisateur
@@ -847,7 +852,7 @@ et l'hôte n'ajoute que deux lignes à une application existante :
 
 ```js
 const host = new FaustRemoteHost(faustNode, { token });
-host.listen(createHttpSignaling(location.origin, room, "host", token));
+host.listen(createHttpSignaling(location.origin, room, token, { role: "host" }));
 ```
 
 ## 14. Intégration dans le package
@@ -1011,6 +1016,51 @@ Q7
 :   Retour audio : une piste WebRTC (Opus) de l'hôte vers la télécommande, pour
     l'écoute au casque en répétition (latence de l'ordre de 100 à 200 ms, donc
     inutilisable pour jouer). Utile en v2 ?
+
+## 16 bis. État de la mise en œuvre
+
+P0 et P1 sont réalisées sur la branche `remote-control`.
+
+P0
+:   `src/remote/` : protocole, `FaustRemoteHost`, `FaustRemoteDsp`, transport
+    en mémoire. Tests `remote-protocol`, `remote-host`, `remote-render`.
+
+P1
+:   `createRTCTransport`, `callHost`/`answerPeers` (exposés comme
+    `FaustRemoteDsp.connectRTC` et `FaustRemoteHost.listen`),
+    `createHttpSignaling`, `createLoopbackSignaling`, le serveur
+    `faust-remote-server-ts` (`src/faustRemoteServer.js`) et les pages
+    `test/web/remote/host.html` et `remote.html`. Tests `remote-rtc` (faux
+    `RTCPeerConnection`, strict sur l'ordre des candidats) et `remote-server`,
+    plus `test/cli/remote-server.test.mjs`.
+
+Écarts avec les sections précédentes, décidés en implémentant :
+
+- **Signalisation** : le jeton voyage dans l'en-tête `x-faust-token` de
+  *toutes* les requêtes, y compris le flux d'évènements, lu avec `fetch` plutôt
+  qu'`EventSource` ; les points d'entrée sont `POST host`, `GET events/<id>` et
+  `POST send` sous `/signal/<room>/`.
+- **Candidats ICE** : chaque côté retient les siens jusqu'à l'envoi de sa
+  description, et l'hôte garde (en nombre borné) ceux qui arrivent avant
+  l'offre, la signalisation ne garantissant pas l'ordre de deux messages.
+- **État initial** : `setInputParamHandler` et `setOutputParamHandler` d'un
+  `FaustRemoteDsp` rejouent aussitôt les valeurs courantes, pour que
+  `createFaustUI` montre l'état de l'hôte et non les valeurs `init`.
+- **Mesure** : `FaustRemoteDsp` émet un évènement `rtt` à chaque aller-retour.
+
+Vérifié dans un navigateur (Chromium intégré, deux onglets en localhost) :
+connexion par le serveur, paramètres et bouton appliqués sur l'hôte, bargraph
+de retour, accéléromètre simulé appliqué puis synchronisé, 8 connexions de suite
+ouvertes en 13 à 15 ms, aller-retour médian de 1,2 ms en boucle locale. La
+toute première tentative a expiré sans cause identifiée ; non reproduite
+ensuite. **Non vérifié : un vrai téléphone sur le Wi-Fi**, donc ni HTTPS avec
+certificat, ni capteurs réels, ni latence radio.
+
+Limite constatée, hors de cette couche : `getParamValue` d'un nœud AudioWorklet
+lit son `AudioParam`, que les écritures faites sur le thread audio (capteurs,
+MIDI) ne mettent pas à jour. Les valeurs initiales envoyées dans `welcome` pour
+un paramètre piloté par capteur peuvent donc être en retard ; la
+synchronisation (`sync`) les corrige au changement suivant.
 
 ## 17. Plan de mise en œuvre
 

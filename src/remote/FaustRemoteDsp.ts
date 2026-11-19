@@ -17,6 +17,8 @@ import {
     type FaustRemoteRejectCode,
     type FaustRemoteWelcomeMessage
 } from './protocol';
+import { callHost, type FaustRTCOptions } from './rtc';
+import type { FaustSignaling } from './signaling';
 import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
 import { isDiscrete, readUI, type FaustRemoteUI } from './ui';
 
@@ -114,7 +116,8 @@ const unref = <T>(timer: T): T => {
  * by a sensor) arrive through the input parameter handler, as they do on a
  * node.
  *
- * Events: `statechange` when `state` changes, `error` (`detail`: the error).
+ * Events: `statechange` when `state` changes, `rtt` on each measured round
+ * trip (`detail`: milliseconds), `error` (`detail`: the error).
  */
 export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
     readonly #transport: FaustRemoteTransport;
@@ -184,6 +187,27 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
      * @throws {FaustRemoteError} if the host refuses (`code` says why), the
      * connection closes, or no welcome comes in time
      */
+    /**
+     * Connect to a host over WebRTC, through a signaling channel, then
+     * introduce this remote control as `connect` does. The signaling channel
+     * is closed once the connection is open: no control goes through it.
+     *
+     * @throws {FaustRemoteError} as `connect` does, or an `Error` if the
+     * connection does not open
+     */
+    static async connectRTC(
+        signaling: FaustSignaling,
+        options: FaustRemoteDspOptions = {},
+        rtc: FaustRTCOptions = {}
+    ): Promise<FaustRemoteDsp> {
+        try {
+            const transport = await callHost(signaling, rtc);
+            return await FaustRemoteDsp.connect(transport, options);
+        } finally {
+            signaling.close();
+        }
+    }
+
     static async connect(
         transport: FaustRemoteTransport,
         options: FaustRemoteDspOptions = {}
@@ -240,6 +264,11 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
     /** Shortest recent round trip to the host, in milliseconds; NaN before the first. */
     get rtt() {
         return this.#rtt;
+    }
+
+    /** The recent round trips, in milliseconds, oldest first. */
+    get rttSamples() {
+        return [...this.#rtts];
     }
 
     /** Say goodbye to the host and close the connection. */
@@ -312,8 +341,20 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         return this.#ui.inputs;
     }
 
+    /**
+     * As on a node, plus one thing a node does not need: the handler is
+     * given the last bargraph values at once (in a microtask), since the host
+     * computed them before this remote control was there to see.
+     */
     setOutputParamHandler(handler: OutputParamHandler | null) {
         this.#outputHandler = handler;
+        if (!handler) return;
+        queueMicrotask(() => {
+            if (this.#outputHandler !== handler) return;
+            this.#outputs.forEach((path, k) =>
+                handler(path, this.#outValues[k])
+            );
+        });
     }
     getOutputParamHandler() {
         return this.#outputHandler;
@@ -322,8 +363,20 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         this.#outputHandler?.(path, value);
     }
 
+    /**
+     * As on a node, plus one thing a node does not need: the handler is
+     * given every parameter's current value at once (in a microtask). A UI
+     * built from the JSON starts from the `init` values, which is right for a
+     * node that has just been created and wrong for a host that has been
+     * running: this is what brings it to the host's state.
+     */
     setInputParamHandler(handler: InputParamHandler | null) {
         this.#inputHandler = handler;
+        if (!handler) return;
+        queueMicrotask(() => {
+            if (this.#inputHandler !== handler) return;
+            for (const [path, value] of this.#values) handler(path, value);
+        });
     }
     getInputParamHandler() {
         return this.#inputHandler;
@@ -580,6 +633,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
                 this.#rtts.push(rtt);
                 if (this.#rtts.length > RTT_WINDOW) this.#rtts.shift();
                 this.#rtt = Math.min(...this.#rtts);
+                this.dispatchEvent(new CustomEvent('rtt', { detail: rtt }));
                 return;
             }
             case 'bye':

@@ -19,167 +19,7 @@ import {
     PROTOCOL_VERSION,
     createLoopbackTransports
 } from '../../dist/remote/index.js';
-
-/** A DSP description: two sliders, one per sensor, a button and a bargraph. */
-const describe = (name = 't') => ({
-    name,
-    filename: `${name}.dsp`,
-    compile_options: '',
-    include_pathnames: [],
-    inputs: 0,
-    outputs: 1,
-    size: 0,
-    version: '2.94.0',
-    library_list: [],
-    meta: [],
-    ui: [
-        {
-            type: 'vgroup',
-            label: name,
-            items: [
-                {
-                    type: 'hslider',
-                    label: 'freq',
-                    shortname: 'freq',
-                    address: `/${name}/freq`,
-                    url: '',
-                    index: 0,
-                    init: 440,
-                    min: 20,
-                    max: 2000,
-                    step: 1
-                },
-                {
-                    type: 'button',
-                    label: 'gate',
-                    shortname: 'gate',
-                    address: `/${name}/gate`,
-                    url: '',
-                    index: 4
-                },
-                {
-                    type: 'hslider',
-                    label: 'tilt',
-                    shortname: 'tilt',
-                    address: `/${name}/tilt`,
-                    url: '',
-                    index: 8,
-                    init: 0,
-                    min: 0,
-                    max: 1,
-                    step: 0.01,
-                    meta: [{ acc: '0 0 -10 0 10' }]
-                },
-                {
-                    type: 'hslider',
-                    label: 'turn',
-                    shortname: 'turn',
-                    address: `/${name}/turn`,
-                    url: '',
-                    index: 12,
-                    init: 0,
-                    min: 0,
-                    max: 1,
-                    step: 0.01,
-                    meta: [{ gyr: '0 0 -90 0 90' }]
-                },
-                {
-                    type: 'hbargraph',
-                    label: 'level',
-                    shortname: 'level',
-                    address: `/${name}/level`,
-                    index: 16,
-                    min: 0,
-                    max: 1
-                }
-            ]
-        }
-    ]
-});
-const JSON_TEXT = JSON.stringify(describe());
-const FREQ = '/t/freq';
-const GATE = '/t/gate';
-const LEVEL = '/t/level';
-
-/**
- * The node API the host uses, recording every call.
- *
- * `setParamValue` calls the input handler afterwards with the float32 value,
- * as the DSP does once it has applied a write: that echo is what the host's
- * parameter synchronisation feeds on.
- */
-class FakeNode {
-    constructor(json = JSON_TEXT) {
-        this.json = json;
-        this.meta = JSON.parse(json);
-        /** @type {Map<string, number>} */
-        this.values = new Map([[FREQ, 440]]);
-        /** @type {[string, number][]} */
-        this.writes = [];
-        /** @type {number[][]} */
-        this.midi = [];
-        /** @type {[number, number, number, boolean][]} */
-        this.acc = [];
-        /** @type {[number, number, number][]} */
-        this.gyr = [];
-        this.hasAccInput = true;
-        this.hasGyrInput = true;
-        this.voices = 0;
-        /** @type {((path: string, value: number) => void) | null} */
-        this.outputHandler = null;
-        /** @type {((path: string, value: number) => void) | null} */
-        this.inputHandler = null;
-    }
-    getJSON() {
-        return this.json;
-    }
-    getMeta() {
-        return this.meta;
-    }
-    /** @param {string} path @param {number} value */
-    setParamValue(path, value) {
-        this.writes.push([path, value]);
-        this.values.set(path, value);
-        this.inputHandler?.(path, Math.fround(value));
-    }
-    /** @param {string} path */
-    getParamValue(path) {
-        return this.values.get(path) ?? 0;
-    }
-    setOutputParamHandler(handler) {
-        this.outputHandler = handler;
-    }
-    getOutputParamHandler() {
-        return this.outputHandler;
-    }
-    setInputParamHandler(handler) {
-        this.inputHandler = handler;
-    }
-    getInputParamHandler() {
-        return this.inputHandler;
-    }
-    /** @param {number[] | Uint8Array} data */
-    midiMessage(data) {
-        this.midi.push(Array.from(data));
-    }
-    propagateAcc({ x, y, z }, invert) {
-        this.acc.push([x, y, z, invert]);
-    }
-    propagateGyr({ alpha, beta, gamma }) {
-        this.gyr.push([alpha, beta, gamma]);
-    }
-    getNumActiveVoices() {
-        return this.voices;
-    }
-    /** A bargraph tick, as the DSP produces one every few blocks. */
-    emit(path, value) {
-        this.outputHandler?.(path, value);
-    }
-    /** The writes that reached a path, in order. */
-    writesTo(path) {
-        return this.writes.filter(([p]) => p === path).map(([, v]) => v);
-    }
-}
+import { FREQ, GATE, JSON_TEXT, LEVEL, FakeNode, describe } from './remote-fakes.mjs';
 
 /** Let queued deliveries happen, and anything they queue in turn. */
 const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -267,14 +107,20 @@ const rawClient = (host, loopback = {}) => {
     };
 };
 
-/** Record what a remote control's handlers are called with. */
-const watch = (dsp) => {
+/**
+ * Record what a remote control's handlers are called with from now on: the
+ * current values they are given when set are let through, then forgotten.
+ */
+const watch = async (dsp) => {
     /** @type {[string, number][]} */
     const outputs = [];
     /** @type {[string, number][]} */
     const inputs = [];
     dsp.setOutputParamHandler((path, value) => outputs.push([path, value]));
     dsp.setInputParamHandler((path, value) => inputs.push([path, value]));
+    await settle();
+    outputs.length = 0;
+    inputs.length = 0;
     return { outputs, inputs };
 };
 
@@ -397,7 +243,7 @@ test('a host in unidirectional mode imposes it and stays silent', async () => {
 
     const { dsp } = await connect(host, { json: JSON_TEXT });
     assert.equal(dsp.mode, 'uni');
-    const { outputs, inputs } = watch(dsp);
+    const { outputs, inputs } = await watch(dsp);
     node.emit(LEVEL, 0.5);
     node.setParamValue(FREQ, 1000);
     await settle();
@@ -657,7 +503,7 @@ test('sensor readings are ignored by a node without sensor controls', async () =
 test('bargraphs reach the remote control, small changes left out', async () => {
     const { host, node } = makeHost();
     const { dsp } = await connect(host);
-    const { outputs } = watch(dsp);
+    const { outputs } = await watch(dsp);
     node.emit(LEVEL, 0.5);
     await settle();
     // Under 0.1 % of the bargraph's range
@@ -675,7 +521,7 @@ test('bargraphs reach the remote control, small changes left out', async () => {
 test('bargraphs are sent no faster than the output rate', async () => {
     const { host, node } = makeHost({ outputRate: 20 });
     const { dsp } = await connect(host);
-    const { outputs } = watch(dsp);
+    const { outputs } = await watch(dsp);
     node.emit(LEVEL, 0.1);
     node.emit(LEVEL, 0.2);
     await settle();
@@ -696,12 +542,31 @@ test('a remote control joining later gets the last bargraph values', async () =>
     assert.equal(dsp.getOutputValue(LEVEL), 0.7);
 });
 
+test('handlers set on a remote control are given the host state at once', async () => {
+    const { host, node } = makeHost();
+    node.values.set(FREQ, 660);
+    node.emit(LEVEL, 0.7);
+    const { dsp } = await connect(host);
+    const inputs = [];
+    const outputs = [];
+    dsp.setInputParamHandler((path, value) => inputs.push([path, value]));
+    dsp.setOutputParamHandler((path, value) => outputs.push([path, value]));
+    await settle();
+    assert.deepEqual(inputs, [
+        [FREQ, 660],
+        [GATE, 0],
+        ['/t/tilt', 0],
+        ['/t/turn', 0]
+    ]);
+    assert.deepEqual(outputs, [[LEVEL, 0.7]]);
+});
+
 test('a write is shown to the other remote controls, not echoed to its writer', async () => {
     const { host, node } = makeHost();
     const a = await connect(host, { id: 'a' });
     const b = await connect(host, { id: 'b' });
-    const seenByA = watch(a.dsp);
-    const seenByB = watch(b.dsp);
+    const seenByA = await watch(a.dsp);
+    const seenByB = await watch(b.dsp);
     a.dsp.setParamValue(FREQ, 880);
     await settle();
     assert.deepEqual(seenByA.inputs, []);
@@ -721,7 +586,7 @@ test('a write is shown to the other remote controls, not echoed to its writer', 
 test('a value the host clamped comes back to correct its writer', async () => {
     const { host } = makeHost();
     const { dsp } = await connect(host);
-    const { inputs } = watch(dsp);
+    const { inputs } = await watch(dsp);
     dsp.setParamValue(FREQ, 5000);
     await settle();
     assert.deepEqual(inputs, [[FREQ, 2000]]);
@@ -740,7 +605,7 @@ test('the host chains the handlers the page had, and gives them back', async () 
     node.setInputParamHandler(pageInput);
     const { host } = makeHost({}, node);
     const { dsp } = await connect(host);
-    const { outputs } = watch(dsp);
+    const { outputs } = await watch(dsp);
 
     node.emit(LEVEL, 0.25);
     dsp.setParamValue(FREQ, 500);

@@ -16,6 +16,8 @@ import {
     type FaustRemoteMode,
     type FaustRemoteRejectCode
 } from './protocol';
+import { answerPeers, type FaustRTCOptions } from './rtc';
+import type { FaustSignaling } from './signaling';
 import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
 import { inputRange, readUI } from './ui';
 
@@ -158,6 +160,7 @@ export class FaustRemoteHost extends EventTarget {
 
     readonly #clients = new Map<FaustRemoteTransport, Client>();
     #livenessTimer: ReturnType<typeof setInterval> | null = null;
+    readonly #listeners: (() => void)[] = [];
     #chunkId = 0;
     #closed = false;
 
@@ -220,6 +223,23 @@ export class FaustRemoteHost extends EventTarget {
     }
 
     /** Take a remote control on a connection that is already open. */
+    /**
+     * Answer the WebRTC offers of remote controls arriving through a
+     * signaling channel, and accept each connection that opens. Stops on
+     * `close()`.
+     */
+    listen(signaling: FaustSignaling, options: FaustRTCOptions = {}) {
+        if (this.#closed) return;
+        this.#listeners.push(
+            answerPeers(
+                signaling,
+                (transport) => this.accept(transport),
+                options,
+                (error) => this.#error(error)
+            )
+        );
+    }
+
     accept(transport: FaustRemoteTransport) {
         if (this.#closed) {
             transport.close('host closed');
@@ -260,6 +280,7 @@ export class FaustRemoteHost extends EventTarget {
     close() {
         if (this.#closed) return;
         this.#closed = true;
+        for (const stop of this.#listeners.splice(0)) stop();
         for (const client of [...this.#clients.values()])
             this.#drop(client, 'host closed', true);
         if (this.#livenessTimer) clearInterval(this.#livenessTimer);

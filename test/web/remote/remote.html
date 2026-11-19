@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Faust remote control</title>
+        <link rel="stylesheet" href="../../../assets/standalone/faust-ui/index.css">
+        <style>
+            body { font-family: sans-serif; margin: 12px; }
+            #ui { height: 340px; border: 1px solid #ccc; margin-top: 8px; }
+            #error { color: #a12a12; }
+            #stats { font-family: monospace; }
+        </style>
+    </head>
+    <body>
+        <h1>Remote control</h1>
+        <p>Opened from the link the host page shows. The button asks for the motion sensors (on iOS it has to
+            be a tap) and connects.</p>
+        <button id="connect">Connect</button>
+        <span id="state">not connected</span>
+        <pre id="error"></pre>
+        <div id="stats"></div>
+        <div id="ui"></div>
+        <script type="module" src="remote.js"></script>
+    </body>
+</html>

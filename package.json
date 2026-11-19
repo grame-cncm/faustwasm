@@ -40,7 +40,8 @@
     "bin": {
         "faust2sndfile-ts": "scripts/faust2sndfile.js",
         "faust2svg-ts": "scripts/faust2svg.js",
-        "faust2wasm-ts": "scripts/faust2wasm.js"
+        "faust2wasm-ts": "scripts/faust2wasm.js",
+        "faust-remote-server-ts": "scripts/faust-remote-server.js"
     },
     "files": [
         "dist/cjs",

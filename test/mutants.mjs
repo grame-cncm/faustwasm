@@ -308,6 +308,27 @@ const MUTANTS = [
         from: 'for (const note of client.notes)',
         to: 'for (const note of [])',
         tests: 'test/unit/remote-render.test.mjs'
+    },
+    {
+        what: 'a WebRTC candidate is added before the remote description it needs',
+        file: 'src/remote/rtc.ts',
+        from: 'else this.pending.push(candidate);',
+        to: 'else this.pc.addIceCandidate(candidate).catch(() => {});',
+        tests: 'test/unit/remote-rtc.test.mjs'
+    },
+    {
+        what: 'the signaling server lets a remote control speak for another',
+        file: 'src/faustRemoteServer.js',
+        from: 'deliver(room, room.host, { ...message, peer: body.id });',
+        to: 'deliver(room, room.host, message);',
+        tests: 'test/unit/remote-server.test.mjs'
+    },
+    {
+        what: 'the remote server serves files outside its root',
+        file: 'src/faustRemoteServer.js',
+        from: 'if (file !== base && !file.startsWith(base + path.sep))',
+        to: 'if (false)',
+        tests: 'test/unit/remote-server.test.mjs'
     }
 ];
 

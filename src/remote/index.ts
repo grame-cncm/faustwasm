@@ -31,3 +31,17 @@ export {
     type FaustRemoteMode,
     type FaustRemoteRejectCode
 } from './protocol';
+export {
+    answerPeers,
+    callHost,
+    createRTCTransport,
+    type FaustRTCOptions
+} from './rtc';
+export {
+    createHttpSignaling,
+    createLoopbackSignaling,
+    type FaustHttpSignaling,
+    type FaustHttpSignalingOptions,
+    type FaustSignalMessage,
+    type FaustSignaling
+} from './signaling';
