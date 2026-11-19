@@ -12,6 +12,7 @@ import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { request as httpRequest } from 'node:http';
 import createFaustRemoteServer from '../../src/faustRemoteServer.js';
 import {
     FaustRemoteDsp,
@@ -315,4 +316,102 @@ test('the relay refuses a wrong token, and a room without a relaying host', asyn
 test('the relay answers no plain HTTP request on its path', async () => {
     const response = await fetch(`${base}/relay/someroom`);
     assert.equal(response.status, 404);
+});
+
+// ------------------------------------------------------------ other origins
+
+/**
+ * A raw request, to set the `Origin` header a browser would, and read the
+ * headers of a response that may never end (an event stream).
+ *
+ * @param {string} url
+ * @param {string} method
+ * @param {Record<string, string>} headers
+ * @param {string} [body]
+ * @returns {Promise<{ status: number, headers: import('node:http').IncomingHttpHeaders }>}
+ */
+const raw = (url, method, headers, body) =>
+    new Promise((resolve, reject) => {
+        const request = httpRequest(url, { method, headers });
+        request.on('response', (response) => {
+            resolve({ status: response.statusCode ?? 0, headers: response.headers });
+            response.destroy();
+        });
+        // A refused WebSocket upgrade answers with a plain response; an
+        // accepted one with 101, as an 'upgrade' event
+        request.on('upgrade', (response, socket) => {
+            resolve({ status: response.statusCode ?? 0, headers: response.headers });
+            socket.destroy();
+        });
+        request.on('error', reject);
+        request.end(body);
+    });
+
+test('pages of an allowed origin may use the signaling, others may not', async () => {
+    const IDE = 'https://ide.example.org';
+    const server = createFaustRemoteServer({ root: ROOT, allowOrigins: [IDE] });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(null)));
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    const url = `http://127.0.0.1:${address.port}`;
+    const json = { 'content-type': 'application/json', 'x-faust-token': 'secret' };
+    try {
+        // The preflight a browser sends first: no token, answered on the origin
+        const preflight = await raw(`${url}/signal/r1/host`, 'OPTIONS', {
+            origin: IDE,
+            'access-control-request-method': 'POST',
+            'access-control-request-headers': 'content-type, x-faust-token'
+        });
+        assert.equal(preflight.status, 204);
+        assert.equal(preflight.headers['access-control-allow-origin'], IDE);
+        assert.match(String(preflight.headers['access-control-allow-headers']), /x-faust-token/);
+        assert.match(String(preflight.headers['access-control-allow-methods']), /POST/);
+
+        // The request itself, and the event stream
+        const host = await raw(`${url}/signal/r1/host`, 'POST', { ...json, origin: IDE }, '{"id":"h"}');
+        assert.equal(host.status, 204);
+        assert.equal(host.headers['access-control-allow-origin'], IDE);
+        const events = await raw(`${url}/signal/r1/events/h`, 'GET', { ...json, origin: IDE });
+        assert.equal(events.status, 200);
+        assert.equal(events.headers['access-control-allow-origin'], IDE);
+        // Not held back by a reverse proxy
+        assert.equal(events.headers['x-accel-buffering'], 'no');
+
+        // Another origin is refused, preflight included
+        const other = { ...json, origin: 'https://elsewhere.example.org' };
+        assert.equal((await raw(`${url}/signal/r1/host`, 'OPTIONS', other)).status, 403);
+        assert.equal((await raw(`${url}/signal/r1/host`, 'POST', other, '{"id":"x"}')).status, 403);
+
+        // The server's own pages, and clients that are no page, as before
+        const own = await raw(`${url}/signal/r2/host`, 'POST', { ...json, origin: url }, '{"id":"h"}');
+        assert.equal(own.status, 204);
+        assert.equal(own.headers['access-control-allow-origin'], undefined);
+        assert.equal((await raw(`${url}/signal/r3/host`, 'POST', json, '{"id":"h"}')).status, 204);
+    } finally {
+        server.closeAllConnections();
+        server.close();
+    }
+});
+
+test('the relay checks the origin itself, which CORS does not cover', async () => {
+    const IDE = 'https://ide.example.org';
+    const server = createFaustRemoteServer({ root: ROOT, allowOrigins: [IDE] });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(null)));
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    const upgrade = (origin) =>
+        raw(`http://127.0.0.1:${address.port}/relay/r1`, 'GET', {
+            connection: 'Upgrade',
+            upgrade: 'websocket',
+            'sec-websocket-version': '13',
+            'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
+            ...(origin ? { origin } : {})
+        });
+    try {
+        assert.equal((await upgrade('https://elsewhere.example.org')).status, 403);
+        assert.equal((await upgrade(IDE)).status, 101);
+        assert.equal((await upgrade(null)).status, 101);
+    } finally {
+        server.close();
+    }
 });

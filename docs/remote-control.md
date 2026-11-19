@@ -1349,10 +1349,10 @@ serveur (WebSocket, Firebase, Matrix…) de s'en servir pour la signalisation.
 
 ### 16 ter.8. Travail à faire, dans l'ordre
 
-1. **CORS et origine du relais** dans `faust-remote-server`, avec une liste
+1. *(Fait.)* **CORS et origine du relais** dans `faust-remote-server`, avec une liste
    d'origines autorisées en option (`-allow-origin`), et `X-Accel-Buffering`
    sur le flux d'évènements. Petit, et testable comme le reste du serveur.
-2. **Adresse de signalisation et serveurs ICE configurables** dans les pages
+2. *(Fait.)* **Adresse de signalisation et serveurs ICE configurables** dans les pages
    générées et le générateur (`-signal`, `-stun`), la télécommande ne suivant
    que des serveurs connus.
 3. **Protection contre les abus** : quotas par adresse, expiration des
@@ -1365,6 +1365,22 @@ serveur (WebSocket, Firebase, Matrix…) de s'en servir pour la signalisation.
 
 Les points 1 et 2 sont utiles même sans usage sur Internet : un serveur de
 signalisation séparé de la page hôte sert aussi sur un réseau local.
+
+Ils sont faits. Côté serveur, `createFaustRemoteServer({ allowOrigins })` et
+l'option `-allow-origin` (répétable) : réponse aux requêtes préalables
+`OPTIONS` sans jeton, en-têtes CORS pour les origines de la liste, refus (403)
+de toute autre origine étrangère, relais compris (l'en-tête `Origin` de la
+demande de WebSocket est vérifié) ; les requêtes sans `Origin` et celles de
+l'origine du serveur sont servies comme avant ; `X-Accel-Buffering: no` sur le
+flux d'évènements. Côté pages, `faust2wasm -remote -signal <url> -stun <url>`
+écrit l'adresse de signalisation et les serveurs STUN dans la page hôte et la
+télécommande ; le lien porte `&signal=…`, que la télécommande ne suit que s'il
+désigne le serveur pour lequel elle a été construite ou celui de sa propre
+page. Vérifié dans Chromium avec les pages sur une origine et la
+signalisation sur une autre : connexion WebRTC et relais acceptés pour
+l'origine autorisée, requête préalable refusée pour une autre (la page hôte
+le dit, en nommant l'option), lien vers un serveur inconnu refusé sans
+qu'aucune requête ne lui soit envoyée.
 
 ## 17. Plan de mise en œuvre
 

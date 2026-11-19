@@ -371,6 +371,13 @@ const MUTANTS = [
         from: 'await import("../faustwasm-remote/client.js")',
         to: 'await import("../faustwasm-remote/index.js")',
         tests: 'test/cli/remote-app.test.mjs'
+    },
+    {
+        what: 'the remote server lets any foreign origin use its signaling',
+        file: 'src/faustRemoteServer.js',
+        from: 'if (allowOrigins.includes(origin))',
+        to: 'if (true)',
+        tests: 'test/unit/remote-server.test.mjs'
     }
 ];
 

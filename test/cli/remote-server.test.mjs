@@ -51,7 +51,9 @@ test('the server refuses arguments it cannot use', () => {
         [['no/such/dir'], /is not a directory/],
         [['test', '-port', 'many'], /invalid port/],
         [['test', '-cert', 'package.json'], /-cert and -key go together/],
-        [['test', '-port'], /-port needs a value/]
+        [['test', '-port'], /-port needs a value/],
+        [['test', '-allow-origin', 'https://example.org/path'], /wants an origin/],
+        [['test', '-allow-origin', 'example.org'], /wants an origin/]
     ];
     for (const [args, message] of cases) {
         const result = runCli('faust-remote-server', args);

@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vm from 'node:vm';
-import { listDir, outDir, readOut, runCliOk } from './runner.mjs';
+import { listDir, outDir, readOut, runCli, runCliOk } from './runner.mjs';
 import { REMOTE_PWA_FILES } from './expected.mjs';
 
 let dir = '';
@@ -139,4 +139,52 @@ test('the service worker answers for its files and leaves signaling alone', () =
     assert.equal(fetchEvent('/signal/room/send', 'POST'), false);
     // The host page is not the remote control's to cache
     assert.equal(fetchEvent('../index.js'), false);
+});
+
+test('without -signal or -stun, the pages use their own server and no STUN', () => {
+    for (const file of ['index.js', 'remote/index.js']) {
+        assert.match(readOut(dir, file), /const FAUST_SIGNAL_URL = "";/);
+        assert.match(readOut(dir, file), /const FAUST_ICE_SERVERS = \[\];/);
+    }
+});
+
+test('-signal and -stun reach both pages', () => {
+    const signalDir = outDir('remote-app-signal');
+    runCliOk('faust2wasm', [
+        'test/mono.dsp',
+        signalDir,
+        '-remote',
+        '-signal',
+        'https://signal.example.org',
+        '-stun',
+        'stun:stun.example.org:3478',
+        '-stun',
+        'stun:other.example.org'
+    ]);
+    for (const file of ['index.js', 'remote/index.js']) {
+        const content = readOut(signalDir, file);
+        assert.match(content, /const FAUST_SIGNAL_URL = "https:\/\/signal\.example\.org";/, file);
+        const ice = content.match(/const FAUST_ICE_SERVERS = (.*);/);
+        assert.ok(ice, file);
+        assert.deepEqual(JSON.parse(ice[1]), [
+            { urls: 'stun:stun.example.org:3478' },
+            { urls: 'stun:other.example.org' }
+        ]);
+    }
+});
+
+test('-signal and -stun refuse what they cannot use', () => {
+    /** @type {[string[], RegExp][]} */
+    const cases = [
+        [['-remote', '-signal', 'signal.example.org'], /-signal wants/],
+        [['-remote', '-signal', 'https://signal.example.org/?x=1'], /-signal wants/],
+        [['-remote', '-stun', 'https://stun.example.org'], /-stun wants/],
+        [['-pwa', '-signal', 'https://signal.example.org'], /go with -remote/],
+        [['-remote', '-signal'], /-signal needs a value/]
+    ];
+    for (const [args, message] of cases) {
+        const result = runCli('faust2wasm', ['test/mono.dsp', outDir('remote-app-refused'), ...args]);
+        assert.equal(result.status, 1, args.join(' '));
+        assert.match(result.stdout + result.stderr, message, args.join(' '));
+    }
 });

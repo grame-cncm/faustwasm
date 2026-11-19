@@ -156,6 +156,22 @@ Variants:
 
 The repository also has manual pages where the DSP can be edited in the page: serve the repository root with `node scripts/faust-remote-server.js . -port 8443` and open [http://localhost:8443/test/web/remote/host.html](http://localhost:8443/test/web/remote/host.html).
 
+##### A signaling server elsewhere
+
+By default the pages use the signaling and relay of the server that serves them. They can use another one instead, such as a public server when the pages are served by a website, with STUN servers for remote controls on another network:
+
+```bash
+node scripts/faust2wasm.js mydsp.dsp out -remote -signal https://signal.example.org -stun stun:stun.example.org:3478
+```
+
+`-stun` can be repeated. The remote control follows only the signaling server it was built for (or the server of its own page): a link naming another one is refused. The signaling server must then let the pages' origin in, since the pages are served from somewhere else:
+
+```bash
+node scripts/faust-remote-server.js <dir> -allow-origin https://pages.example.org
+```
+
+`-allow-origin` can be repeated; requests from any other page origin are refused, the relay included. Behind a reverse proxy, the event stream must not be buffered (the server sends `X-Accel-Buffering: no`, which nginx honours). See section 16 ter of [docs/remote-control.md](docs/remote-control.md) for what using it over the Internet involves.
+
 ##### Testing with a phone
 
 Phones need HTTPS for their motion sensors and for installing a PWA, so the server needs a certificate the phone trusts. With [mkcert](https://github.com/FiloSottile/mkcert) (`brew install mkcert` or `sudo port install mkcert`), and the address of the host machine on the local network (`ipconfig getifaddr en0` on macOS) in place of `192.168.1.20`:

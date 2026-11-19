@@ -17,6 +17,25 @@
 
 const DSP_NAME = "FAUST_DSP_NAME";
 const SESSION_KEY = `faust-remote:${DSP_NAME}`;
+// The signaling server and relay it was built for, if not the server of this page (-signal)
+const FAUST_SIGNAL_URL = "";
+// STUN servers, for a host on another network (-stun)
+const FAUST_ICE_SERVERS = [];
+
+/** A URL without its trailing slashes, to compare signaling servers. */
+const normalize = (url) => {
+    try {
+        return new URL(url).href.replace(/\/+$/, "");
+    } catch {
+        return null;
+    }
+};
+/**
+ * The signaling servers this remote control accepts from a link: the server
+ * of this page, and the one it was built for. Any other, a link could name to
+ * see this remote control's messages pass.
+ */
+const KNOWN_SIGNALS = [location.origin, FAUST_SIGNAL_URL].filter(Boolean).map(normalize);
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,22 +45,31 @@ if ("serviceWorker" in navigator) {
         .catch((error) => console.warn("Service worker registration failed:", error));
 }
 
-/** The session from the link, kept for later; or the one kept from before. */
+/**
+ * The session from the link, kept for later; or the one kept from before.
+ * `signal` is the signaling server: the link's if this remote control knows
+ * it, else the one it was built for, else this page's server.
+ */
 const findSession = () => {
     const params = new URLSearchParams(location.hash.slice(1));
     const room = params.get("room");
     const token = params.get("token");
+    const asked = params.get("signal");
+    if (asked !== null && !KNOWN_SIGNALS.includes(normalize(asked)))
+        return { error: `the link names an unknown signaling server: ${asked}` };
+    const signal = asked ?? (FAUST_SIGNAL_URL || location.origin);
     try {
         if (room && token) {
-            localStorage.setItem(SESSION_KEY, JSON.stringify({ room, token }));
+            localStorage.setItem(SESSION_KEY, JSON.stringify({ room, token, signal }));
             // Out of the address bar, where it would be shared with a screenshot
             history.replaceState(null, "", location.pathname);
-            return { room, token };
+            return { room, token, signal };
         }
         const stored = JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null");
-        if (stored?.room && stored?.token) return stored;
+        if (stored?.room && stored?.token)
+            return { ...stored, signal: KNOWN_SIGNALS.includes(normalize(stored.signal)) ? stored.signal : signal };
     } catch { /* storage unavailable */ }
-    return room && token ? { room, token } : null;
+    return room && token ? { room, token, signal } : null;
 };
 
 const setStatus = (text) => ($("status").textContent = text);
@@ -52,8 +80,8 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     const { FaustRemoteDsp, createHttpSignaling } = await import("../faustwasm-remote/client.js");
 
     const session = findSession();
-    if (!session) {
-        setStatus("no host: open the link the host page shows");
+    if (!session || session.error) {
+        setStatus(session?.error ?? "no host: open the link the host page shows");
         $("button-connect").disabled = true;
         return;
     }
@@ -77,15 +105,15 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
             let via = "WebRTC";
             try {
                 dsp = await FaustRemoteDsp.connectRTC(
-                    createHttpSignaling(location.origin, session.room, session.token, { role: "remote" }),
+                    createHttpSignaling(session.signal, session.room, session.token, { role: "remote" }),
                     { token: session.token },
-                    { timeout: 8000 }
+                    { timeout: 8000, rtc: { iceServers: FAUST_ICE_SERVERS } }
                 );
             } catch (error) {
                 // WebRTC cannot connect on this network: through the server
                 console.warn("WebRTC failed, using the relay:", error.message);
                 via = "relay";
-                dsp = await FaustRemoteDsp.connectRelay(location.origin, session.room, { token: session.token });
+                dsp = await FaustRemoteDsp.connectRelay(session.signal, session.room, { token: session.token });
             }
             transport = via;
             rtts = [];

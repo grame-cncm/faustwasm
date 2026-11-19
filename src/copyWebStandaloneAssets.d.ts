@@ -21,7 +21,8 @@ declare const copyWebRemoteAssets: (
     outputDir: string,
     dspName: string,
     poly?: boolean,
-    effect?: boolean
+    effect?: boolean,
+    options?: { signal?: string; iceServers?: string[] }
 ) => void;
 
 export {

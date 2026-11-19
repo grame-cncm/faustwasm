@@ -9,11 +9,13 @@ const argv = process.argv.slice(2);
 
 if (argv.includes("-help") || argv.includes("-h") || argv.length === 0) {
     console.log(`
-faust-remote-server.js <rootDir> [-port <n>] [-host <address>] [-cert <file.pem> -key <file.pem>]
+faust-remote-server.js <rootDir> [-port <n>] [-host <address>] [-cert <file.pem> -key <file.pem>] [-allow-origin <origin>]...
 Serves <rootDir> and relays the signaling of Faust remote control sessions.
 With -cert and -key, serves HTTPS: phones need it for their sensors and
 for a PWA, anywhere but on localhost. Default port 8443, default address
-0.0.0.0 (every interface).
+0.0.0.0 (every interface). -allow-origin (repeatable) lets pages served
+from another origin, such as https://example.org, use the signaling and
+the relay.
 `);
     process.exit(argv.length === 0 ? 1 : 0);
 }
@@ -31,6 +33,25 @@ const takeValue = (flag) => {
     return value;
 };
 
+/** Every value of a flag that may be given several times. */
+const takeValues = (/** @type {string} */ flag) => {
+    const values = [];
+    while (argv.includes(flag)) values.push(/** @type {string} */ (takeValue(flag)));
+    return values;
+};
+
+const allowOrigins = takeValues("-allow-origin");
+for (const origin of allowOrigins) {
+    let valid = false;
+    try {
+        const url = new URL(origin);
+        valid = (url.protocol === "https:" || url.protocol === "http:") && url.origin === origin;
+    } catch { /* invalid below */ }
+    if (!valid) {
+        console.error(`-allow-origin wants an origin such as https://example.org, not ${origin}`);
+        process.exit(1);
+    }
+}
 const port = Number(takeValue("-port") ?? 8443);
 const host = takeValue("-host") ?? "0.0.0.0";
 const certFile = takeValue("-cert");
@@ -53,7 +74,8 @@ if (!!certFile !== !!keyFile) {
 const server = createFaustRemoteServer({
     root,
     cert: certFile ? fs.readFileSync(certFile) : undefined,
-    key: keyFile ? fs.readFileSync(keyFile) : undefined
+    key: keyFile ? fs.readFileSync(keyFile) : undefined,
+    allowOrigins
 });
 
 server.listen(port, host, () => {
@@ -67,6 +89,7 @@ server.listen(port, host, () => {
             .map((i) => i?.address)]
         : [host];
     console.log(`Serving ${root}`);
+    if (allowOrigins.length) console.log(`Signaling and relay open to ${allowOrigins.join(", ")}`);
     for (const name of hosts) console.log(`  ${scheme}://${name}:${actualPort}/`);
     if (!certFile)
         console.log("Without -cert and -key, phones get no sensors and no PWA (HTTPS only, except on localhost).");

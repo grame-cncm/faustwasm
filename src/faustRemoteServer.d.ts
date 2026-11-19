@@ -5,6 +5,7 @@ export declare const createFaustRemoteServer: (options: {
     root: string;
     cert?: string | Buffer;
     key?: string | Buffer;
+    allowOrigins?: string[];
 }) => http.Server | https.Server;
 
 export default createFaustRemoteServer;

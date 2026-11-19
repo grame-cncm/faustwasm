@@ -11,7 +11,11 @@ if (argv.includes("-help") || argv.includes("-h")) {
 faust2wasm.js <file.dsp> <outputDir> [-poly] [-standalone] [-pwa] [-remote] [-no-template]
 Generates WebAssembly and metadata JSON files of a given Faust DSP.
 -remote writes a host page and, in remote/, a remote control PWA that drives
-it over WebRTC; serve <outputDir> with faust-remote-server-ts.
+it over WebRTC; serve <outputDir> with faust-remote-server-ts. With -remote:
+  -signal <url>  the signaling server and relay, when it is not the server of
+                 the pages (start it with -allow-origin <origin of the pages>)
+  -stun <url>    a STUN server, such as stun:stun.example.org:3478, for
+                 remote controls on another network (repeatable)
 `);
     process.exit();
 }
@@ -27,6 +31,43 @@ const standalone = takeFlag("-standalone");
 const pwa = takeFlag("-pwa");
 const remote = takeFlag("-remote");
 const noTemplate = takeFlag("-no-template");
+
+/** The value after a flag, removed from argv with it. */
+const takeValue = (flag) => {
+    const index = argv.indexOf(flag);
+    if (index === -1) return undefined;
+    const value = argv[index + 1];
+    if (value === undefined || value.startsWith("-")) {
+        console.error(`${flag} needs a value`);
+        process.exit(1);
+    }
+    argv.splice(index, 2);
+    return value;
+};
+const signal = takeValue("-signal");
+const stun = [];
+for (let value; (value = takeValue("-stun")) !== undefined;) stun.push(value);
+if ((signal || stun.length) && !remote) {
+    console.error("-signal and -stun go with -remote");
+    process.exit(1);
+}
+if (signal !== undefined) {
+    let valid = false;
+    try {
+        const { protocol, search, hash } = new URL(signal);
+        valid = (protocol === "https:" || protocol === "http:") && !search && !hash;
+    } catch { /* invalid below */ }
+    if (!valid) {
+        console.error(`-signal wants the server's URL, such as https://signal.example.org, not ${signal}`);
+        process.exit(1);
+    }
+}
+for (const url of stun) {
+    if (!/^stuns?:[^\s]+$/.test(url)) {
+        console.error(`-stun wants a STUN URL, such as stun:stun.example.org:3478, not ${url}`);
+        process.exit(1);
+    }
+}
 
 // Allow Faust flags (like -I) anywhere while keeping the first two positionals as input/output.
 const positionals = [];
@@ -59,8 +100,11 @@ const dspName = fileName.replace(/\.dsp$/, '');
     } else if (pwa) {
         copyWebPWAAssets(outputDir, dspName, poly, !!effectMeta);
     } else if (remote) {
-        copyWebRemoteAssets(outputDir, dspName, poly, !!effectMeta);
-        console.log(`Serve it with: npx faust-remote-server-ts ${outputDir} [-cert <file.pem> -key <file.pem>]`);
+        copyWebRemoteAssets(outputDir, dspName, poly, !!effectMeta, { signal, iceServers: stun });
+        if (signal)
+            console.log(`Serve ${outputDir} with any HTTPS server, and run at ${signal}: npx faust-remote-server-ts <dir> -allow-origin <origin of the pages>`);
+        else
+            console.log(`Serve it with: npx faust-remote-server-ts ${outputDir} [-cert <file.pem> -key <file.pem>]`);
     } else if (!noTemplate) {
         copyWebTemplateAssets(outputDir, dspName, poly, !!effectMeta);
     }

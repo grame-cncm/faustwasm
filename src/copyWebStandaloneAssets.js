@@ -292,12 +292,17 @@ const copyWebTemplateAssets = (
  * @param {string} dspName - The name of the DSP to be loaded.
  * @param {boolean} [poly] - Whether the DSP is polyphonic.
  * @param {boolean} [effect] - Whether the DSP has an effect module.
+ * @param {{ signal?: string, iceServers?: string[] }} [options] - `signal`:
+ *   the signaling server and relay, when it is not the server of the pages
+ *   (the remote control accepts it, and no other besides its own server);
+ *   `iceServers`: STUN server URLs, for peers on different networks.
  */
 const copyWebRemoteAssets = (
     outputDir,
     dspName,
     poly = false,
-    effect = false
+    effect = false,
+    options = {}
 ) => {
     console.log(`Writing assets files.`);
     const remoteBundle = path.join(__dirname, '../dist/remote');
@@ -322,6 +327,29 @@ const copyWebRemoteAssets = (
         findAndReplace.push(
             'FAUST_DSP_HAS_EFFECT = false',
             'FAUST_DSP_HAS_EFFECT = true'
+        );
+
+    // `cpSyncModify` takes the text to find as a regular expression and
+    // interprets `$` in the replacement: escaped on both sides
+    /** @param {string} text */
+    const literal = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    /** @param {string} text */
+    const replacement = (text) => text.replace(/\$/g, '$$$$');
+    if (options.signal)
+        findAndReplace.push(
+            literal('const FAUST_SIGNAL_URL = ""'),
+            replacement(
+                `const FAUST_SIGNAL_URL = ${JSON.stringify(options.signal)}`
+            )
+        );
+    if (options.iceServers?.length)
+        findAndReplace.push(
+            literal('const FAUST_ICE_SERVERS = []'),
+            replacement(
+                `const FAUST_ICE_SERVERS = ${JSON.stringify(
+                    options.iceServers.map((urls) => ({ urls }))
+                )}`
+            )
         );
 
     const asset = (/** @type {string} */ name) =>

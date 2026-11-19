@@ -24,6 +24,15 @@
  * after the prefix says that end has closed. Same token rule as signaling: a
  * relaying host registers the room as `POST host` does.
  *
+ * Other origins: a page served elsewhere (an online editor, say) may use
+ * this server's signaling and relay if its origin is in `allowOrigins`. The
+ * server then answers CORS preflights and adds the CORS headers; it refuses
+ * any other foreign origin, the relay included, which CORS does not cover
+ * and whose `Origin` header the server checks itself. Requests without an
+ * `Origin` (not from a browser page) or from the server's own origin are
+ * served as before. Behind a reverse proxy that changes the host or the
+ * scheme, list the server's public origin too.
+ *
  * Messages for an id whose stream is not open yet are kept (the last 64, for a
  * minute), so a remote control may post its offer before its stream is up.
  * The server reads nothing in them but `peer`, and keeps nothing once they are
@@ -249,12 +258,37 @@ const acceptWebSocket = (req, socket) => {
 /**
  * Create the server; call `listen` on it.
  *
- * @param {{ root: string, cert?: string | Buffer, key?: string | Buffer }} options
- *   `root` is the directory served; with `cert` and `key` (PEM), HTTPS.
+ * @param {{ root: string, cert?: string | Buffer, key?: string | Buffer, allowOrigins?: string[] }} options
+ *   `root` is the directory served; with `cert` and `key` (PEM), HTTPS;
+ *   `allowOrigins`, the origins of pages served elsewhere that may use the
+ *   signaling and the relay (`https://example.org`, no path).
  * @returns {http.Server | https.Server}
  */
-export const createFaustRemoteServer = ({ root, cert, key }) => {
+export const createFaustRemoteServer = ({
+    root,
+    cert,
+    key,
+    allowOrigins = []
+}) => {
     const base = path.resolve(root);
+    const scheme = cert && key ? 'https' : 'http';
+
+    /**
+     * Whether a request may use the signaling or the relay, and the origin
+     * to name in CORS headers if it comes from another one.
+     *
+     * @param {http.IncomingMessage} req
+     * @returns {{ allowed: boolean, cors: string | null }}
+     */
+    const checkOrigin = (req) => {
+        const origin = req.headers.origin;
+        if (origin === undefined) return { allowed: true, cors: null };
+        if (origin === `${scheme}://${req.headers.host}`)
+            return { allowed: true, cors: null };
+        if (allowOrigins.includes(origin))
+            return { allowed: true, cors: origin };
+        return { allowed: false, cors: null };
+    };
     /** @type {Map<string, Room>} */
     const rooms = new Map();
 
@@ -331,7 +365,10 @@ export const createFaustRemoteServer = ({ root, cert, key }) => {
             res.writeHead(200, {
                 'content-type': 'text/event-stream',
                 'cache-control': 'no-store',
-                connection: 'keep-alive'
+                connection: 'keep-alive',
+                // A reverse proxy holding the stream back would deliver
+                // nothing until it closes
+                'x-accel-buffering': 'no'
             });
             res.write(': open\n\n');
             const now = Date.now();
@@ -415,6 +452,20 @@ export const createFaustRemoteServer = ({ root, cert, key }) => {
             /^\/signal\/([^/]+)\/(host|events|send)(?:\/([^/]+))?$/
         );
         if (!match) return serveFile(req, res, pathname);
+        const { allowed, cors } = checkOrigin(req);
+        if (!allowed) return reply(res, 403, 'origin not allowed');
+        if (cors) {
+            res.setHeader('access-control-allow-origin', cors);
+            res.setHeader('vary', 'Origin');
+            res.setHeader(
+                'access-control-allow-headers',
+                'content-type, x-faust-token'
+            );
+            res.setHeader('access-control-allow-methods', 'GET, POST');
+            res.setHeader('access-control-max-age', '600');
+        }
+        // A preflight carries no token: answered on the origin alone
+        if (req.method === 'OPTIONS') return reply(res, 204);
         signal(req, res, match[1], match[2], match[3]).catch((error) =>
             reply(res, error.status ?? 500, error.message)
         );
@@ -529,6 +580,11 @@ export const createFaustRemoteServer = ({ root, cert, key }) => {
             );
         } catch {
             match = null;
+        }
+        // CORS does not apply to a WebSocket: the origin is checked here
+        if (match && !checkOrigin(req).allowed) {
+            socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+            return;
         }
         const ws = match ? acceptWebSocket(req, socket) : null;
         if (!match || !ws) {
