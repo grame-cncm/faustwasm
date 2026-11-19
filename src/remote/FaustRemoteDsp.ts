@@ -22,7 +22,7 @@ import { connectRelay, type FaustRelayOptions } from './relay';
 import { callHost, type FaustRTCOptions } from './rtc';
 import type { FaustSignaling } from './signaling';
 import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
-import { isDiscrete, readUI, type FaustRemoteUI } from './ui';
+import { isDiscrete, isRemoteOff, readUI, type FaustRemoteUI } from './ui';
 
 /**
  * The part of a node's API that controls it, without the audio: what a user
@@ -330,6 +330,13 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         const i = this.#inputIndex.get(address);
         const item = this.#items.get(address);
         if (i === undefined || !item || !Number.isFinite(value)) return;
+        if (isRemoteOff(item)) {
+            // The DSP keeps it from remote controls: nothing is sent, and
+            // the control is given the host's value back
+            const hostValue = this.#values.get(address) ?? 0;
+            queueMicrotask(() => this.#inputHandler?.(address, hostValue));
+            return;
+        }
         this.#values.set(address, value);
         if (this.#state !== 'open') return;
         const time = this.#stamp();

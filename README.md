@@ -154,6 +154,15 @@ Variants:
 - **Timed mode**: open the host as [http://localhost:8443/?delay=40](http://localhost:8443/?delay=40). Values from the remote controls are then applied 40 ms after they were sent, as regularly as they were sent, instead of when the network delivers them.
 - **Relay fallback**: in the remote control tab's console, run `window.RTCPeerConnection = undefined` before clicking **Connect**. The status then reads `connected (relay)`: the messages go through the server.
 
+The DSP decides what remote controls may change: a control with `[remote:off]` in its label is shown on the remote controls and follows the host's value, but cannot be changed from them (the host refuses the write and sends the value back). To hide it from the remote controls as well, add `[hidden:1]`, which faust-ui honours:
+
+```faust
+volume = hslider("volume [remote:off]", 0.5, 0, 1, 0.01);   // shown, not remotely changeable
+calib = hslider("calib [remote:off] [hidden:1]", 0, 0, 1, 0.01);   // neither
+```
+
+Sensors do not drive a `[remote:off]` control either: a remote control sends its accelerometer or gyroscope readings only if some control it may drive uses them.
+
 The repository also has manual pages where the DSP can be edited in the page: serve the repository root with `node scripts/faust-remote-server.js . -port 8443` and open [http://localhost:8443/test/web/remote/host.html](http://localhost:8443/test/web/remote/host.html).
 
 ##### A signaling server elsewhere

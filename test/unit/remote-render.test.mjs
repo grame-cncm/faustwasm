@@ -176,7 +176,45 @@ for (const [kind, sp] of KINDS) {
         host.close();
     });
 
-    test(`a note held by a vanished remote control dies away on ${kind}`, async () => {
+    test(`[remote:off] from the Faust source keeps a control of ${kind} from remote controls`, async () => {
+        const generator = new FaustMonoDspGenerator();
+        await generator.compile(
+            compiler,
+            'remotelocked',
+            `import("stdfaust.lib");
+process = os.osc(hslider("freq [remote:off]", 440, 20, 3000, 1)) * button("gate");`,
+            '-ftz 2'
+        );
+        assert.ok(generator.factory, 'remotelocked has to have compiled');
+        const node = await generator.createNode(
+            audioContext(),
+            'remotelocked',
+            generator.factory,
+            sp,
+            BLOCK
+        );
+        assert.ok(node, 'createNode returned nothing');
+        const { host, dsp } = await remoteControl(node);
+        /** @type {[string, number][]} */
+        const seen = [];
+        dsp.setInputParamHandler((path, value) => seen.push([path, value]));
+        await settle();
+        seen.length = 0;
+
+        dsp.setParamValue('freq', 1000);
+        dsp.setParamValue('gate', 1);
+        await settle();
+        renderNode(node, BLOCK);
+        // The gate went through, the frequency did not, and came back
+        assert.equal(node.getParamValue('/remotelocked/gate'), 1);
+        assert.equal(node.getParamValue('/remotelocked/freq'), 440);
+        assert.deepEqual(seen[0], ['/remotelocked/freq', 440]);
+
+        dsp.close();
+        host.close();
+    });
+
+        test(`a note held by a vanished remote control dies away on ${kind}`, async () => {
         const generator = new FaustPolyDspGenerator();
         await generator.compile(compiler, 'remotepoly', INSTRUMENT, '-ftz 2');
         assert.ok(generator.voiceFactory, 'the voices have to have compiled');

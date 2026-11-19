@@ -378,6 +378,13 @@ const MUTANTS = [
         from: 'if (allowOrigins.includes(origin))',
         to: 'if (true)',
         tests: 'test/unit/remote-server.test.mjs'
+    },
+    {
+        what: 'the remote host accepts a write to a [remote:off] control',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: 'if (this.#remoteOff.has(message.i)) {',
+        to: 'if (false) {',
+        tests: 'test/unit/remote-host.test.mjs'
     }
 ];
 

@@ -1022,6 +1022,16 @@ Q6
 :   Une convention de métadonnées (`[remote:off]` sur un widget, ou
     `declare remote "…"`) pour que le DSP déclare lui-même ce qui est pilotable,
     en plus de l'option `expose` ?
+    **Tranché :** `[remote:off]` sur un widget d'entrée. Les télécommandes le
+    montrent toujours et suivent sa valeur (le cacher, c'est le rôle de
+    `[hidden:1]`, que faust-ui respecte), mais ne peuvent pas le changer : la
+    télécommande n'envoie rien et remet la valeur de l'hôte ; l'hôte refuse
+    l'écriture et renvoie la valeur, au cas où une télécommande ne jouerait pas
+    le jeu. Les capteurs ne sont pris en compte que si un widget pilotable les
+    utilise (le nœud applique toutes les correspondances de capteurs à la fois :
+    un curseur `[acc:]` en `[remote:off]` parmi d'autres pilotables bouge
+    quand même). Sans objet sur un bargraph, qui reste envoyé. Pas de
+    `declare` au niveau du DSP pour l'instant.
 
 Q7
 :   Retour audio : une piste WebRTC (Opus) de l'hôte vers la télécommande, pour

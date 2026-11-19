@@ -657,3 +657,70 @@ test('closing the host releases what every remote control held', async () => {
         (error) => error instanceof FaustRemoteError && error.code === 'closed'
     );
 });
+
+// -------------------------------------------------------------- [remote:off]
+
+/** The test DSP with `[remote:off]` on the controls named. */
+const lockedNode = (...labels) => {
+    const meta = describe();
+    const lock = (item) => {
+        if (item.items) item.items.forEach(lock);
+        else if (labels.includes(item.label))
+            item.meta = [...(item.meta ?? []), { remote: 'off' }];
+    };
+    meta.ui.forEach(lock);
+    return new FakeNode(JSON.stringify(meta));
+};
+
+test('a control kept by [remote:off] is shown and followed, not changed', async () => {
+    const { host, node } = makeHost({}, lockedNode('freq'));
+    const { dsp } = await connect(host);
+    // Still there, with the host's value: hiding it is [hidden:1]'s job
+    assert.ok(dsp.getParams().includes(FREQ));
+    assert.equal(dsp.getParamValue(FREQ), 440);
+    const { inputs } = await watch(dsp);
+
+    // A write is not sent, and the control is given the host's value back
+    dsp.setParamValue(FREQ, 880);
+    await settle();
+    assert.deepEqual(node.writesTo(FREQ), []);
+    assert.deepEqual(inputs, [[FREQ, 440]]);
+    assert.equal(dsp.getParamValue(FREQ), 440);
+
+    // Changes made on the host still reach the remote control
+    node.setParamValue(FREQ, 1000);
+    await settle();
+    assert.deepEqual(inputs.at(-1), [FREQ, 1000]);
+
+    // Other controls are as before
+    dsp.setParamValue(GATE, 1);
+    await settle();
+    assert.deepEqual(node.writesTo(GATE), [1]);
+});
+
+test('the host refuses a write to a [remote:off] control and sends the value back', async () => {
+    const { host, node } = makeHost({}, lockedNode('freq'));
+    node.values.set(FREQ, 550);
+    const raw = rawClient(host);
+    await raw.hello();
+    raw.send({ type: 'param', i: 0, value: 880 });
+    await settle();
+    assert.deepEqual(node.writesTo(FREQ), []);
+    assert.deepEqual(raw.received.at(-1), { type: 'sync', i: 0, value: 550 });
+});
+
+test('sensors do not drive what [remote:off] keeps', async () => {
+    // The only accelerometer control is kept; the gyroscope one is not
+    const { host, node } = makeHost({}, lockedNode('tilt'));
+    const { dsp } = await connect(host);
+    assert.equal(dsp.hasAccInput, false);
+    assert.equal(dsp.hasGyrInput, true);
+    // Even sent anyway, a reading is ignored
+    const raw = rawClient(host);
+    await raw.hello({ id: 'raw2' });
+    raw.send({ type: 'acc', x: 1, y: 2, z: 3, invert: false }, 'stream');
+    dsp.propagateGyr({ alpha: 10, beta: 20, gamma: 30 });
+    await settle();
+    assert.deepEqual(node.acc, []);
+    assert.deepEqual(node.gyr, [[10, 20, 30]]);
+});

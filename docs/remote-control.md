@@ -1020,6 +1020,15 @@ Q6
 :   A metadata convention (`[remote:off]` on a widget, or
     `declare remote "…"`) so that the DSP itself declares what is
     controllable, in addition to the `expose` option?
+    **Settled:** `[remote:off]` on an input widget. Remote controls still
+    show it and follow its value (hiding is what `[hidden:1]` is for, and
+    faust-ui honours it), but cannot change it: the remote control sends
+    nothing and puts the host's value back; the host refuses the write and
+    sends the value back, in case a remote control does not play along.
+    Sensor readings are taken only while a controllable widget uses them
+    (the node applies every sensor mapping at once, so one `[remote:off]`
+    `[acc:]` slider among controllable ones still moves). It means nothing
+    on a bargraph, which is still sent. No DSP-level `declare` for now.
 
 Q7
 :   Audio feedback: a WebRTC track (Opus) from the host to the remote control,

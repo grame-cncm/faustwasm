@@ -21,9 +21,12 @@ export interface FaustRemoteUI {
     readonly outputs: FaustUIOutputItem[];
     /** Short names and labels, to the address they stand for. */
     readonly aliases: Record<string, string>;
-    /** Whether a control carries `[acc:...]` metadata. */
+    /**
+     * Whether a control remote controls may drive carries `[acc:...]`
+     * metadata: whether a remote control's accelerometer has anything to do.
+     */
     readonly hasAcc: boolean;
-    /** Whether a control carries `[gyr:...]` metadata. */
+    /** The same for `[gyr:...]` and the gyroscope. */
     readonly hasGyr: boolean;
 }
 
@@ -54,9 +57,13 @@ export const readUI = (ui: FaustUIDescriptor): FaustRemoteUI => {
                 if (alias && !(alias in aliases))
                     aliases[alias] = input.address;
             }
-            for (const meta of input.meta ?? []) {
-                if (meta.acc) hasAcc = true;
-                if (meta.gyr) hasGyr = true;
+            // A control kept from remote controls is not theirs to drive by
+            // their sensors either
+            if (!isRemoteOff(input)) {
+                for (const meta of input.meta ?? []) {
+                    if (meta.acc) hasAcc = true;
+                    if (meta.gyr) hasGyr = true;
+                }
             }
         } else if (OUTPUT_TYPES.has(item.type)) {
             outputs.push(item as FaustUIOutputItem);
@@ -65,6 +72,16 @@ export const readUI = (ui: FaustUIDescriptor): FaustRemoteUI => {
     ui.forEach(visit);
     return { inputs, outputs, aliases, hasAcc, hasGyr };
 };
+
+/**
+ * Whether the DSP keeps a control out of remote controls' reach, by
+ * `[remote:off]` in its label: they show it and follow its value, but cannot
+ * change it. To hide it as well, `[hidden:1]`, which faust-ui honours.
+ */
+export const isRemoteOff = (item: FaustUIInputItem) =>
+    (item.meta ?? []).some(
+        (meta) => (meta.remote ?? '').trim().toLowerCase() === 'off'
+    );
 
 /**
  * The range a value written to an input is held to.

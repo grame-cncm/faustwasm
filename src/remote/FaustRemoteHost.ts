@@ -20,7 +20,7 @@ import { listenRelay, type FaustRelayOptions } from './relay';
 import { answerPeers, type FaustRTCOptions } from './rtc';
 import type { FaustSignaling } from './signaling';
 import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
-import { inputRange, readUI } from './ui';
+import { inputRange, isRemoteOff, readUI } from './ui';
 
 /**
  * What the host needs from a node: every Faust node, mono or polyphonic,
@@ -167,6 +167,11 @@ export class FaustRemoteHost extends EventTarget {
     #hash: Promise<string> | null = null;
 
     readonly #inputs: FaustUIInputItem[];
+    /** Inputs the DSP keeps from remote controls, by `[remote:off]`. */
+    readonly #remoteOff = new Set<number>();
+    /** Whether a remote control's sensor readings may drive anything. */
+    readonly #remoteAcc: boolean;
+    readonly #remoteGyr: boolean;
     readonly #inputIndex = new Map<string, number>();
     readonly #outputs: string[];
     readonly #outputIndex = new Map<string, number>();
@@ -210,7 +215,15 @@ export class FaustRemoteHost extends EventTarget {
         this.#json = node.getJSON();
         const ui = readUI(node.getMeta().ui);
         this.#inputs = ui.inputs;
-        ui.inputs.forEach((item, i) => this.#inputIndex.set(item.address, i));
+        ui.inputs.forEach((item, i) => {
+            this.#inputIndex.set(item.address, i);
+            if (isRemoteOff(item)) this.#remoteOff.add(i);
+        });
+        // The node applies every sensor mapping at once: a remote reading is
+        // only taken while one of the controls it drives is the remote
+        // controls' to drive
+        this.#remoteAcc = ui.hasAcc;
+        this.#remoteGyr = ui.hasGyr;
         this.#outputs = ui.outputs.map((item) => item.address);
         this.#outputs.forEach((path, k) => this.#outputIndex.set(path, k));
         this.#outputThreshold = ui.outputs.map((item) => {
@@ -460,7 +473,18 @@ export class FaustRemoteHost extends EventTarget {
         switch (message.type) {
             case 'param': {
                 const item = this.#inputs[message.i];
-                if (!item || !this.#mayWrite(client, item.address)) return;
+                if (!item) return;
+                if (this.#remoteOff.has(message.i)) {
+                    // Kept from remote controls by the DSP: refused, and the
+                    // real value sent back so the writer's control returns
+                    this.#send(client, {
+                        type: 'sync',
+                        i: message.i,
+                        value: finite(this.#node.getParamValue(item.address))
+                    });
+                    return;
+                }
+                if (!this.#mayWrite(client, item.address)) return;
                 if (!this.#fresh(client, `p${message.i}`, message.seq)) return;
                 const [min, max] = inputRange(item);
                 const value = Math.min(max, Math.max(min, message.value));
@@ -479,7 +503,12 @@ export class FaustRemoteHost extends EventTarget {
                 return;
             }
             case 'acc': {
-                if (!this.#node.hasAccInput || !this.#mayDrive(client)) return;
+                if (
+                    !this.#node.hasAccInput ||
+                    !this.#remoteAcc ||
+                    !this.#mayDrive(client)
+                )
+                    return;
                 if (!this.#fresh(client, 'acc', message.seq)) return;
                 const { x, y, z, invert } = message;
                 this.#later(client, message.time, () =>
@@ -488,7 +517,12 @@ export class FaustRemoteHost extends EventTarget {
                 return;
             }
             case 'gyr': {
-                if (!this.#node.hasGyrInput || !this.#mayDrive(client)) return;
+                if (
+                    !this.#node.hasGyrInput ||
+                    !this.#remoteGyr ||
+                    !this.#mayDrive(client)
+                )
+                    return;
                 if (!this.#fresh(client, 'gyr', message.seq)) return;
                 const { alpha, beta, gamma } = message;
                 this.#later(client, message.time, () =>
