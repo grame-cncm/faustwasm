@@ -273,6 +273,41 @@ const MUTANTS = [
         from: 'fromNode: this.fNodeWrite',
         to: 'fromNode: true',
         tests: 'test/unit/node-param-value.test.mjs'
+    },
+    {
+        what: 'a remote button is sent on the channel that may lose its release',
+        file: 'src/remote/FaustRemoteDsp.ts',
+        from: 'if (isDiscrete(item) || this.#options.gestureEnd <= 0) {',
+        to: 'if (this.#options.gestureEnd <= 0) {',
+        tests: 'test/unit/remote-host.test.mjs'
+    },
+    {
+        what: 'the last value of a remote gesture is resent under a stale sequence number',
+        file: 'src/remote/FaustRemoteDsp.ts',
+        from: 'seq: this.#lastSeq.get(i)',
+        to: 'seq: 0',
+        tests: 'test/unit/remote-host.test.mjs'
+    },
+    {
+        what: 'the remote host passes values outside the control range to the node',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: 'const value = Math.min(max, Math.max(min, message.value));',
+        to: 'const value = message.value;',
+        tests: 'test/unit/remote-host.test.mjs'
+    },
+    {
+        what: 'the remote host echoes a write back to its writer',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: 'Math.fround(written.value) === Math.fround(value)',
+        to: 'false',
+        tests: 'test/unit/remote-host.test.mjs'
+    },
+    {
+        what: 'a remote control that vanishes leaves its notes sounding',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: 'for (const note of client.notes)',
+        to: 'for (const note of [])',
+        tests: 'test/unit/remote-render.test.mjs'
     }
 ];
 

@@ -1,0 +1,623 @@
+import type {
+    IFaustBaseWebAudioDsp,
+    InputParamHandler,
+    OutputParamHandler
+} from '../FaustWebAudioDsp';
+import type { FaustDspMeta, FaustUIInputItem } from '../types';
+import {
+    FaustRemoteChunkAssembler,
+    PROTOCOL_VERSION,
+    isChannelVoiceMessage,
+    parseHostMessage,
+    randomId,
+    sha256Hex,
+    type FaustRemoteClientMessage,
+    type FaustRemoteHostMessage,
+    type FaustRemoteMode,
+    type FaustRemoteRejectCode,
+    type FaustRemoteWelcomeMessage
+} from './protocol';
+import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
+import { isDiscrete, readUI, type FaustRemoteUI } from './ui';
+
+/**
+ * The part of a node's API that controls it, without the audio: what a user
+ * interface and the sensors need. `createFaustUI(div, node)` uses nothing
+ * else, so it accepts a `FaustRemoteDsp` as it is.
+ */
+export type IFaustRemoteControl = Pick<
+    IFaustBaseWebAudioDsp,
+    | 'setParamValue'
+    | 'getParamValue'
+    | 'getParams'
+    | 'getMeta'
+    | 'getUI'
+    | 'getJSON'
+    | 'getDescriptors'
+    | 'setOutputParamHandler'
+    | 'getOutputParamHandler'
+    | 'callOutputParamHandler'
+    | 'setInputParamHandler'
+    | 'getInputParamHandler'
+    | 'callInputParamHandler'
+    | 'midiMessage'
+    | 'keyOn'
+    | 'keyOff'
+    | 'ctrlChange'
+    | 'pitchWheel'
+    | 'hasAccInput'
+    | 'hasGyrInput'
+    | 'propagateAcc'
+    | 'propagateGyr'
+    | 'startSensors'
+    | 'stopSensors'
+>;
+
+export interface FaustRemoteDspOptions {
+    /** The token the host was given. */
+    token?: string;
+    /** Keep it across reconnections; a random one otherwise. */
+    id?: string;
+    /** Default `bi`. */
+    mode?: FaustRemoteMode;
+    /**
+     * The DSP JSON, for a remote control built with its DSP. Required in `uni`
+     * mode, where the host does not send it; the host refuses a different DSP.
+     */
+    json?: string;
+    /** Milliseconds to wait for the host's welcome. Default 10000. */
+    timeout?: number;
+    /** Milliseconds between pings; 0 sends none. Default 1000. */
+    pingInterval?: number;
+    /**
+     * Milliseconds of stillness after which a slider's last value is sent
+     * again on the reliable channel. 0 sends every slider value there, and
+     * nothing on the unreliable one. Default 100.
+     */
+    gestureEnd?: number;
+    /** Smallest change of a sensor axis worth sending. Default 0.01. */
+    sensorThreshold?: number;
+}
+
+/** Why `connect` failed, when the host said so. */
+export class FaustRemoteError extends Error {
+    constructor(
+        message: string,
+        readonly code: FaustRemoteRejectCode | 'closed' | 'timeout' | 'no-json'
+    ) {
+        super(message);
+        this.name = 'FaustRemoteError';
+    }
+}
+
+export type FaustRemoteDspState = 'connecting' | 'open' | 'closed';
+
+/** `stream` bytes queued past which a continuous value is not sent. */
+const STREAM_HIGH_WATER = 4096;
+/** Round trips kept to estimate the latency. */
+const RTT_WINDOW = 16;
+
+const now = () => globalThis.performance.now();
+
+const unref = <T>(timer: T): T => {
+    (timer as { unref?: () => void }).unref?.();
+    return timer;
+};
+
+/**
+ * A DSP running on a host, controlled from here: the remote control side.
+ *
+ * It behaves as the node does for everything that controls it -- parameters,
+ * output and input handlers, sensors, MIDI -- and produces no sound. Values
+ * are written locally at once, so `getParamValue` answers without a round
+ * trip, and changes made elsewhere (on the host, by another remote control,
+ * by a sensor) arrive through the input parameter handler, as they do on a
+ * node.
+ *
+ * Events: `statechange` when `state` changes, `error` (`detail`: the error).
+ */
+export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
+    readonly #transport: FaustRemoteTransport;
+    readonly #options: Required<Omit<FaustRemoteDspOptions, 'token' | 'json'>> &
+        Pick<FaustRemoteDspOptions, 'token' | 'json'>;
+    readonly #assembler = new FaustRemoteChunkAssembler();
+
+    #state: FaustRemoteDspState = 'connecting';
+    #mode: FaustRemoteMode = 'bi';
+    #json = '';
+    #meta: FaustDspMeta | null = null;
+    #ui: FaustRemoteUI = {
+        inputs: [],
+        outputs: [],
+        aliases: {},
+        hasAcc: false,
+        hasGyr: false
+    };
+    #inputs: string[] = [];
+    readonly #inputIndex = new Map<string, number>();
+    readonly #items = new Map<string, FaustUIInputItem>();
+    readonly #values = new Map<string, number>();
+    #outputs: string[] = [];
+    #outValues: number[] = [];
+    #voices = 0;
+
+    #seq = 0;
+    readonly #lastSeq = new Map<number, number>();
+    readonly #gestureTimers = new Map<number, ReturnType<typeof setTimeout>>();
+    #lastAcc: [number, number, number] | null = null;
+    #lastGyr: [number, number, number] | null = null;
+
+    #pingTimer: ReturnType<typeof setInterval> | null = null;
+    #pingSeq = 0;
+    readonly #rtts: number[] = [];
+    #rtt = NaN;
+
+    #outputHandler: OutputParamHandler | null = null;
+    #inputHandler: InputParamHandler | null = null;
+
+    #welcome: {
+        resolve: (welcome: FaustRemoteWelcomeMessage) => void;
+        reject: (error: FaustRemoteError) => void;
+    } | null = null;
+
+    private constructor(
+        transport: FaustRemoteTransport,
+        options: FaustRemoteDspOptions
+    ) {
+        super();
+        this.#transport = transport;
+        this.#options = {
+            id: randomId(8),
+            mode: 'bi',
+            timeout: 10000,
+            pingInterval: 1000,
+            gestureEnd: 100,
+            sensorThreshold: 0.01,
+            ...options
+        };
+    }
+
+    /**
+     * Introduce this remote control to the host on an open connection, and
+     * resolve once the host has welcomed it.
+     *
+     * @throws {FaustRemoteError} if the host refuses (`code` says why), the
+     * connection closes, or no welcome comes in time
+     */
+    static async connect(
+        transport: FaustRemoteTransport,
+        options: FaustRemoteDspOptions = {}
+    ): Promise<FaustRemoteDsp> {
+        const dsp = new FaustRemoteDsp(transport, options);
+        const hash =
+            options.json !== undefined
+                ? await sha256Hex(options.json)
+                : undefined;
+        const welcome = await new Promise<FaustRemoteWelcomeMessage>(
+            (resolve, reject) => {
+                const timer = setTimeout(() => {
+                    dsp.#welcome = null;
+                    transport.close('timeout');
+                    reject(new FaustRemoteError('no welcome', 'timeout'));
+                }, dsp.#options.timeout);
+                dsp.#welcome = {
+                    resolve: (welcome) => {
+                        clearTimeout(timer);
+                        resolve(welcome);
+                    },
+                    reject: (error) => {
+                        clearTimeout(timer);
+                        reject(error);
+                    }
+                };
+                transport.onmessage = (channel, text) =>
+                    dsp.#receive(channel, text);
+                transport.onclose = (reason) => dsp.#closed(reason);
+                dsp.#send({
+                    type: 'hello',
+                    v: PROTOCOL_VERSION,
+                    id: dsp.#options.id,
+                    token: options.token,
+                    mode: dsp.#options.mode,
+                    hash
+                });
+            }
+        );
+        dsp.#open(welcome);
+        return dsp;
+    }
+
+    /** `connecting` until the welcome, `open`, then `closed` for good. */
+    get state() {
+        return this.#state;
+    }
+
+    /** The mode the host granted. */
+    get mode() {
+        return this.#mode;
+    }
+
+    /** Shortest recent round trip to the host, in milliseconds; NaN before the first. */
+    get rtt() {
+        return this.#rtt;
+    }
+
+    /** Say goodbye to the host and close the connection. */
+    close(reason = 'bye') {
+        if (this.#state === 'closed') return;
+        this.#send({ type: 'bye', reason });
+        this.#transport.close(reason);
+        this.#closed(reason);
+    }
+
+    // ---------------------------------------------------------- parameters
+
+    setParamValue(path: string, value: number) {
+        const address = this.#ui.aliases[path] ?? path;
+        const i = this.#inputIndex.get(address);
+        const item = this.#items.get(address);
+        if (i === undefined || !item || !Number.isFinite(value)) return;
+        this.#values.set(address, value);
+        if (this.#state !== 'open') return;
+        if (isDiscrete(item) || this.#options.gestureEnd <= 0) {
+            // A lost button release would leave a note sounding
+            this.#send({ type: 'param', i, value });
+            return;
+        }
+        this.#seq += 1;
+        const seq = this.#seq;
+        this.#lastSeq.set(i, seq);
+        if (this.#transport.bufferedAmount('stream') <= STREAM_HIGH_WATER)
+            this.#send({ type: 'param', i, value, seq }, 'stream');
+        // The stream may drop the last value of the gesture, which nothing
+        // would replace: send it again, reliably, once the control rests
+        const pending = this.#gestureTimers.get(i);
+        if (pending) clearTimeout(pending);
+        this.#gestureTimers.set(
+            i,
+            setTimeout(() => {
+                this.#gestureTimers.delete(i);
+                this.#send({
+                    type: 'param',
+                    i,
+                    value: this.#values.get(address)!,
+                    seq: this.#lastSeq.get(i)
+                });
+            }, this.#options.gestureEnd)
+        );
+    }
+
+    getParamValue(path: string) {
+        const address = this.#ui.aliases[path] ?? path;
+        return this.#values.get(address) ?? 0;
+    }
+
+    getParams() {
+        return [...this.#inputs];
+    }
+
+    getMeta(): FaustDspMeta {
+        return this.#meta!;
+    }
+
+    getUI() {
+        return this.#meta!.ui;
+    }
+
+    getJSON() {
+        return this.#json;
+    }
+
+    getDescriptors() {
+        return this.#ui.inputs;
+    }
+
+    setOutputParamHandler(handler: OutputParamHandler | null) {
+        this.#outputHandler = handler;
+    }
+    getOutputParamHandler() {
+        return this.#outputHandler;
+    }
+    callOutputParamHandler(path: string, value: number) {
+        this.#outputHandler?.(path, value);
+    }
+
+    setInputParamHandler(handler: InputParamHandler | null) {
+        this.#inputHandler = handler;
+    }
+    getInputParamHandler() {
+        return this.#inputHandler;
+    }
+    callInputParamHandler(path: string, value: number) {
+        this.#inputHandler?.(path, value);
+    }
+
+    /** Last bargraph value received, by address. */
+    getOutputValue(path: string) {
+        const k = this.#outputs.indexOf(path);
+        return k === -1 ? 0 : this.#outValues[k];
+    }
+
+    /** Voices sounding on the host, for a polyphonic DSP. */
+    getNumActiveVoices() {
+        return this.#voices;
+    }
+
+    // ----------------------------------------------------------------- MIDI
+
+    midiMessage(data: number[] | Uint8Array) {
+        const bytes = Array.from(data);
+        if (this.#state !== 'open' || !isChannelVoiceMessage(bytes)) return;
+        this.#send({ type: 'midi', data: bytes });
+    }
+    keyOn(channel: number, pitch: number, velocity: number) {
+        this.midiMessage([0x90 | (channel & 0xf), pitch, velocity]);
+    }
+    keyOff(channel: number, pitch: number, velocity: number) {
+        this.midiMessage([0x80 | (channel & 0xf), pitch, velocity]);
+    }
+    ctrlChange(channel: number, ctrl: number, value: number) {
+        this.midiMessage([0xb0 | (channel & 0xf), ctrl, value]);
+    }
+    pitchWheel(channel: number, value: number) {
+        this.midiMessage([
+            0xe0 | (channel & 0xf),
+            value & 0x7f,
+            (value >> 7) & 0x7f
+        ]);
+    }
+
+    // -------------------------------------------------------------- sensors
+
+    get hasAccInput() {
+        return this.#ui.hasAcc;
+    }
+
+    get hasGyrInput() {
+        return this.#ui.hasGyr;
+    }
+
+    /**
+     * Send a raw accelerometer reading; the host maps it through the DSP's
+     * `[acc:...]` metadata. `invert` is this device's: Android reports the
+     * opposite sign.
+     */
+    propagateAcc(
+        accelerationIncludingGravity: NonNullable<
+            DeviceMotionEvent['accelerationIncludingGravity']
+        >,
+        invert = false
+    ) {
+        if (this.#state !== 'open' || !this.hasAccInput) return;
+        if (!accelerationIncludingGravity) return;
+        const { x, y, z } = accelerationIncludingGravity;
+        if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(z))
+            return;
+        if (this.#unchanged(this.#lastAcc, x, y, z)) return;
+        if (this.#transport.bufferedAmount('stream') > STREAM_HIGH_WATER)
+            return;
+        this.#lastAcc = [x, y, z];
+        this.#seq += 1;
+        this.#send({ type: 'acc', x, y, z, invert, seq: this.#seq }, 'stream');
+    }
+
+    /** Send a raw orientation reading; see `propagateAcc`. */
+    propagateGyr(
+        event: Pick<DeviceOrientationEvent, 'alpha' | 'beta' | 'gamma'>
+    ) {
+        if (this.#state !== 'open' || !this.hasGyrInput || !event) return;
+        const { alpha, beta, gamma } = event;
+        if (
+            !isFiniteNumber(alpha) ||
+            !isFiniteNumber(beta) ||
+            !isFiniteNumber(gamma)
+        )
+            return;
+        if (this.#unchanged(this.#lastGyr, alpha, beta, gamma)) return;
+        if (this.#transport.bufferedAmount('stream') > STREAM_HIGH_WATER)
+            return;
+        this.#lastGyr = [alpha, beta, gamma];
+        this.#seq += 1;
+        this.#send(
+            { type: 'gyr', alpha, beta, gamma, seq: this.#seq },
+            'stream'
+        );
+    }
+
+    #unchanged(
+        last: [number, number, number] | null,
+        a: number,
+        b: number,
+        c: number
+    ) {
+        const threshold = this.#options.sensorThreshold;
+        return (
+            last !== null &&
+            Math.abs(a - last[0]) < threshold &&
+            Math.abs(b - last[1]) < threshold &&
+            Math.abs(c - last[2]) < threshold
+        );
+    }
+
+    #handleDeviceMotion = ({
+        accelerationIncludingGravity
+    }: DeviceMotionEvent) => {
+        if (!accelerationIncludingGravity) return;
+        const isAndroid = /Android/i.test(
+            globalThis.navigator?.userAgent ?? ''
+        );
+        this.propagateAcc(accelerationIncludingGravity, isAndroid);
+    };
+
+    #handleDeviceOrientation = ({
+        alpha,
+        beta,
+        gamma
+    }: DeviceOrientationEvent) => this.propagateGyr({ alpha, beta, gamma });
+
+    /**
+     * Listen to this device's motion and orientation, for the axes the DSP
+     * uses. On iOS, permission has to have been asked for first, from a user
+     * gesture.
+     */
+    startSensors() {
+        if (typeof window === 'undefined') return;
+        if (this.hasAccInput)
+            window.addEventListener(
+                'devicemotion',
+                this.#handleDeviceMotion,
+                true
+            );
+        if (this.hasGyrInput)
+            window.addEventListener(
+                'deviceorientation',
+                this.#handleDeviceOrientation,
+                true
+            );
+    }
+
+    stopSensors() {
+        if (typeof window === 'undefined') return;
+        window.removeEventListener(
+            'devicemotion',
+            this.#handleDeviceMotion,
+            true
+        );
+        window.removeEventListener(
+            'deviceorientation',
+            this.#handleDeviceOrientation,
+            true
+        );
+    }
+
+    // ------------------------------------------------------------ the wire
+
+    #open(welcome: FaustRemoteWelcomeMessage) {
+        const json = welcome.json ?? this.#options.json;
+        if (json === undefined) {
+            this.close('no DSP description');
+            throw new FaustRemoteError(
+                'the host sent no DSP description and none was given',
+                'no-json'
+            );
+        }
+        this.#mode = welcome.mode;
+        this.#json = json;
+        this.#meta = JSON.parse(json) as FaustDspMeta;
+        this.#ui = readUI(this.#meta.ui);
+        // The host's lists are the authority on indices
+        this.#inputs = welcome.inputs;
+        this.#inputs.forEach((path, i) => this.#inputIndex.set(path, i));
+        for (const item of this.#ui.inputs) this.#items.set(item.address, item);
+        this.#inputs.forEach((path, i) =>
+            this.#values.set(path, welcome.values[i])
+        );
+        this.#outputs = welcome.outputs;
+        this.#outValues = [...welcome.outputValues];
+        this.#voices = welcome.voices;
+        this.#setState('open');
+        if (this.#options.pingInterval > 0) {
+            this.#pingTimer = unref(
+                setInterval(() => {
+                    this.#pingSeq += 1;
+                    this.#send({ type: 'ping', s: this.#pingSeq, t0: now() });
+                }, this.#options.pingInterval)
+            );
+        }
+    }
+
+    #receive(channel: FaustRemoteChannel, text: string) {
+        try {
+            let message = parseHostMessage(text);
+            if (message?.type === 'chunk') {
+                const whole = this.#assembler.push(message);
+                if (whole === null) return;
+                message = parseHostMessage(whole);
+                if (message?.type === 'chunk') return;
+            }
+            if (message) this.#handle(message);
+        } catch (error) {
+            this.dispatchEvent(new CustomEvent('error', { detail: error }));
+        }
+    }
+
+    #handle(message: FaustRemoteHostMessage) {
+        switch (message.type) {
+            case 'welcome':
+                if (this.#state === 'connecting') {
+                    this.#welcome?.resolve(message);
+                    this.#welcome = null;
+                }
+                return;
+            case 'reject':
+                this.#welcome?.reject(
+                    new FaustRemoteError(message.reason, message.code)
+                );
+                this.#welcome = null;
+                return;
+            case 'out': {
+                const indices = message.i ?? message.values.map((_, k) => k);
+                indices.forEach((k, n) => {
+                    if (k >= this.#outputs.length) return;
+                    this.#outValues[k] = message.values[n];
+                    this.#outputHandler?.(this.#outputs[k], message.values[n]);
+                });
+                return;
+            }
+            case 'sync': {
+                const path = this.#inputs[message.i];
+                if (path === undefined) return;
+                this.#values.set(path, message.value);
+                this.#inputHandler?.(path, message.value);
+                return;
+            }
+            case 'voices':
+                this.#voices = message.count;
+                return;
+            case 'pong': {
+                const t3 = now();
+                const rtt = t3 - message.t0 - (message.t2 - message.t1);
+                this.#rtts.push(rtt);
+                if (this.#rtts.length > RTT_WINDOW) this.#rtts.shift();
+                this.#rtt = Math.min(...this.#rtts);
+                return;
+            }
+            case 'bye':
+                this.#transport.close(message.reason ?? 'bye');
+                this.#closed(message.reason ?? 'bye');
+                return;
+        }
+    }
+
+    #send(
+        message: FaustRemoteClientMessage,
+        channel: FaustRemoteChannel = 'ctl'
+    ) {
+        if (this.#state === 'closed') return;
+        try {
+            this.#transport.send(channel, JSON.stringify(message));
+        } catch (error) {
+            this.dispatchEvent(new CustomEvent('error', { detail: error }));
+        }
+    }
+
+    #closed(reason: string) {
+        if (this.#state === 'closed') return;
+        this.#welcome?.reject(new FaustRemoteError(reason, 'closed'));
+        this.#welcome = null;
+        if (this.#pingTimer) clearInterval(this.#pingTimer);
+        this.#pingTimer = null;
+        for (const timer of this.#gestureTimers.values()) clearTimeout(timer);
+        this.#gestureTimers.clear();
+        this.stopSensors();
+        this.#setState('closed');
+    }
+
+    #setState(state: FaustRemoteDspState) {
+        this.#state = state;
+        this.dispatchEvent(new CustomEvent('statechange', { detail: state }));
+    }
+}
+
+const isFiniteNumber = (x: unknown): x is number =>
+    typeof x === 'number' && Number.isFinite(x);
