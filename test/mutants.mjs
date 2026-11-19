@@ -123,15 +123,15 @@ const MUTANTS = [
     {
         what: 'the AudioWorklet node is created without its DSP factory',
         file: 'src/FaustDspGenerator.ts',
-        from: '                    name: processorName,\n                    factory,\n',
-        to: '                    name: processorName,\n',
+        from: '                            name: processorName,\n                            factory,\n',
+        to: '                            name: processorName,\n',
         tests: 'test/unit/node-render.test.mjs'
     },
     {
         what: 'the generated processor module leaves out the instantiator',
-        file: 'src/FaustDspGenerator.ts',
-        from: 'var ${FaustWasmInstantiator.name} = ${FaustWasmInstantiator.toString()}\n',
-        to: '',
+        file: 'src/worklet/monoProcessor.ts',
+        from: '        FaustWasmInstantiator,\n        FaustAudioWorkletProcessorCommunicator,',
+        to: '        FaustWasmInstantiator: undefined as any,\n        FaustAudioWorkletProcessorCommunicator,',
         tests: 'test/unit/node-render.test.mjs'
     },
     {
