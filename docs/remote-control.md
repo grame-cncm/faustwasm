@@ -1,372 +1,373 @@
 ---
-title: Contrôle à distance des applications Faust Web Audio par WebRTC
+title: Remote control of Faust Web Audio applications over WebRTC
 organization: GRAME-CNCM — faustwasm
 date: 2026-11-19
-status: étude de faisabilité et spécification, brouillon
+status: feasibility study and specification, draft
 ---
 
 ```header
-faustwasm — contrôle à distance | | {page} / {pages}
+faustwasm — remote control | | {page} / {pages}
 ```
 
-# Contrôle à distance des applications Faust Web Audio par WebRTC
+# Remote control of Faust Web Audio applications over WebRTC
+
+*A French version of this document is in [remote-control.fr.md](remote-control.fr.md).*
 
 ::: toc+
-- **Résumé** — le verdict de faisabilité et les choix structurants, en une page.
-- **Contexte et objectifs** — les cas d'usage, ce que l'extension doit faire et ce qu'elle ne fera pas.
-- **Ce que faustwasm fournit déjà** — les API publiques sur lesquelles tout repose, et les contraintes qu'elles imposent.
-- **Architecture** — les trois rôles, le schéma d'ensemble, les topologies de déploiement.
-- **Transport** — pourquoi WebRTC, la configuration des canaux de données, ICE, le contrôle de flux.
-- **Signalisation** — le besoin, les options, la recommandation, la séquence d'établissement.
-- **Protocole applicatif** — les messages, la poignée de main, les modes uni- et bidirectionnel, la validation.
-- **Capteurs** — où appliquer le mapping `[acc:]`/`[gyr:]`, et les contraintes des navigateurs mobiles.
-- **Retour de l'hôte vers la télécommande** — bargraphs, synchronisation d'état, suppression d'écho.
-- **Temps, latence et gigue** — le budget de latence, le mode immédiat, le mode horodaté.
-- **Plusieurs télécommandes** — les politiques de partage et leurs limites.
-- **Sécurité et robustesse** — appairage, validation, panique à la déconnexion.
-- **API proposée** — les interfaces TypeScript côté hôte et côté télécommande.
-- **Intégration dans le package** — fichiers, construction, générateur, dépendances, version.
-- **Tests et mesures** — comment vérifier sans navigateur, puis mesurer en vrai.
-- **Risques et questions ouvertes** — ce qui reste à trancher avec le mainteneur.
-- **État de la mise en œuvre** — ce qui est fait, phase par phase, et les écarts avec ce qui précède.
-- **Usage sur Internet** — ce qu'il faudrait pour l'IDE en ligne : serveur public, pages, NAT, sécurité, hébergement.
-- **Plan de mise en œuvre** — les phases et leur ordre.
+- **Summary** — the feasibility verdict and the structural choices, on one page.
+- **Context and goals** — the use cases, what the extension must do and what it will not do.
+- **What faustwasm already provides** — the public APIs everything rests on, and the constraints they impose.
+- **Architecture** — the three roles, the overall diagram, the deployment topologies.
+- **Transport** — why WebRTC, the data channel configuration, ICE, flow control.
+- **Signaling** — the need, the options, the recommendation, the connection sequence.
+- **Application protocol** — the messages, the handshake, the one-way and two-way modes, validation.
+- **Sensors** — where to apply the `[acc:]`/`[gyr:]` mapping, and the constraints of mobile browsers.
+- **Feedback from the host to the remote control** — bargraphs, state synchronization, echo suppression.
+- **Time, latency and jitter** — the latency budget, immediate mode, timed mode.
+- **Multiple remote controls** — the sharing policies and their limits.
+- **Security and robustness** — pairing, validation, panic on disconnection.
+- **Proposed API** — the TypeScript interfaces on the host side and on the remote control side.
+- **Integration into the package** — files, build, generator, dependencies, version.
+- **Tests and measurements** — how to verify without a browser, then measure for real.
+- **Risks and open questions** — what remains to be decided with the maintainer.
+- **Implementation status** — what is done, phase by phase, and the deviations from the preceding sections.
+- **Use over the Internet** — what the online IDE would need: public server, pages, NAT, security, hosting.
+- **Implementation plan** — the phases and their order.
 :::
 
-## 1. Résumé
+## 1. Summary
 
-**L'extension est faisable sans modifier le runtime DSP.** Tout ce dont une
-télécommande a besoin existe déjà dans l'API publique des nœuds faustwasm :
-l'espace d'adresses des paramètres (`getParams`, `getUI`, `getJSON`), l'écriture
-horodatée (`setParamValue(path, value, time?)`), le flux des bargraphs
-(`setOutputParamHandler`), l'écho de tout changement de paramètre
-(`setInputParamHandler`), les capteurs bruts (`propagateAcc`, `propagateGyr`) et
-le MIDI. La couche distante est donc une couche *additive*, sur le thread
-principal, au-dessus d'un nœud existant : aucune ligne de
-`FaustWebAudioDsp.ts`, de `FaustAudioWorkletProcessor.ts` ou de `src/worklet/`
-n'a besoin de changer, et les invariants du thread audio (pas d'allocation, pas
-d'exception dans `process`) ne sont pas concernés.
+**The extension is feasible without modifying the DSP runtime.** Everything a
+remote control needs already exists in the public API of faustwasm nodes: the
+parameter address space (`getParams`, `getUI`, `getJSON`), timed writes
+(`setParamValue(path, value, time?)`), the bargraph stream
+(`setOutputParamHandler`), the echo of every parameter change
+(`setInputParamHandler`), raw sensors (`propagateAcc`, `propagateGyr`) and
+MIDI. The remote layer is therefore an *additive* layer, on the main thread,
+on top of an existing node: not a single line of `FaustWebAudioDsp.ts`,
+`FaustAudioWorkletProcessor.ts` or `src/worklet/` needs to change, and the
+audio thread invariants (no allocation, no exception in `process`) are not
+affected.
 
-Les choix structurants proposés :
+The proposed structural choices:
 
-1. **Deux rôles** : un *hôte* (la page qui joue le son, sur la machine reliée
-   aux haut-parleurs) et des *télécommandes* (une PWA sur téléphone). La
-   télécommande n'embarque **ni compilateur, ni wasm** : elle reçoit le JSON du
-   DSP de l'hôte et construit son interface avec faust-ui.
-2. **WebRTC DataChannel**, avec deux canaux négociés : un canal *fiable et
-   ordonné* pour la session, les boutons et le MIDI, et un canal *non fiable,
-   non ordonné* pour les flux continus (sliders, capteurs, bargraphs), où la
-   dernière valeur gagne.
-3. **Bidirectionnel par défaut.** Le retour a du sens : le JSON de l'interface,
-   les bargraphs, la synchronisation des sliders entre plusieurs télécommandes,
-   le nombre de voix actives. Le mode unidirectionnel n'est pas un second
-   protocole mais un sous-ensemble du même (l'hôte se tait après la poignée de
-   main).
-4. **Capteurs : valeurs brutes, mapping sur l'hôte.** La télécommande envoie
-   les valeurs brutes de l'accéléromètre et du gyroscope ; l'hôte les passe à
-   `propagateAcc`/`propagateGyr`, si bien que les courbes `[acc:]`/`[gyr:]`
-   s'appliquent exactement comme en local et que `FaustSensors` reste interne.
-5. **Signalisation sans dépendance** : un petit serveur Node (HTTPS statique +
-   signalisation HTTP/SSE) qui sert aussi la PWA, derrière une interface
-   abstraite remplaçable par n'importe quel autre canal.
-6. **Aucune nouvelle dépendance d'exécution.** Le code distant est un bundle
-   séparé, hors de `src/exports.ts` tant qu'il est expérimental.
+1. **Two roles**: a *host* (the page that plays the sound, on the machine
+   connected to the loudspeakers) and *remote controls* (a PWA on a phone).
+   The remote control embeds **neither a compiler nor wasm**: it receives the
+   DSP's JSON from the host and builds its interface with faust-ui.
+2. **WebRTC DataChannel**, with two negotiated channels: a *reliable, ordered*
+   channel for the session, buttons and MIDI, and an *unreliable, unordered*
+   channel for continuous streams (sliders, sensors, bargraphs), where the
+   last value wins.
+3. **Two-way by default.** Feedback makes sense: the interface JSON, the
+   bargraphs, slider synchronization between several remote controls, the
+   number of active voices. One-way mode is not a second protocol but a
+   subset of the same one (the host goes silent after the handshake).
+4. **Sensors: raw values, mapping on the host.** The remote control sends the
+   raw accelerometer and gyroscope values; the host passes them to
+   `propagateAcc`/`propagateGyr`, so that the `[acc:]`/`[gyr:]` curves apply
+   exactly as they do locally and `FaustSensors` stays internal.
+5. **Dependency-free signaling**: a small Node server (static HTTPS + HTTP/SSE
+   signaling) that also serves the PWA, behind an abstract interface that can
+   be replaced by any other channel.
+6. **No new runtime dependency.** The remote code is a separate bundle, kept
+   out of `src/exports.ts` while it is experimental.
 
-Le principal obstacle n'est pas technique mais pratique : capteurs et service
-worker exigent un **contexte sécurisé (HTTPS)**, ce qui impose un certificat
-sur le réseau local (\ref{sec:signal}).
+The main obstacle is not technical but practical: sensors and service workers
+require a **secure context (HTTPS)**, which means a certificate on the local
+network (\ref{sec:signal}).
 
-## 2. Contexte et objectifs
+## 2. Context and goals
 
-### 2.1. Cas d'usage
+### 2.1. Use cases
 
-- **Concert, installation** : un ordinateur relié à la sonorisation exécute une
-  application Faust ; des musiciens ou le public la pilotent depuis leur
-  téléphone, par l'écran ou par le geste.
-- **Régie et répétition** : un technicien règle depuis la salle les paramètres
-  d'un traitement qui tourne en coulisse.
-- **Interface gestuelle déportée** : le téléphone fournit les capteurs, une
-  machine plus puissante calcule un DSP trop lourd pour le téléphone (forte
-  polyphonie, réverbérations, spatialisation multicanale) et sort le son sur
-  ses propres interfaces audio.
-- **Partage depuis un éditeur** : un environnement fondé sur faustwasm (l'IDE
-  Faust en ligne, par exemple) propose « télécommande » et affiche un code QR ;
-  les téléphones présents pilotent le DSP en cours d'écriture.
+- **Concert, installation**: a computer connected to the sound system runs a
+  Faust application; musicians or the audience control it from their phones,
+  through the screen or through gesture.
+- **Front of house and rehearsal**: a technician in the audience area adjusts
+  the parameters of a process running backstage.
+- **Remote gestural interface**: the phone provides the sensors, a more
+  powerful machine computes a DSP too heavy for the phone (high polyphony,
+  reverbs, multichannel spatialization) and outputs the sound on its own
+  audio interfaces.
+- **Sharing from an editor**: an environment built on faustwasm (the online
+  Faust IDE, for example) offers "Remote control" and displays a QR code; the
+  phones present control the DSP while it is being written.
 
-### 2.2. Objectifs
+### 2.2. Goals
 
 O1
-:   Piloter depuis une PWA tous les widgets d'entrée d'un DSP Faust
-    (`button`, `checkbox`, `hslider`, `vslider`, `nentry`) qui tourne dans un
-    nœud faustwasm (AudioWorklet ou ScriptProcessor, mono ou polyphonique).
+:   Control from a PWA all the input widgets of a Faust DSP
+    (`button`, `checkbox`, `hslider`, `vslider`, `nentry`) running in a
+    faustwasm node (AudioWorklet or ScriptProcessor, mono or polyphonic).
 
 O2
-:   Piloter ces mêmes widgets par les capteurs du téléphone, avec la sémantique
-    des métadonnées `[acc:]` et `[gyr:]` déjà implémentée.
+:   Control these same widgets with the phone's sensors, with the semantics of
+    the `[acc:]` and `[gyr:]` metadata already implemented.
 
 O3
-:   Afficher sur la télécommande les bargraphs de l'hôte et l'état courant des
-    paramètres, quand cela a du sens (mode bidirectionnel).
+:   Display the host's bargraphs and the current parameter state on the remote
+    control, when that makes sense (two-way mode).
 
 O4
-:   Réutiliser l'interface générée existante : le code qui construit une UI
-    faust-ui à partir d'un nœud local (`createFaustUI(div, node)`) doit
-    fonctionner sans modification avec un mandataire distant.
+:   Reuse the existing generated interface: the code that builds a faust-ui UI
+    from a local node (`createFaustUI(div, node)`) must work unchanged with a
+    remote proxy.
 
 O5
-:   Ne rien imposer aux applications qui n'utilisent pas l'extension : pas de
-    dépendance, pas de surcoût dans le bundle principal, comportement mono/poly
-    bit à bit identique.
+:   Impose nothing on applications that do not use the extension: no
+    dependency, no overhead in the main bundle, mono/poly behavior
+    bit-identical.
 
-### 2.3. Non-objectifs
+### 2.3. Non-goals
 
-- Transporter de l'audio du téléphone vers l'hôte ou l'inverse (une extension
-  possible est décrite en \ref{sec:risques}, hors v1).
-- Compiler ou modifier un DSP à distance : la télécommande ne soumet jamais de
-  code, seulement des valeurs.
-- Fournir un serveur TURN, un service de signalisation public ou une
-  authentification par compte.
-- Les nœuds FFT (`createFFTNode`) : leur interface de paramètres est la même et
-  devrait fonctionner, mais ils ne sont pas visés par la v1.
+- Carrying audio from the phone to the host or the other way round (a
+  possible extension is described in \ref{sec:risques}, outside v1).
+- Compiling or modifying a DSP remotely: the remote control never submits
+  code, only values.
+- Providing a TURN server, a public signaling service or account-based
+  authentication.
+- FFT nodes (`createFFTNode`): their parameter interface is the same and
+  should work, but they are not targeted by v1.
 
-## 3. Ce que faustwasm fournit déjà
+## 3. What faustwasm already provides
 
-Tout ce qui suit est de l'API publique, commune à `FaustMonoAudioWorkletNode`,
-`FaustPolyAudioWorkletNode` et à leurs équivalents ScriptProcessor.
+Everything below is public API, common to `FaustMonoAudioWorkletNode`,
+`FaustPolyAudioWorkletNode` and their ScriptProcessor equivalents.
 
-| Existant | Rôle dans l'extension |
+| Existing | Role in the extension |
 | :-- | :-- |
-| `getParams()`, `getUI()`, `getJSON()`, `getDescriptors()` | Espace d'adresses des paramètres (`/dsp/group/param`), identique à celui des interfaces OSC et HTTP du Faust C++. Transmis à la télécommande à la connexion. |
-| `setParamValue(path, value, time?)` | Écriture d'un paramètre ; `time` en secondes de l'`AudioContext`, appliqué à l'échantillon près en AudioWorklet, ignoré en ScriptProcessor. |
-| `setOutputParamHandler(h)` | Flux des bargraphs, vers la télécommande. |
-| `setInputParamHandler(h)` | Écho de *tout* changement de paramètre vu par le DSP, quelle qu'en soit l'origine (UI locale, MIDI, capteurs, autre télécommande). Base de la synchronisation d'état. |
-| `hasAccInput`, `hasGyrInput`, `propagateAcc`, `propagateGyr` | Capteurs bruts ; le mapping `[acc:]`/`[gyr:]` est fait par le DSP (sur le thread audio en AudioWorklet). |
-| `midiMessage`, `keyOn`, `keyOff`, `ctrlChange`, `pitchWheel` (avec `time?`) | MIDI et notes, pour un clavier sur la télécommande et pour la polyphonie. |
-| `getNumActiveVoices()` (poly) | Retour d'état facultatif. |
-| `faust2wasm-ts … -pwa`, `FaustPWA`, `createFaustUI` | Générateur et squelette de PWA ; `createFaustUI` n'utilise que `getUI`, `setParamValue`, `setOutputParamHandler` et `setInputParamHandler`. |
+| `getParams()`, `getUI()`, `getJSON()`, `getDescriptors()` | Parameter address space (`/dsp/group/param`), identical to that of the OSC and HTTP interfaces of C++ Faust. Sent to the remote control on connection. |
+| `setParamValue(path, value, time?)` | Writes a parameter; `time` in `AudioContext` seconds, applied sample-accurately in AudioWorklet, ignored in ScriptProcessor. |
+| `setOutputParamHandler(h)` | Bargraph stream, toward the remote control. |
+| `setInputParamHandler(h)` | Echo of *every* parameter change seen by the DSP, whatever its origin (local UI, MIDI, sensors, another remote control). Basis of state synchronization. |
+| `hasAccInput`, `hasGyrInput`, `propagateAcc`, `propagateGyr` | Raw sensors; the `[acc:]`/`[gyr:]` mapping is done by the DSP (on the audio thread in AudioWorklet). |
+| `midiMessage`, `keyOn`, `keyOff`, `ctrlChange`, `pitchWheel` (with `time?`) | MIDI and notes, for a keyboard on the remote control and for polyphony. |
+| `getNumActiveVoices()` (poly) | Optional state feedback. |
+| `faust2wasm-ts … -pwa`, `FaustPWA`, `createFaustUI` | Generator and PWA skeleton; `createFaustUI` uses only `getUI`, `setParamValue`, `setOutputParamHandler` and `setInputParamHandler`. |
 
-L'étude du code fait apparaître cinq contraintes dont la conception tient
-compte :
+Studying the code reveals five constraints that the design takes into
+account:
 
-C1 — Un seul handler par nœud
-:   `setOutputParamHandler` et `setInputParamHandler` remplacent le handler
-    précédent. Si la page hôte affiche aussi sa propre interface, l'hôte distant
-    doit *chaîner* le handler existant (l'appeler puis émettre) et le rendre
-    à la fermeture. Une API d'écouteurs multiples dans le cœur serait plus
-    propre mais constitue un ajout d'API publique (question ouverte Q1).
+C1 — One handler per node
+:   `setOutputParamHandler` and `setInputParamHandler` replace the previous
+    handler. If the host page also displays its own interface, the remote host
+    must *chain* the existing handler (call it, then emit) and restore it on
+    close. A multiple-listener API in the core would be cleaner but is an
+    addition to the public API (open question Q1).
 
-C2 — Le drapeau `invert` dépend de la plateforme du capteur
-:   `handleDeviceMotion` calcule `invert` à partir de l'agent utilisateur
-    (`/Android/i`) de la machine *qui porte le capteur*. À distance, c'est la
-    plateforme de la télécommande qui compte, pas celle de l'hôte : le drapeau
-    doit voyager avec la mesure.
+C2 — The `invert` flag depends on the sensor's platform
+:   `handleDeviceMotion` computes `invert` from the user agent
+    (`/Android/i`) of the machine *that carries the sensor*. Remotely, it is
+    the remote control's platform that matters, not the host's: the flag must
+    travel with the measurement.
 
-C3 — Cadence fixe et non agrégée des bargraphs
-:   `updateOutputs` émet *tous* les bargraphs tous les 6 appels de `compute`,
-    même inchangés, chacun dans un `postMessage` distinct : 6 × 128 = 768
-    trames, soit 62,5 Hz à 48 kHz en AudioWorklet (environ 15,6 Hz en
-    ScriptProcessor de 512 trames). L'hôte distant doit agréger, filtrer les
-    valeurs inchangées et limiter le débit avant le réseau.
+C3 — Fixed, unaggregated bargraph rate
+:   `updateOutputs` emits *all* bargraphs every 6 calls to `compute`, even
+    unchanged, each in a separate `postMessage`: 6 × 128 = 768 frames, i.e.
+    62.5 Hz at 48 kHz in AudioWorklet (about 15.6 Hz with a 512-frame
+    ScriptProcessor). The remote host must aggregate, filter out unchanged
+    values and limit the rate before the network.
 
-C4 — `FaustSensors` reste interne
-:   Conformément à `AGENTS.md`, le mapping des capteurs n'est pas exporté. Le
-    choix fait en \ref{sec:capteurs} (valeurs brutes, mapping sur l'hôte)
-    le respecte.
+C4 — `FaustSensors` stays internal
+:   As required by `AGENTS.md`, the sensor mapping is not exported. The choice
+    made in \ref{sec:capteurs} (raw values, mapping on the host) respects
+    this.
 
-C5 — Rien sur le thread audio
-:   Les messages réseau arrivent sur le thread principal de l'hôte ; ils sont
-    convertis en appels de l'API du nœud, qui passe déjà par le port de
-    l'AudioWorklet. Le processeur ne voit aucune différence entre une écriture
-    locale et une écriture distante.
+C5 — Nothing on the audio thread
+:   Network messages arrive on the host's main thread; they are converted into
+    calls to the node's API, which already goes through the AudioWorklet port.
+    The processor sees no difference between a local write and a remote one.
 
 ## 4. Architecture
 
-### 4.1. Rôles
+### 4.1. Roles
 
-Hôte
-:   La page (ou le processus) qui possède le nœud faustwasm et l'`AudioContext`
-    relié aux haut-parleurs. Elle crée un `FaustRemoteHost` au-dessus du nœud.
-    C'est l'*autorité* : elle valide et borne toute valeur reçue.
+Host
+:   The page (or process) that owns the faustwasm node and the `AudioContext`
+    connected to the loudspeakers. It creates a `FaustRemoteHost` on top of the
+    node. It is the *authority*: it validates and clamps every value it
+    receives.
 
-Télécommande
-:   Une PWA légère qui crée un `FaustRemoteDsp`, mandataire qui expose la partie
-    « contrôle » de l'API d'un nœud (paramètres, handlers, capteurs, MIDI) sans
-    produire de son. Elle charge faust-ui et le bundle distant, pas faustwasm.
+Remote control
+:   A lightweight PWA that creates a `FaustRemoteDsp`, a proxy exposing the
+    "control" part of a node's API (parameters, handlers, sensors, MIDI)
+    without producing sound. It loads faust-ui and the remote bundle, not
+    faustwasm.
 
-Signalisation
-:   Le canal hors bande qui permet aux deux pairs d'échanger offre, réponse SDP
-    et candidats ICE avant que le canal WebRTC existe. Il ne voit passer aucun
-    message de contrôle.
+Signaling
+:   The out-of-band channel that lets the two peers exchange the SDP offer and
+    answer and the ICE candidates before the WebRTC channel exists. No control
+    message goes through it.
 
-### 4.2. Schéma d'ensemble
+### 4.2. Overall diagram
 
-```mermaid "Architecture de la couche distante" \label{fig:archi}
+```mermaid "Architecture of the remote layer" \label{fig:archi}
 flowchart LR
-  subgraph Phone["Telecommande (PWA)"]
+  subgraph Phone["Remote control (PWA)"]
     UI["faust-ui"] --> RD["FaustRemoteDsp"]
     SENS["DeviceMotion / DeviceOrientation"] --> RD
     RD --> UI
   end
-  subgraph Host["Hote (page audio)"]
-    RH["FaustRemoteHost"] --> NODE["Noeud faustwasm"]
+  subgraph Host["Host (audio page)"]
+    RH["FaustRemoteHost"] --> NODE["faustwasm node"]
     NODE --> RH
     NODE --> OUT["AudioContext.destination"]
   end
-  SIG["Serveur de signalisation<br>HTTPS + SSE"]
-  RD -- "ctl : fiable, ordonne" --> RH
-  RD -. "stream : non fiable" .-> RH
+  SIG["Signaling server<br>HTTPS + SSE"]
+  RD -- "ctl : reliable, ordered" --> RH
+  RD -. "stream : unreliable" .-> RH
   RH -. "out / sync" .-> RD
   RD <--> SIG
   RH <--> SIG
 ```
 
-### 4.3. Topologies de déploiement
+### 4.3. Deployment topologies
 
-Réseau local (cas principal)
-:   Hôte et téléphones sur le même Wi-Fi. Le serveur Node tourne sur la machine
-    hôte : il sert la PWA, la page hôte et la signalisation en HTTPS. Les
-    candidats ICE locaux suffisent, aucun STUN n'est nécessaire.
+Local network (main case)
+:   Host and phones on the same Wi-Fi. The Node server runs on the host
+    machine: it serves the PWA, the host page and signaling over HTTPS. Local
+    ICE candidates are enough; no STUN is needed.
 
 Internet
-:   Hôte et télécommandes sur des réseaux différents. La signalisation doit être
-    joignable publiquement (serveur hébergé ou service tiers) et un serveur
-    TURN devient nécessaire derrière les NAT symétriques. L'extension accepte
-    une `RTCConfiguration` mais ne fournit ni l'un ni l'autre.
+:   Host and remote controls on different networks. Signaling must be publicly
+    reachable (hosted server or third-party service) and a TURN server becomes
+    necessary behind symmetric NATs. The extension accepts an
+    `RTCConfiguration` but provides neither.
 
-Même page
-:   Hôte et télécommande dans la même page, reliés par un transport en mémoire.
-    Sans intérêt en production, c'est le support des tests unitaires (\ref{sec:tests}).
+Same page
+:   Host and remote control in the same page, connected by an in-memory
+    transport. Of no use in production, it is what the unit tests run on
+    (\ref{sec:tests}).
 
 ## 5. Transport
 
-### 5.1. Pourquoi WebRTC
+### 5.1. Why WebRTC
 
-| Critère | WebRTC DataChannel | WebSocket (via relais) | WebTransport |
+| Criterion | WebRTC DataChannel | WebSocket (via relay) | WebTransport |
 | :-- | :-- | :-- | :-- |
-| Navigateur hôte joignable directement | oui, pair à pair | non, relais obligatoire | non, serveur HTTP/3 obligatoire |
-| Messages non fiables et non ordonnés | oui | non (TCP) | oui (datagrammes) |
-| Blocage en tête de file sur perte Wi-Fi | évitable | inévitable | évitable |
-| Signalisation préalable | nécessaire | inutile | inutile |
-| Chiffrement | DTLS, obligatoire | TLS (`wss:`) | TLS 1.3 |
-| iOS Safari | oui | oui | récent ou partiel selon les versions |
-| Hôte sous Node | bibliothèque native à ajouter | serveur à écrire ou `ws` | serveur HTTP/3 à ajouter |
+| Host browser directly reachable | yes, peer to peer | no, relay required | no, HTTP/3 server required |
+| Unreliable, unordered messages | yes | no (TCP) | yes (datagrams) |
+| Head-of-line blocking on Wi-Fi loss | avoidable | unavoidable | avoidable |
+| Prior signaling | required | not needed | not needed |
+| Encryption | DTLS, mandatory | TLS (`wss:`) | TLS 1.3 |
+| iOS Safari | yes | yes | recent or partial depending on version |
+| Host under Node | native library to add | server to write, or `ws` | HTTP/3 server to add |
 
-L'argument décisif est le premier : **une page web ne peut pas accepter de
-connexion entrante**, ni WebSocket ni WebTransport. Seul WebRTC relie deux
-navigateurs sans faire transiter les messages par un serveur, et seul WebRTC
-(avec WebTransport) offre des messages non fiables, indispensables pour qu'une
-perte sur le Wi-Fi ne retarde pas les valeurs suivantes. Le prix est la
-signalisation et ICE.
+The decisive argument is the first one: **a web page cannot accept an
+incoming connection**, neither WebSocket nor WebTransport. Only WebRTC
+connects two browsers without routing messages through a server, and only
+WebRTC (along with WebTransport) offers unreliable messages, which are
+essential so that a loss on the Wi-Fi does not delay the following values. The
+price is signaling and ICE.
 
-Le transport est néanmoins abstrait (interface `FaustRemoteTransport`, \ref{sec:api}) : un transport WebSocket par relais reste un repli simple pour
-les réseaux où ICE échoue, sans toucher au protocole.
+The transport is nevertheless abstract (the `FaustRemoteTransport` interface, \ref{sec:api}): a WebSocket transport through a relay remains a simple fallback for
+networks where ICE fails, without touching the protocol.
 
-### 5.2. Canaux de données
+### 5.2. Data channels
 
-Deux canaux, créés en mode *négocié* (`negotiated: true`, identifiants fixes)
-par les deux pairs : ils sont utilisables dès l'ouverture de la connexion SCTP,
-sans aller-retour DCEP.
+Two channels, created in *negotiated* mode (`negotiated: true`, fixed
+identifiers) by both peers: they are usable as soon as the SCTP connection
+opens, without a DCEP round trip.
 
-| Canal | Options | Contenu |
+| Channel | Options | Content |
 | :-- | :-- | :-- |
-| `faust-ctl` (id 0) | `ordered: true`, fiable | poignée de main, `button` et `checkbox`, dernière valeur d'un geste, MIDI, synchronisation d'état, ping, voix actives, fin de session |
-| `faust-stream` (id 1) | `ordered: false`, `maxRetransmits: 0` | valeurs continues des sliders pendant un geste, capteurs, bargraphs |
+| `faust-ctl` (id 0) | `ordered: true`, reliable | handshake, `button` and `checkbox`, last value of a gesture, MIDI, state synchronization, ping, active voices, end of session |
+| `faust-stream` (id 1) | `ordered: false`, `maxRetransmits: 0` | continuous slider values during a gesture, sensors, bargraphs |
 
-Deux règles découlent de cette séparation :
+Two rules follow from this separation:
 
-- **Un événement discret n'emprunte jamais le canal non fiable.** Un relâchement
-  de bouton perdu laisserait une note bloquée.
-- **La dernière valeur d'un geste est garantie.** Quand un slider cesse de
-  bouger (fin de geste faust-ui, ou 100 ms sans nouvelle valeur), la
-  télécommande renvoie sa dernière valeur sur `faust-ctl`. Le flux non fiable
-  donne la réactivité, ce renvoi donne la valeur finale exacte.
+- **A discrete event never takes the unreliable channel.** A lost button
+  release would leave a stuck note.
+- **The last value of a gesture is guaranteed.** When a slider stops moving
+  (end of a faust-ui gesture, or 100 ms without a new value), the remote
+  control sends its last value again on `faust-ctl`. The unreliable stream
+  provides responsiveness; this resend provides the exact final value.
 
-Comme `faust-stream` n'est pas ordonné, chaque message y porte un numéro de
-séquence par émetteur ; le récepteur ignore, pour une même clé (paramètre,
-capteur), tout message plus ancien que le dernier appliqué.
+Since `faust-stream` is not ordered, every message on it carries a per-sender
+sequence number; for a given key (parameter, sensor), the receiver ignores any
+message older than the last one applied.
 
 ### 5.3. ICE, STUN, TURN
 
-Sur un réseau local, les candidats *host* suffisent. Les navigateurs masquent
-désormais les adresses locales derrière des noms mDNS (`….local`) ; la
-résolution fonctionne sur la plupart des réseaux domestiques et de salle, mais
-certains réseaux d'entreprise ou d'établissement filtrent le multicast. Dans ce
-cas il faut un STUN (accessible) ou un TURN, ou le repli WebSocket. Le
-diagnostic doit être visible : la télécommande affiche l'état ICE
-(`checking`, `connected`, `failed`) plutôt qu'un échec silencieux.
+On a local network, *host* candidates are enough. Browsers now hide local
+addresses behind mDNS names (`….local`); resolution works on most home and
+venue networks, but some corporate or institutional networks filter
+multicast. In that case a (reachable) STUN or a TURN server is needed, or the
+WebSocket fallback. The diagnosis must be visible: the remote control displays
+the ICE state (`checking`, `connected`, `failed`) rather than failing
+silently.
 
-### 5.4. Contrôle de flux
+### 5.4. Flow control
 
-Les flux continus ne doivent jamais s'accumuler : une file d'attente est une
-latence. Avant chaque envoi sur `faust-stream`, l'émetteur consulte
-`bufferedAmount` ; au-delà d'un seuil (4 Kio par défaut), il **remplace** la
-valeur en attente pour cette clé au lieu d'en empiler une nouvelle, et l'envoie
-au prochain évènement `bufferedamountlow`. Le débit utile est d'ailleurs
-minime : un capteur à 60 Hz en messages JSON d'environ 80 octets représente
-environ 5 Ko/s.
+Continuous streams must never pile up: a queue is latency. Before each send on
+`faust-stream`, the sender checks `bufferedAmount`; above a threshold (4 KiB
+by default), it **replaces** the pending value for that key instead of
+queueing a new one, and sends it on the next `bufferedamountlow` event. The
+useful bandwidth is tiny anyway: a sensor at 60 Hz in JSON messages of about
+80 bytes amounts to about 5 KB/s.
 
-## 6. Signalisation \label{sec:signal}
+## 6. Signaling \label{sec:signal}
 
-### 6.1. Besoin
+### 6.1. Need
 
-Avant toute connexion WebRTC, les deux pairs doivent échanger une offre SDP,
-une réponse SDP et leurs candidats ICE. La télécommande est l'*appelant* (elle
-crée l'offre), l'hôte est l'*appelé* (il répond) : c'est l'hôte qui « écoute »,
-comme un serveur.
+Before any WebRTC connection, the two peers must exchange an SDP offer, an SDP
+answer and their ICE candidates. The remote control is the *caller* (it
+creates the offer), the host is the *callee* (it answers): it is the host that
+"listens", like a server.
 
 ```adt
-Signal ::= Offer(peer, sdp)              (* télécommande vers hôte *)
-         | Answer(peer, sdp)             (* hôte vers télécommande *)
-         | Candidate(peer, candidate)    (* dans les deux sens, ICE incrémental *)
+Signal ::= Offer(peer, sdp)              (* remote control to host *)
+         | Answer(peer, sdp)             (* host to remote control *)
+         | Candidate(peer, candidate)    (* both directions, incremental ICE *)
          | Bye(peer)
 ```
 
 ### 6.2. Options
 
-| Option | Avantages | Inconvénients |
+| Option | Advantages | Drawbacks |
 | :-- | :-- | :-- |
-| Serveur Node HTTP + SSE (recommandé) | aucune dépendance (`node:https`), sert aussi la PWA et la page hôte, une seule origine | un processus à lancer, un certificat à fournir |
-| Serveur WebSocket | bidirectionnel natif | Node n'a pas de serveur WebSocket intégré : dépendance `ws` ou code de trame à écrire |
-| Service tiers ou serveur public | fonctionne sur Internet, convient à l'IDE en ligne | dépendance externe, confidentialité, disponibilité |
-| Manuelle (SDP dans un code QR) | aucun serveur | il faut aussi rapporter la réponse vers l'hôte (caméra), fragile ; écartée |
+| Node HTTP + SSE server (recommended) | no dependency (`node:https`), also serves the PWA and the host page, a single origin | a process to launch, a certificate to provide |
+| WebSocket server | natively two-way | Node has no built-in WebSocket server: `ws` dependency or framing code to write |
+| Third-party service or public server | works over the Internet, suits the online IDE | external dependency, privacy, availability |
+| Manual (SDP in a QR code) | no server | the answer must also be brought back to the host (camera), fragile; rejected |
 
-### 6.3. Recommandation
+### 6.3. Recommendation
 
-Un script `faust-remote-server-ts`, sans dépendance, qui :
+A dependency-free `faust-remote-server-ts` script that:
 
-- sert en HTTPS la page hôte et la PWA télécommande générées ;
-- expose `POST /signal/{room}/{peer}` (un message de signalisation) et
-  `GET /signal/{room}/{peer}/events` (flux SSE des messages destinés à ce
-  pair), où `room` identifie une session hôte ;
-- n'interprète ni ne conserve les messages : il les relaie entre l'hôte de la
-  salle et ses pairs, puis les oublie.
+- serves the generated host page and remote control PWA over HTTPS;
+- exposes `POST /signal/{room}/{peer}` (one signaling message) and
+  `GET /signal/{room}/{peer}/events` (SSE stream of the messages addressed to
+  that peer), where `room` identifies a host session;
+- neither interprets nor stores the messages: it relays them between the
+  room's host and its peers, then forgets them.
 
-L'**appairage** passe par une URL, affichée par la page hôte en clair et, si
-possible, en code QR : `https://hote.local:8443/remote/#room=…&token=…`. Le
-jeton est dans le *fragment* de l'URL : il n'est envoyé ni dans les journaux du
-serveur HTTP ni dans l'en-tête `Referer`. La télécommande le transmet à l'hôte
-dans son `hello`, sur le canal chiffré.
+**Pairing** goes through a URL, displayed by the host page as text and, where
+possible, as a QR code: `https://hote.local:8443/remote/#room=…&token=…`. The
+token is in the URL *fragment*: it is sent neither to the HTTP server's logs
+nor in the `Referer` header. The remote control passes it to the host in its
+`hello`, over the encrypted channel.
 
-::: warning [HTTPS sur le réseau local]
-`DeviceMotionEvent`, `DeviceOrientationEvent` et l'enregistrement d'un service
-worker exigent un contexte sécurisé. `http://localhost` en est un, mais pas
-`http://192.168.1.10` vu depuis un téléphone. Le serveur doit donc recevoir un
-certificat (`--cert`, `--key`) que les téléphones acceptent : typiquement une
-autorité locale de type mkcert installée sur les appareils, ou un nom de
-domaine réel avec un certificat public pointant vers l'adresse locale. Une page
-servie en HTTPS depuis un hébergement public ne peut pas, à l'inverse,
-interroger un serveur de signalisation local en HTTP (contenu mixte bloqué).
-C'est le principal coût d'usage de l'extension, et la documentation doit le
-traiter en premier.
+::: warning [HTTPS on the local network]
+`DeviceMotionEvent`, `DeviceOrientationEvent` and registering a service worker
+require a secure context. `http://localhost` is one, but
+`http://192.168.1.10` seen from a phone is not. The server must therefore be
+given a certificate (`--cert`, `--key`) that the phones accept: typically a
+local mkcert-style authority installed on the devices, or a real domain name
+with a public certificate pointing to the local address. Conversely, a page
+served over HTTPS from public hosting cannot query a local signaling server
+over HTTP (mixed content is blocked). This is the extension's main usability
+cost, and the documentation must address it first.
 :::
 
-### 6.4. Séquence d'établissement
+### 6.4. Connection sequence
 
-```mermaid "Établissement d'une session" \label{fig:seq}
+```mermaid "Establishing a session" \label{fig:seq}
 sequenceDiagram
-    participant T as Telecommande
-    participant S as Signalisation
-    participant H as Hote
+    participant T as Remote control
+    participant S as Signaling
+    participant H as Host
     H->>S: GET events (room, host)
     T->>S: GET events (room, peer)
     T->>S: POST Offer(peer, sdp)
@@ -377,68 +378,68 @@ sequenceDiagram
     S-->>H: Candidate(...)
     H->>S: POST Candidate(...)
     S-->>T: Candidate(...)
-    Note over T,H: DTLS puis SCTP, canaux 0 et 1 ouverts
+    Note over T,H: DTLS then SCTP, channels 0 and 1 open
     T->>H: hello(v, id, token, mode)
     H-->>T: welcome(json, inputs, outputs, values)
     T->>H: param, acc, gyr, midi ...
     H-->>T: out, sync, voices ...
 ```
 
-L'interface `FaustSignaling` (\ref{sec:api}) rend ce mécanisme
-remplaçable : un environnement qui possède déjà un canal (l'IDE en ligne, un
-serveur d'application) l'adapte en quelques lignes.
+The `FaustSignaling` interface (\ref{sec:api}) makes this mechanism
+replaceable: an environment that already has a channel (the online IDE, an
+application server) adapts it in a few lines.
 
-## 7. Protocole applicatif
+## 7. Application protocol
 
-### 7.1. Principes
+### 7.1. Principles
 
-- **Messages texte JSON**, un objet par message, discriminé par `type` (comme
-  les messages actuels entre nœud et processeur). Les messages binaires sont
-  réservés à une version ultérieure, si les mesures le justifient ; un
-  récepteur v1 les ignore.
-- **Adressage par indices** après la poignée de main : `welcome` donne la liste
-  ordonnée des entrées (`inputs`, l'ordre de `getParams()`) et des sorties
-  (`outputs`, les adresses des bargraphs) ; les messages courants désignent un
-  paramètre par son indice `i` dans ces listes.
-- **Valeurs dans les unités du widget** (celles de `setParamValue`), jamais
-  normalisées. L'hôte borne à `[min, max]` ; il ne quantifie pas au pas, ce que
-  fait déjà faust-ui.
-- **L'hôte fait autorité** : il ne reçoit jamais de JSON, de code ou d'adresse
-  qui ne soit pas dans ses propres listes.
-- **Version** : `hello` et `welcome` portent `v` (1). Un hôte refuse une
-  version majeure qu'il ne connaît pas avec `reject`.
+- **JSON text messages**, one object per message, discriminated by `type`
+  (like the current messages between node and processor). Binary messages are
+  reserved for a later version, if measurements justify them; a v1 receiver
+  ignores them.
+- **Addressing by index** after the handshake: `welcome` gives the ordered
+  list of inputs (`inputs`, in `getParams()` order) and outputs (`outputs`,
+  the bargraph addresses); regular messages designate a parameter by its
+  index `i` in these lists.
+- **Values in widget units** (those of `setParamValue`), never normalized.
+  The host clamps to `[min, max]`; it does not quantize to the step, which
+  faust-ui already does.
+- **The host is the authority**: it never accepts JSON, code or an address
+  that is not in its own lists.
+- **Version**: `hello` and `welcome` carry `v` (1). A host rejects a major
+  version it does not know with `reject`.
 
 ### 7.2. Messages
 
 ```adt
 ClientMsg ::= Hello(v, id, token, mode, hash?)     (* ctl *)
-            | Param(i, value, seq, time?)          (* stream pendant un geste, ctl sinon *)
-            | Acc(x, y, z, invert, seq, time?)     (* stream ; invert = plateforme du téléphone *)
+            | Param(i, value, seq, time?)          (* stream during a gesture, ctl otherwise *)
+            | Acc(x, y, z, invert, seq, time?)     (* stream ; invert = the phone's platform *)
             | Gyr(α, β, γ, seq, time?)             (* stream *)
-            | Midi(bytes, time?)                   (* ctl ; messages de canal uniquement *)
-            | Ping(s, t₀)                          (* ctl, toutes les secondes *)
+            | Midi(bytes, time?)                   (* ctl ; channel messages only *)
+            | Ping(s, t₀)                          (* ctl, every second *)
             | Bye                                  (* ctl *)
 
 HostMsg   ::= Welcome(v, session, mode, json?, inputs, outputs, values, outputValues, voices, rates)  (* ctl *)
-            | Reject(code, reason)                 (* ctl, puis fermeture *)
-            | Out(values, i?)                      (* stream ; bargraphs, i = indices si partiel *)
-            | Sync(i, value)                       (* ctl ; paramètre changé par une autre source *)
+            | Reject(code, reason)                 (* ctl, then close *)
+            | Out(values, i?)                      (* stream ; bargraphs, i = indices if partial *)
+            | Sync(i, value)                       (* ctl ; parameter changed by another source *)
             | Voices(count)                        (* ctl ; poly *)
-            | Pong(s, t₀, t₁, t₂)                  (* ctl ; t₁, t₂ = horloge de l'hôte *)
+            | Pong(s, t₀, t₁, t₂)                  (* ctl ; t₁, t₂ = host clock *)
             | Bye(reason)                          (* ctl *)
 ```
 
-`time` n'est présent qu'en mode horodaté (\ref{sec:temps}) ; il est
-exprimé dans l'horloge `performance.now()` de la télécommande, en
-millisecondes. `hash` n'est utile qu'en mode unidirectionnel (section 7.4).
+`time` is present only in timed mode (\ref{sec:temps}); it is expressed in
+the remote control's `performance.now()` clock, in milliseconds. `hash` is
+only useful in one-way mode (section 7.4).
 
-Le JSON d'un DSP peut dépasser la taille de message SCTP interopérable (la
-limite sûre est de 16 Kio ; `RTCSctpTransport.maxMessageSize` donne la valeur
-négociée). L'hôte découpe alors `welcome` en fragments
-`{"type":"chunk","id":…,"part":k,"of":n,"data":…}` sur `faust-ctl` ; l'ordre et
-la fiabilité du canal rendent le réassemblage trivial.
+A DSP's JSON can exceed the interoperable SCTP message size (the safe limit is
+16 KiB; `RTCSctpTransport.maxMessageSize` gives the negotiated value). The
+host then splits `welcome` into fragments
+`{"type":"chunk","id":…,"part":k,"of":n,"data":…}` on `faust-ctl`; the
+channel's ordering and reliability make reassembly trivial.
 
-### 7.3. Exemples
+### 7.3. Examples
 
 ```json
 {"type":"hello","v":1,"id":"c-7f3a","token":"Zq3…","mode":"bi"}
@@ -450,305 +451,304 @@ la fiabilité du canal rendent le réassemblage trivial.
 {"type":"sync","i":0,"value":523.25}
 ```
 
-### 7.4. Modes unidirectionnel et bidirectionnel
+### 7.4. One-way and two-way modes
 
-La poignée de main est toujours bidirectionnelle ; le mode décide de ce que
-l'hôte émet *ensuite*.
+The handshake is always two-way; the mode decides what the host sends
+*afterwards*.
 
-| Message de l'hôte | `bi` (défaut) | `uni` |
+| Host message | `bi` (default) | `uni` |
 | :-- | :-- | :-- |
-| `welcome` avec le JSON | oui | sans le JSON, que la PWA embarque déjà |
-| `out` (bargraphs) | oui | non |
-| `sync` (état des paramètres) | oui | non |
-| `voices` | oui | non |
-| `pong` | oui | oui (mesure de latence, vivacité) |
+| `welcome` with the JSON | yes | without the JSON, which the PWA already embeds |
+| `out` (bargraphs) | yes | no |
+| `sync` (parameter state) | yes | no |
+| `voices` | yes | no |
+| `pong` | yes | yes (latency measurement, liveness) |
 
-Le mode unidirectionnel sert deux situations : une PWA générée avec le DSP, qui
-connaît déjà son interface (elle envoie alors `hash`, le SHA-256 de son JSON, et
-l'hôte refuse une interface différente) ; et un grand nombre de télécommandes,
-où le retour coûterait à l'hôte autant de flux que de clients. Dans tous les
-autres cas, le bidirectionnel est préférable : il évite de distribuer le JSON
-avec la PWA, il garde les télécommandes cohérentes entre elles et avec l'hôte,
-et il rend l'affichage des bargraphs possible, ce que rien d'autre ne permet.
+One-way mode serves two situations: a PWA generated with the DSP, which
+already knows its interface (it then sends `hash`, the SHA-256 of its JSON,
+and the host rejects a different interface); and a large number of remote
+controls, where feedback would cost the host as many streams as there are
+clients. In every other case, two-way is preferable: it avoids distributing
+the JSON with the PWA, it keeps the remote controls consistent with one
+another and with the host, and it makes displaying the bargraphs possible,
+which nothing else allows.
 
-### 7.5. Cycle de vie d'une session
+### 7.5. Session lifecycle
 
-```mermaid "États d'une télécommande vue par l'hôte"
+```mermaid "States of a remote control as seen by the host"
 stateDiagram-v2
     [*] --> Signaling
-    Signaling --> Handshake: canaux ouverts
-    Signaling --> Closed: echec ICE
-    Handshake --> Open: hello valide
+    Signaling --> Handshake: channels open
+    Signaling --> Closed: ICE failure
+    Handshake --> Open: valid hello
     Handshake --> Closed: reject
     Open --> Open: param, acc, gyr, midi, ping
-    Open --> Stale: aucun message depuis 3 s
-    Stale --> Open: message recu
-    Stale --> Closed: connexion failed ou 10 s
+    Open --> Stale: no message for 3 s
+    Stale --> Open: message received
+    Stale --> Closed: connection failed or 10 s
     Open --> Closed: bye
     Closed --> [*]
 ```
 
-Le passage par `Closed` déclenche toujours la panique décrite en
-\ref{sec:securite}. Une télécommande qui revient (téléphone sorti de veille)
-ouvre une nouvelle connexion avec le même `id` ; l'hôte la traite comme une
-nouvelle session et lui renvoie l'état complet dans `welcome`.
+Entering `Closed` always triggers the panic described in
+\ref{sec:securite}. A remote control that comes back (phone woken from sleep)
+opens a new connection with the same `id`; the host treats it as a new
+session and sends it the full state again in `welcome`.
 
-### 7.6. Validation côté hôte
+### 7.6. Host-side validation
 
-Pour chaque message reçu, l'hôte applique dans l'ordre :
+For each message received, the host applies, in order:
 
-1. message JSON bien formé, `type` connu, sinon ignoré (pas de fermeture : une
-   télécommande plus récente peut émettre des types que l'hôte ignore) ;
-2. session ouverte (seul `hello` est accepté avant) ;
-3. indice dans les bornes de `inputs`, paramètre exposé (option `expose`) ;
-4. valeur numérique finie, bornée à `[min, max]` du descripteur ;
-5. numéro de séquence plus récent que le dernier appliqué pour cette clé ;
-6. débit par client sous la limite (200 messages/s par défaut), sinon
-   message abandonné ;
-7. pour `midi` : messages de canal uniquement (notes, contrôleurs, pitch bend,
-   pression, programme), pas de SysEx.
+1. well-formed JSON message, known `type`, otherwise ignored (no close: a more
+   recent remote control may send types the host does not know);
+2. session open (only `hello` is accepted before that);
+3. index within the bounds of `inputs`, parameter exposed (`expose` option);
+4. finite numeric value, clamped to the descriptor's `[min, max]`;
+5. sequence number more recent than the last one applied for that key;
+6. per-client rate under the limit (200 messages/s by default), otherwise the
+   message is dropped;
+7. for `midi`: channel messages only (notes, controllers, pitch bend,
+   pressure, program), no SysEx.
 
-## 8. Capteurs \label{sec:capteurs}
+## 8. Sensors \label{sec:capteurs}
 
-### 8.1. Option retenue : valeurs brutes, mapping sur l'hôte
+### 8.1. Chosen option: raw values, mapping on the host
 
-La télécommande lit `devicemotion` (`accelerationIncludingGravity`) et
-`deviceorientation` (`alpha`, `beta`, `gamma`), et les envoie telles quelles
-dans `acc` et `gyr`, avec le drapeau `invert` de *sa* plateforme (contrainte
-C2). L'hôte appelle `node.propagateAcc({x, y, z}, invert)` et
-`node.propagateGyr({alpha, beta, gamma})`. Le DSP de l'hôte applique les
-courbes `[acc: a c amin amid amax]` exactement comme pour un capteur local, et
-chaque paramètre ainsi piloté revient en `in-param`, donc en `sync` vers les
-télécommandes : leurs sliders suivent le geste.
+The remote control reads `devicemotion` (`accelerationIncludingGravity`) and
+`deviceorientation` (`alpha`, `beta`, `gamma`), and sends them as they are in
+`acc` and `gyr`, with the `invert` flag of *its* platform (constraint C2). The
+host calls `node.propagateAcc({x, y, z}, invert)` and
+`node.propagateGyr({alpha, beta, gamma})`. The host's DSP applies the
+`[acc: a c amin amid amax]` curves exactly as for a local sensor, and each
+parameter driven this way comes back as `in-param`, hence as `sync` to the
+remote controls: their sliders follow the gesture.
 
-Ce choix a quatre avantages : le mapping n'existe qu'en un seul endroit, celui
-qui est déjà testé ; `FaustSensors` reste interne (C4) ; la télécommande n'a pas
-à connaître les métadonnées ; et `hasAccInput`/`hasGyrInput`, que le mandataire
-calcule à partir du JSON comme le fait le nœud, suffisent à décider s'il faut
-demander la permission et écouter les capteurs.
+This choice has four advantages: the mapping exists in only one place, the one
+that is already tested; `FaustSensors` stays internal (C4); the remote control
+does not need to know the metadata; and `hasAccInput`/`hasGyrInput`, which
+the proxy computes from the JSON as the node does, are enough to decide
+whether to ask for permission and listen to the sensors.
 
-### 8.2. Option écartée : mapping sur le téléphone
+### 8.2. Rejected option: mapping on the phone
 
-Appliquer les courbes sur la télécommande et n'envoyer que des valeurs de
-paramètres dupliquerait le mapping hors du thread audio et obligerait à exporter
-`FaustSensors`, ce que `AGENTS.md` exclut. Le seul gain, ne transmettre que les
-axes utilisés, s'obtient aussi en n'envoyant pas `gyr` quand `hasGyrInput` est
-faux.
+Applying the curves on the remote control and sending only parameter values
+would duplicate the mapping outside the audio thread and would require
+exporting `FaustSensors`, which `AGENTS.md` rules out. The only gain, sending
+only the axes in use, can also be obtained by not sending `gyr` when
+`hasGyrInput` is false.
 
-### 8.3. Contraintes des navigateurs mobiles
+### 8.3. Constraints of mobile browsers
 
-- **Permission iOS** : `DeviceMotionEvent.requestPermission()` doit être appelé
-  depuis un geste de l'utilisateur ; la PWA reprend `requestPermissions()` de
+- **iOS permission**: `DeviceMotionEvent.requestPermission()` must be called
+  from a user gesture; the PWA reuses `requestPermissions()` from
   `create-node.js`.
-- **Cadence** : environ 60 Hz sur iOS, du même ordre sur Android ; la
-  télécommande n'envoie un échantillon que s'il diffère du précédent au-delà
-  d'un seuil, ce qui supprime l'essentiel du trafic d'un téléphone posé.
-- **Arrière-plan** : un téléphone verrouillé ou une PWA masquée cessent de
-  fournir des capteurs et, sur iOS, perdent rapidement leur connexion WebRTC.
-  Sur `visibilitychange`/`pagehide`, la télécommande envoie `bye` ; au retour,
-  elle se reconnecte. L'API Screen Wake Lock peut garder l'écran allumé, avec un
-  support variable selon les versions d'iOS en mode PWA installée.
-- **Plusieurs capteurs, un paramètre** : si deux télécommandes envoient `acc`,
-  la dernière écriture gagne (\ref{sec:multi}).
+- **Rate**: about 60 Hz on iOS, of the same order on Android; the remote
+  control sends a sample only if it differs from the previous one by more
+  than a threshold, which removes most of the traffic of a phone lying still.
+- **Background**: a locked phone or a hidden PWA stops providing sensor data
+  and, on iOS, quickly loses its WebRTC connection. On
+  `visibilitychange`/`pagehide`, the remote control sends `bye`; when it comes
+  back, it reconnects. The Screen Wake Lock API can keep the screen on, with
+  support that varies across iOS versions in installed PWA mode.
+- **Several sensors, one parameter**: if two remote controls send `acc`, the
+  last write wins (\ref{sec:multi}).
 
-## 9. Retour de l'hôte vers la télécommande
+## 9. Feedback from the host to the remote control
 
 ### 9.1. Bargraphs
 
-L'hôte chaîne `setOutputParamHandler` (C1) et range chaque valeur reçue à
-l'indice de son adresse dans `outputs`. Il émet un message `out` quand deux
-conditions sont réunies :
+The host chains `setOutputParamHandler` (C1) and stores each value received
+at the index of its address in `outputs`. It sends an `out` message when two
+conditions are met:
 
-- au moins une valeur a changé de plus que `outputDeadband` (par défaut 0,1 %
-  de la plage du bargraph) depuis le dernier envoi ;
-- au moins $1/\text{outputRate}$ s se sont écoulées depuis le dernier envoi
-  (30 Hz par défaut, l'œil n'en demande pas plus).
+- at least one value has changed by more than `outputDeadband` (by default
+  0.1 % of the bargraph's range) since the last send;
+- at least $1/\text{outputRate}$ s have elapsed since the last send
+  (30 Hz by default; the eye needs no more).
 
-Le déclenchement se fait à l'arrivée des valeurs, sans minuterie : comme le
-processeur émet tous les bargraphs à chaque tic (C3), aucune valeur ne reste en
-attente plus d'un tic. Cela évite aussi le ralentissement des minuteries dans
-un onglet hôte en arrière-plan. Pour un DSP à nombreux bargraphs, `out` porte
-`i`, la liste des indices modifiés, au lieu du tableau complet.
+Sending is triggered by the arrival of values, without a timer: since the
+processor emits all bargraphs at every tick (C3), no value waits more than one
+tick. This also avoids timer throttling in a background host tab. For a DSP
+with many bargraphs, `out` carries `i`, the list of changed indices, instead
+of the full array.
 
-### 9.2. Synchronisation d'état et suppression d'écho
+### 9.2. State synchronization and echo suppression
 
-L'hôte chaîne `setInputParamHandler`. Le DSP appelant ce handler après toute
-écriture, l'hôte apprend chaque changement, d'où qu'il vienne : son interface
-locale, le MIDI, les capteurs, une autre télécommande. Il le diffuse en `sync`,
-limité en débit comme les bargraphs.
+The host chains `setInputParamHandler`. Since the DSP calls this handler after
+every write, the host learns of each change, wherever it comes from: its local
+interface, MIDI, sensors, another remote control. It broadcasts it as `sync`,
+rate-limited like the bargraphs.
 
-Le retour d'une valeur à la télécommande qui vient de l'écrire ferait sauter son
-slider en arrière pendant le geste. L'hôte mémorise donc, par télécommande et par
-paramètre, la dernière valeur reçue et son instant ; un `in-param` égal à
-`Math.fround` de cette valeur (le DSP calcule en float32) et arrivé moins de
-500 ms après n'est pas renvoyé à cette télécommande, mais l'est aux autres. Une
-valeur que l'hôte a bornée diffère de celle envoyée : elle revient, et corrige
-le slider, ce qui est le comportement voulu. Les doublons éventuels (message de
-port et `AudioParam` vus tous deux par le processeur) sont filtrés par la même
-règle.
+Sending a value back to the remote control that just wrote it would make its
+slider jump backwards during the gesture. The host therefore remembers, per
+remote control and per parameter, the last value received and when it was
+received; an `in-param` equal to `Math.fround` of that value (the DSP computes
+in float32) and arriving less than 500 ms later is not sent back to that remote
+control, but is sent to the others. A value that the host clamped differs from
+the one sent: it comes back and corrects the slider, which is the intended
+behavior. Possible duplicates (port message and `AudioParam` both seen by the
+processor) are filtered by the same rule.
 
-### 9.3. Autres retours
+### 9.3. Other feedback
 
-`voices` relaie `getNumActiveVoices()` quand il change (nœuds poly). `pong`
-sert à la fois à la vivacité et à la mesure de latence, affichée par la
-télécommande (aller-retour médian et 95ᵉ centile).
+`voices` relays `getNumActiveVoices()` when it changes (poly nodes). `pong`
+serves both for liveness and for latency measurement, displayed by the remote
+control (median round trip and 95th percentile).
 
-## 10. Temps, latence et gigue \label{sec:temps}
+## 10. Time, latency and jitter \label{sec:temps}
 
-### 10.1. Budget de latence
+### 10.1. Latency budget
 
-Ordres de grandeur attendus, à confirmer par les mesures décrites en
-\ref{sec:tests} :
+Expected orders of magnitude, to be confirmed by the measurements described in
+\ref{sec:tests}:
 
-```csv "Budget de latence geste vers son, réseau local" \label{tab:latence}
-Étape, Typique (ms), Défavorable (ms)
-Période d'échantillonnage du capteur à 60 Hz, 0 à 17, 17
-Traitement JS et envoi sur la télécommande, < 1, 5 à 20 (GC ou thread chargé)
-Wi-Fi local aller simple, 2 à 5, 50 à 200 (économie d'énergie ou interférences)
-Réception sur le thread principal de l'hôte, < 1, 10 à 50 (page chargée)
-Port de l'AudioWorklet et bloc suivant, 0 à 3, 3
-Latence de sortie audio de l'hôte, 10 à 30, 50 et plus
-Total geste vers son, 15 à 55, au-delà de 200
+```csv "Gesture-to-sound latency budget, local network" \label{tab:latence}
+Step, Typical (ms), Worst case (ms)
+Sensor sampling period at 60 Hz, 0 to 17, 17
+JS processing and sending on the remote control, < 1, 5 to 20 (GC or busy thread)
+Local Wi-Fi one way, 2 to 5, 50 to 200 (power saving or interference)
+Reception on the host main thread, < 1, 10 to 50 (busy page)
+AudioWorklet port and next block, 0 to 3, 3
+Host audio output latency, 10 to 30, 50 and more
+Total gesture to sound, 15 to 55, beyond 200
 ```
 
-Le terme dominant et le plus variable est le Wi-Fi des téléphones, dont la mise
-en veille de l'interface radio produit des pointes de plusieurs dizaines de
-millisecondes. Rien dans la couche logicielle ne les supprime ; on peut
-seulement choisir entre les subir (mode immédiat) et les lisser au prix d'un
-retard constant (mode horodaté).
+The dominant and most variable term is the phones' Wi-Fi, whose radio
+power saving produces spikes of several tens of milliseconds. Nothing in the
+software layer removes them; one can only choose between putting up with them
+(immediate mode) and smoothing them at the cost of a constant delay (timed
+mode).
 
-### 10.2. Mode immédiat (défaut)
+### 10.2. Immediate mode (default)
 
-Chaque valeur est appliquée dès réception, par `setParamValue(path, value)`
-sans `time`. C'est la latence la plus faible et le bon choix pour un geste
-d'interprète, où un retard constant gêne plus qu'une gigue modérée ; le lissage
-reste du ressort du DSP (`si.smoo` sur les paramètres continus, comme pour une
-interface locale).
+Each value is applied as soon as it is received, with `setParamValue(path,
+value)` without `time`. This gives the lowest latency and is the right choice
+for a performer's gesture, where a constant delay is more disturbing than
+moderate jitter; smoothing remains the DSP's job (`si.smoo` on continuous
+parameters, as for a local interface).
 
-### 10.3. Mode horodaté (option `playoutDelay`)
+### 10.3. Timed mode (`playoutDelay` option)
 
-Pour une gigue gênante (séquences, rythmes produits sur le téléphone), la
-télécommande horodate chaque message dans son horloge et l'hôte applique les
-valeurs à un instant régulier, retardé d'une durée $D$ fixe, par les écritures
-horodatées existantes (`setParamValue(path, value, time)`, `midiMessage(data,
-time)`), donc à l'échantillon près en AudioWorklet.
+When jitter is a problem (sequences, rhythms produced on the phone), the
+remote control timestamps each message in its own clock and the host applies
+the values at a regular instant, delayed by a fixed duration $D$, through the
+existing timed writes (`setParamValue(path, value, time)`, `midiMessage(data,
+time)`), hence sample-accurately in AudioWorklet.
 
-L'écart d'horloge $θ$ entre les deux `performance.now()` s'estime par les
-échanges `ping`/`pong`, à la manière de NTP[@ntp] et de l'algorithme de
-Cristian[@cristian] : $t_0$ et $t_3$ sont lus par la télécommande à l'envoi du
-`ping` et à la réception du `pong`, $t_1$ et $t_2$ par l'hôte.
+The clock offset $θ$ between the two `performance.now()` clocks is estimated
+from the `ping`/`pong` exchanges, in the manner of NTP[@ntp] and Cristian's
+algorithm[@cristian]: $t_0$ and $t_3$ are read by the remote control when the
+`ping` is sent and when the `pong` is received, $t_1$ and $t_2$ by the host.
 
 ```math
 \begin{aligned}
-  δ &= (t_3 - t_0) - (t_2 - t_1) && \text{(aller-retour)} \\
-  θ &= \frac{(t_1 - t_0) + (t_2 - t_3)}{2} && \text{(écart d'horloge)} \\
-  τ &= \mathrm{currentTime} + D - \frac{h - (t + θ)}{1000} && \text{(instant d'application, en secondes de l'AudioContext)}
+  δ &= (t_3 - t_0) - (t_2 - t_1) && \text{(round trip)} \\
+  θ &= \frac{(t_1 - t_0) + (t_2 - t_3)}{2} && \text{(clock offset)} \\
+  τ &= \mathrm{currentTime} + D - \frac{h - (t + θ)}{1000} && \text{(application time, in AudioContext seconds)}
 \end{aligned}
 ```
 
-où $t$ est l'horodatage du message et $h$ le `performance.now()` de l'hôte à sa
-réception. Le terme soustrait est l'âge du message ; le résultat ne dépend pas
-d'une correspondance absolue entre les horloges `performance.now()` et
-`AudioContext.currentTime`.
+where $t$ is the message's timestamp and $h$ the host's `performance.now()`
+when it is received. The subtracted term is the message's age; the result
+does not depend on any absolute correspondence between the `performance.now()`
+and `AudioContext.currentTime` clocks.
 
-```algorithm "Application d'un message horodaté sur l'hôte"
-Input: message m (indice, valeur, horodatage t), estimation θ, délai D
+```algorithm "Applying a timed message on the host"
+Input: message m (index, value, timestamp t), estimate θ, delay D
 age ← (performance.now() - (t + θ)) / 1000
 τ ← ctx.currentTime + D - age
 if τ ≤ ctx.currentTime then
-  node.setParamValue(path(m.i), m.value)        // en retard : tout de suite
+  node.setParamValue(path(m.i), m.value)        // late: apply now
 else
   node.setParamValue(path(m.i), m.value, τ)
 end
 ```
 
-L'hôte conserve, parmi les 16 derniers échanges, celui dont l'aller-retour
-$δ$ est minimal (le moins perturbé par la file d'attente) et en tire $θ$ ; un
-`ping` par seconde suffit à suivre la dérive des horloges. $D$ se choisit
-au-dessus du 95ᵉ centile de la gigue mesurée, typiquement 20 à 40 ms, et la
-télécommande peut le proposer à partir de ses propres mesures.
+Among the last 16 exchanges, the host keeps the one with the smallest round
+trip $δ$ (the least disturbed by queueing) and derives $θ$ from it; one
+`ping` per second is enough to track clock drift. $D$ is chosen above the
+95th percentile of the measured jitter, typically 20 to 40 ms, and the remote
+control can suggest it from its own measurements.
 
-## 11. Plusieurs télécommandes \label{sec:multi}
+## 11. Multiple remote controls \label{sec:multi}
 
-L'hôte accepte jusqu'à `maxClients` télécommandes (16 par défaut). Les
-politiques possibles :
+The host accepts up to `maxClients` remote controls (16 by default). The
+possible policies:
 
-Partagée (défaut)
-:   Toutes les télécommandes écrivent tous les paramètres exposés ; la dernière
-    écriture gagne ; `sync` maintient tout le monde cohérent.
+Shared (default)
+:   All remote controls write all exposed parameters; the last write wins;
+    `sync` keeps everyone consistent.
 
 Exclusive
-:   Une seule télécommande « pilote » à la fois, les autres reçoivent `out` et
-    `sync` mais leurs écritures sont ignorées. Utile en régie.
+:   Only one remote control is "in control" at a time; the others receive
+    `out` and `sync` but their writes are ignored. Useful at front of house.
 
-Répartie
-:   Une fonction `assign(client)` rend, pour chaque télécommande, le prédicat des
-    adresses qu'elle peut écrire (par exemple le groupe `/voice_3/` pour le
-    troisième téléphone). La télécommande peut n'afficher que ce sous-ensemble.
+Partitioned
+:   An `assign(client)` function returns, for each remote control, the
+    predicate of the addresses it may write (for example the `/voice_3/`
+    group for the third phone). The remote control can display only that
+    subset.
 
-Polyphonie
-:   L'hôte attribue à chaque télécommande les notes qu'elle déclenche, pour les
-    relâcher à sa déconnexion. Deux télécommandes jouant la même hauteur sur le
-    même canal entrent en collision dans l'allocation de voix (le `keyOff` d'une
-    hauteur relâche la voix qui la joue, quelle que soit la télécommande) ;
-    attribuer un canal MIDI par télécommande l'évite.
+Polyphony
+:   The host attributes to each remote control the notes it triggers, so as to
+    release them when it disconnects. Two remote controls playing the same
+    pitch on the same channel collide in voice allocation (the `keyOff` of a
+    pitch releases the voice playing it, whichever remote control sent it);
+    assigning one MIDI channel per remote control avoids this.
 
-Le nombre de connexions WebRTC qu'une page hôte supporte confortablement est de
-l'ordre de quelques dizaines (coût DTLS et SCTP par pair, et le retour `out`
-multiplié par le nombre de clients) ; il est à mesurer. Au-delà (une salle
-entière), il faut un relais côté serveur qui agrège, et le mode unidirectionnel.
-L'agrégation de capteurs de plusieurs téléphones sur un même paramètre (somme,
-moyenne) est faisable par une fonction de réduction sur l'hôte mais reste hors
+The number of WebRTC connections a host page handles comfortably is in the
+order of a few dozen (DTLS and SCTP cost per peer, and the `out` feedback
+multiplied by the number of clients); it remains to be measured. Beyond that
+(a whole audience), a server-side relay that aggregates is needed, along with
+one-way mode.
+Aggregating sensors from several phones onto the same parameter (sum,
+average) is feasible with a reduction function on the host but stays outside
 v1.
 
-## 12. Sécurité et robustesse \label{sec:securite}
+## 12. Security and robustness \label{sec:securite}
 
-- **Appairage** : un jeton aléatoire de 128 bits par session hôte, dans le
-  fragment de l'URL d'appairage, vérifié dans `hello`. Sans jeton valide,
-  `reject` et fermeture. Le serveur de signalisation n'accepte de message pour
-  une salle qu'accompagné de ce jeton, dans le corps de la requête et jamais
-  dans l'URL ; le flux SSE d'un pair est désigné par un identifiant aléatoire
-  de 128 bits que lui seul connaît (`EventSource` ne permettant pas d'en-tête
-  d'authentification).
-- **Chiffrement** : DTLS est obligatoire en WebRTC, la signalisation passe en
-  HTTPS.
-- **Autorité de l'hôte** : validation de la section 7.6 ; aucune adresse, aucun
-  JSON, aucun code venant d'une télécommande ; filtre `expose` pour ne rendre
-  pilotables que certains paramètres (un volume général, par exemple, peut
-  rester local).
-- **Panique à la déconnexion** : quand une télécommande passe à `Closed`
-  (`bye`, échec de la connexion, absence de message depuis le délai de
-  vivacité), l'hôte remet à 0 les `button` qu'elle tenait enfoncés (et que
-  personne d'autre ne tient), relâche ses notes, puis la retire de la
-  diffusion. C'est le pendant distant de l'invariant « une panique vide les
-  évènements en attente ».
-- **Fermeture de l'hôte** : `close()` envoie `bye` à toutes les télécommandes,
-  rend au nœud les handlers d'origine (C1) et ferme les connexions ; le nœud
-  continue de fonctionner comme avant.
-- **Erreurs** : aucune erreur de réseau ou de protocole ne remonte en exception
-  dans le code de l'application hôte ; elles sont signalées par évènement.
+- **Pairing**: a random 128-bit token per host session, in the fragment of the
+  pairing URL, checked in `hello`. Without a valid token, `reject` and close.
+  The signaling server accepts a message for a room only if it comes with this
+  token, in the request body and never in the URL; a peer's SSE stream is
+  designated by a random 128-bit identifier known only to that peer
+  (`EventSource` does not allow an authentication header).
+- **Encryption**: DTLS is mandatory in WebRTC; signaling goes over HTTPS.
+- **Host authority**: validation as in section 7.6; no address, no JSON, no
+  code from a remote control; an `expose` filter to make only some parameters
+  controllable (a master volume, for example, can stay local).
+- **Panic on disconnection**: when a remote control moves to `Closed`
+  (`bye`, connection failure, no message within the liveness timeout), the
+  host resets to 0 the `button`s it was holding down (and that nobody else is
+  holding), releases its notes, then removes it from the broadcast. This is
+  the remote counterpart of the invariant "a panic flushes pending events".
+- **Host shutdown**: `close()` sends `bye` to all remote controls, gives the
+  original handlers back to the node (C1) and closes the connections; the node
+  keeps working as before.
+- **Errors**: no network or protocol error surfaces as an exception in the
+  host application's code; they are reported through events.
 
-## 13. API proposée \label{sec:api}
+## 13. Proposed API \label{sec:api}
 
-Esquisse, à affiner pendant la phase de prototype.
+A sketch, to be refined during the prototype phase.
 
 ```ts
-/** Deux canaux logiques, messages texte. */
+/** Two logical channels, text messages. */
 export type FaustRemoteChannel = 'ctl' | 'stream';
 
 export interface FaustRemoteTransport {
     send(channel: FaustRemoteChannel, message: string): void;
-    /** Octets en attente (RTCDataChannel.bufferedAmount). */
+    /** Bytes pending (RTCDataChannel.bufferedAmount). */
     bufferedAmount(channel: FaustRemoteChannel): number;
     onmessage: ((channel: FaustRemoteChannel, message: string) => void) | null;
     onclose: ((reason: string) => void) | null;
     close(): void;
 }
 
-/** Transport WebRTC : crée les canaux négociés 0 et 1 sur la connexion. */
+/** WebRTC transport: creates the negotiated channels 0 and 1 on the connection. */
 export function createRTCTransport(pc: RTCPeerConnection): Promise<FaustRemoteTransport>;
 
-/** Paire reliée en mémoire, pour les tests et la démonstration dans une page. */
+/** A pair connected in memory, for tests and for an in-page demonstration. */
 export function createLoopbackTransports(): [FaustRemoteTransport, FaustRemoteTransport];
 
 export type FaustSignalMessage =
@@ -763,7 +763,7 @@ export interface FaustSignaling {
     close(): void;
 }
 
-/** Client du serveur de signalisation HTTP + SSE fourni. */
+/** Client for the provided HTTP + SSE signaling server. */
 export function createHttpSignaling(
     url: string,
     room: string,
@@ -773,15 +773,15 @@ export function createHttpSignaling(
 
 export interface FaustRemoteHostOptions {
     token?: string;
-    mode?: 'bi' | 'uni';               // défaut 'bi'
-    policy?: 'shared' | 'exclusive';   // défaut 'shared'
+    mode?: 'bi' | 'uni';               // default 'bi'
+    policy?: 'shared' | 'exclusive';   // default 'shared'
     assign?: (client: FaustRemoteClientInfo) => (path: string) => boolean;
     expose?: (path: string) => boolean;
-    maxClients?: number;               // défaut 16
-    outputRate?: number;               // Hz, défaut 30
-    outputDeadband?: number;           // fraction de la plage, défaut 0.001
-    playoutDelay?: number | null;      // secondes ; null = mode immédiat (défaut)
-    livenessTimeout?: number;          // ms, défaut 3000
+    maxClients?: number;               // default 16
+    outputRate?: number;               // Hz, default 30
+    outputDeadband?: number;           // fraction of the range, default 0.001
+    playoutDelay?: number | null;      // seconds; null = immediate mode (default)
+    livenessTimeout?: number;          // ms, default 3000
 }
 
 export interface FaustRemoteClientInfo {
@@ -794,17 +794,17 @@ export class FaustRemoteHost extends EventTarget {
         node: IFaustMonoWebAudioNode | IFaustPolyWebAudioNode,
         options?: FaustRemoteHostOptions
     );
-    /** Accepte une télécommande sur un transport déjà ouvert. */
+    /** Accepts a remote control on an already open transport. */
     accept(transport: FaustRemoteTransport): void;
-    /** Écoute la signalisation et ouvre une RTCPeerConnection par télécommande. */
+    /** Listens to signaling and opens one RTCPeerConnection per remote control. */
     listen(signaling: FaustSignaling, rtc?: RTCConfiguration): void;
     readonly clients: ReadonlyArray<FaustRemoteClientInfo>;
-    /** Évènements : 'join', 'leave', 'error'. */
-    /** Envoie bye, rend les handlers d'origine au nœud, ferme tout. */
+    /** Events: 'join', 'leave', 'error'. */
+    /** Sends bye, gives the original handlers back to the node, closes everything. */
     close(): void;
 }
 
-/** La partie « contrôle » de l'API d'un nœud, sans audio. */
+/** The "control" part of a node's API, without audio. */
 export type IFaustRemoteControl = Pick<
     IFaustBaseWebAudioDsp,
     | 'setParamValue' | 'getParamValue' | 'getParams'
@@ -818,10 +818,10 @@ export type IFaustRemoteControl = Pick<
 
 export interface FaustRemoteDspOptions {
     token: string;
-    id?: string;                       // stable entre reconnexions
+    id?: string;                       // stable across reconnections
     mode?: 'bi' | 'uni';
-    json?: string;                     // obligatoire en mode 'uni'
-    timestamps?: boolean;              // mode horodaté, défaut false
+    json?: string;                     // required in 'uni' mode
+    timestamps?: boolean;              // timed mode, default false
 }
 
 export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
@@ -834,566 +834,565 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
     readonly state: 'connecting' | 'open' | 'reconnecting' | 'closed';
     readonly rtt: number;
     getNumActiveVoices(): number;
-    /** Évènements : 'statechange', 'error'. */
+    /** Events: 'statechange', 'error'. */
     close(): void;
-    // … plus les méthodes de IFaustRemoteControl
+    // … plus the methods of IFaustRemoteControl
 }
 ```
 
-Avec ce mandataire, la télécommande réutilise le code existant tel quel :
+With this proxy, the remote control reuses the existing code as it is:
 
 ```js
 const signaling = createHttpSignaling(location.origin, room, token, { role: "remote" });
 const dsp = await FaustRemoteDsp.connectRTC(signaling, { token });
-const faustUI = await createFaustUI(divFaustUI, dsp);  // inchangé
-await requestPermissions();                              // geste utilisateur
-dsp.startSensors();                                      // si hasAccInput / hasGyrInput
+const faustUI = await createFaustUI(divFaustUI, dsp);  // unchanged
+await requestPermissions();                              // user gesture
+dsp.startSensors();                                      // if hasAccInput / hasGyrInput
 ```
 
-et l'hôte n'ajoute que deux lignes à une application existante :
+and the host adds only two lines to an existing application:
 
 ```js
 const host = new FaustRemoteHost(faustNode, { token });
 host.listen(createHttpSignaling(location.origin, room, token, { role: "host" }));
 ```
 
-## 14. Intégration dans le package
+## 14. Integration into the package
 
-### 14.1. Fichiers proposés
+### 14.1. Proposed files
 
 ```tree
 src
   remote
-    protocol.ts — types des messages, version, validation
-    FaustRemoteHost.ts — côté hôte, au-dessus d'un nœud existant
-    FaustRemoteDsp.ts — côté télécommande, mandataire du DSP
-    transport.ts — RTCDataChannel et boucle locale en mémoire
-    signaling.ts — client HTTP + SSE
-    clock.ts — estimation de l'écart d'horloge
-    index.ts — point d'entrée du bundle distant
+    protocol.ts — message types, version, validation
+    FaustRemoteHost.ts — host side, on top of an existing node
+    FaustRemoteDsp.ts — remote control side, proxy for the DSP
+    transport.ts — RTCDataChannel and in-memory loopback
+    signaling.ts — HTTP + SSE client
+    clock.ts — clock offset estimation
+    index.ts — entry point of the remote bundle
 scripts
-  faust-remote-server.js — HTTPS statique et signalisation, sans dépendance
+  faust-remote-server.js — static HTTPS and signaling, no dependency
 assets
   remote
-    host — page hôte : nœud, FaustRemoteHost, URL et QR d'appairage
-    client — PWA télécommande : faust-ui, FaustRemoteDsp, capteurs
+    host — host page: node, FaustRemoteHost, pairing URL and QR code
+    client — remote control PWA: faust-ui, FaustRemoteDsp, sensors
 test
   unit
     remote-protocol.test.mjs
     remote-host.test.mjs
     remote-render.test.mjs
   web
-    remote — pages manuelles hôte et télécommande
+    remote — manual host and remote control pages
 ```
 
-### 14.2. Construction et distribution
+### 14.2. Build and distribution
 
-- **Bundle séparé.** `src/remote/index.ts` devient une entrée esbuild de plus,
-  produisant `dist/remote/index.js` (ESM) et `dist/remote/index.d.ts`. Un
-  répertoire à part plutôt que `dist/esm/` : `postbuild.js` copie `dist/esm/`
-  dans chaque application autonome générée, qui n'a pas à embarquer le bundle
-  distant. La télécommande n'importe que ce bundle (48 Ko non minifié, sans
-  wasm) ; il ne dépend de faustwasm que par les types. Le package n'ayant pas
-  de champ `exports`, le chemin `@grame/faustwasm/dist/remote/index.js` suffit ;
-  ajouter un champ `exports` changerait la résolution de tous les imports
-  profonds existants et doit rester une décision à part. Pas de variante IIFE
-  tant qu'aucune page ne la demande.
-- **Hors de `src/exports.ts`** tant que l'API est expérimentale : tout ce qui y
-  entre devient un engagement de compatibilité.
-- **Rien pour le thread audio** : le bundle distant ne passe pas par
+- **Separate bundle.** `src/remote/index.ts` becomes one more esbuild entry
+  point, producing `dist/remote/index.js` (ESM) and `dist/remote/index.d.ts`.
+  A separate directory rather than `dist/esm/`: `postbuild.js` copies
+  `dist/esm/` into every generated standalone application, which has no need
+  to embed the remote bundle. The remote control imports only this bundle
+  (48 KB unminified, no wasm); it depends on faustwasm only through types.
+  Since the package has no `exports` field, the path
+  `@grame/faustwasm/dist/remote/index.js` is enough; adding an `exports` field
+  would change the resolution of every existing deep import and must remain a
+  separate decision. No IIFE variant until a page asks for one.
+- **Outside `src/exports.ts`** while the API is experimental: anything that
+  goes in there becomes a compatibility commitment.
+- **Nothing for the audio thread**: the remote bundle does not go through
   `build-worklets.js`.
-- **Aucune dépendance d'exécution** : WebRTC, `EventSource`, `crypto.subtle`
-  sont natifs dans les navigateurs ; le serveur n'utilise que `node:https`,
-  `node:fs` et `node:path`. Un générateur de code QR serait à embarquer dans
-  `assets/` comme l'est faust-ui (question ouverte Q3).
-- **`files`** : `assets` et `scripts` y sont déjà ; la nouvelle entrée `bin`
-  (`faust-remote-server-ts`) et les fichiers de `dist` sont couverts. À vérifier
-  avec `npm pack --dry-run`.
+- **No runtime dependency**: WebRTC, `EventSource` and `crypto.subtle` are
+  native in browsers; the server uses only `node:https`, `node:fs` and
+  `node:path`. A QR code generator would have to be embedded in `assets/`, as
+  faust-ui is (open question Q3).
+- **`files`**: `assets` and `scripts` are already in it; the new `bin` entry
+  (`faust-remote-server-ts`) and the `dist` files are covered. To be checked
+  with `npm pack --dry-run`.
 
-### 14.3. Générateur
+### 14.3. Generator
 
-`faust2wasm-ts foo.dsp out -pwa -remote` produirait, à côté des fichiers
-actuels :
+`faust2wasm-ts foo.dsp out -pwa -remote` would produce, next to the current
+files:
 
-- `out/host/` : la page hôte, construite comme l'application autonome actuelle
-  (nœud, interface locale) plus `FaustRemoteHost` et l'affichage de l'URL
-  d'appairage ;
-- `out/remote/` : la PWA télécommande (manifeste, service worker, faust-ui,
-  bundle distant) sans `dsp-module.wasm` ;
-- l'instruction de lancement : `npx faust-remote-server-ts out --cert … --key …`.
+- `out/host/`: the host page, built like the current standalone application
+  (node, local interface) plus `FaustRemoteHost` and the display of the
+  pairing URL;
+- `out/remote/`: the remote control PWA (manifest, service worker, faust-ui,
+  remote bundle) without `dsp-module.wasm`;
+- the launch instruction: `npx faust-remote-server-ts out --cert … --key …`.
 
-Les ensembles de fichiers attendus vont dans `test/cli/expected.mjs`, comme
-pour les autres modes.
+The expected file sets go in `test/cli/expected.mjs`, as for the other modes.
 
-### 14.4. Hôte sous Node
+### 14.4. Host under Node
 
-Un hôte sans navigateur supposerait une implémentation de Web Audio pour Node
-(par exemple node-web-audio-api) et une bibliothèque WebRTC native. Les deux
-sont des dépendances lourdes et ne doivent pas entrer dans le package ;
-l'abstraction `FaustRemoteTransport` permet à un tel hôte de fournir son propre
-transport. L'hôte de référence reste une page de navigateur, éventuellement en
-mode kiosque sur la machine audio. Faisabilité à étudier séparément (Q4).
+A browserless host would require a Web Audio implementation for Node (for
+example node-web-audio-api) and a native WebRTC library. Both are heavy
+dependencies and must not enter the package; the `FaustRemoteTransport`
+abstraction lets such a host provide its own transport. The reference host
+remains a browser page, possibly in kiosk mode on the audio machine.
+Feasibility to be studied separately (Q4).
 
-### 14.5. Version et C++
+### 14.5. Version and C++
 
-Ajout de fonctionnalité et d'API : **version mineure** (0.22.0 → 0.23.0) selon
-`AGENTS.md`, à convenir avec le mainteneur. Le Faust C++ n'a pas d'équivalent
-WebRTC ; en revanche le protocole reprend l'espace d'adresses de ses interfaces
-OSC[@osc] et HTTP, ce qui rendrait possible une passerelle WebRTC vers OSC pour
-piloter une application native (`faust2xxx -osc`) depuis la même PWA.
+A feature and API addition: **minor version** (0.22.0 → 0.23.0) according to
+`AGENTS.md`, to be agreed with the maintainer. C++ Faust has no WebRTC
+equivalent; on the other hand, the protocol reuses the address space of its
+OSC[@osc] and HTTP interfaces, which would make a WebRTC-to-OSC gateway
+possible, to control a native application (`faust2xxx -osc`) from the same
+PWA.
 
-## 15. Tests et mesures \label{sec:tests}
+## 15. Tests and measurements \label{sec:tests}
 
-Unitaires, sans navigateur
-:   Le transport en mémoire relie un `FaustRemoteHost` et un `FaustRemoteDsp`
-    dans le même processus Node. `remote-protocol.test.mjs` couvre la
-    validation (indices hors bornes, valeurs non finies, bornage, séquences
-    anciennes, débit, MIDI filtré), le découpage de `welcome`, la suppression
-    d'écho et la panique à la déconnexion. `remote-render.test.mjs` place
-    l'hôte sur un vrai nœud créé par `createNode`, avec le faux environnement
-    Web Audio de `test/unit/web-audio.mjs`, comme `node-render.test.mjs` : une
-    valeur envoyée par la télécommande doit changer le rendu, un `acc` doit
-    produire le même rendu qu'un `propagateAcc` local, et un bargraph doit
-    revenir en `out`.
+Unit, without a browser
+:   The in-memory transport connects a `FaustRemoteHost` and a
+    `FaustRemoteDsp` in the same Node process. `remote-protocol.test.mjs`
+    covers validation (out-of-bounds indices, non-finite values, clamping,
+    stale sequence numbers, rate, filtered MIDI), the splitting of `welcome`,
+    echo suppression and panic on disconnection. `remote-render.test.mjs`
+    puts the host on a real node created by `createNode`, with the fake Web
+    Audio environment of `test/unit/web-audio.mjs`, as `node-render.test.mjs`
+    does: a value sent by the remote control must change the rendering, an
+    `acc` must produce the same rendering as a local `propagateAcc`, and a
+    bargraph must come back as `out`.
 
 Mutants
-:   Ajouter à `test/mutants.mjs` les ruptures qui comptent : envoyer un
-    `button` sur le canal non fiable, ne pas relâcher à la déconnexion,
-    oublier le bornage, renvoyer l'écho à l'émetteur.
+:   Add to `test/mutants.mjs` the mutants that matter: sending a `button` on
+    the unreliable channel, not releasing on disconnection, forgetting to
+    clamp, sending the echo back to the sender.
 
-Vérification de types
-:   `npm run lint-tests` couvre les nouveaux tests comme les autres.
+Type checking
+:   `npm run lint-tests` covers the new tests like the others.
 
-Manuel, dans le navigateur
-:   `test/web/remote/` : une page hôte et une page télécommande sur la même
-    machine, puis un téléphone réel sur le Wi-Fi.
+Manual, in the browser
+:   `test/web/remote/`: a host page and a remote control page on the same
+    machine, then a real phone on the Wi-Fi.
 
-Mesures
-:   Aller-retour et gigue (histogrammes de `δ` et des intervalles d'arrivée),
-    sur un réseau local réel, avec et sans économie d'énergie du Wi-Fi ; latence
-    geste vers son par enregistrement simultané d'un clic sur le téléphone et
-    de la sortie de l'hôte. Une variante de `npm run measure` peut relier deux
-    pages Chromium par WebRTC en boucle locale pour suivre les régressions de la
-    couche logicielle, mais pas le Wi-Fi.
+Measurements
+:   Round trip and jitter (histograms of `δ` and of arrival intervals), on a
+    real local network, with and without Wi-Fi power saving; gesture-to-sound
+    latency by simultaneously recording a click on the phone and the host's
+    output. A variant of `npm run measure` can connect two Chromium pages over
+    loopback WebRTC to track regressions in the software layer, but not the
+    Wi-Fi.
 
-## 16. Risques et questions ouvertes \label{sec:risques}
+## 16. Risks and open questions \label{sec:risques}
 
-| Risque | Effet | Parade |
+| Risk | Effect | Mitigation |
 | :-- | :-- | :-- |
-| Certificat HTTPS sur le réseau local | capteurs et PWA indisponibles | documentation, option `--cert/--key`, procédure mkcert |
-| mDNS filtré, NAT symétrique | ICE échoue | STUN/TURN configurables, repli WebSocket par relais |
-| Wi-Fi des téléphones en économie d'énergie | pointes de latence | mode horodaté, mesures affichées |
-| iOS en arrière-plan | coupure de la connexion | `bye`, reconnexion automatique, Wake Lock |
-| Handler unique (C1) remplacé après coup par l'application | l'hôte perd le flux | documenter l'ordre, ou API d'écouteurs (Q1) |
-| Beaucoup de télécommandes | CPU de l'hôte | `maxClients`, mode `uni`, relais |
+| HTTPS certificate on the local network | sensors and PWA unavailable | documentation, `--cert/--key` option, mkcert procedure |
+| Filtered mDNS, symmetric NAT | ICE fails | configurable STUN/TURN, WebSocket fallback through a relay |
+| Phones' Wi-Fi in power saving mode | latency spikes | timed mode, measurements displayed |
+| iOS in the background | connection drops | `bye`, automatic reconnection, Wake Lock |
+| Single handler (C1) replaced afterwards by the application | the host loses the stream | document the order, or a listener API (Q1) |
+| Many remote controls | host CPU | `maxClients`, `uni` mode, relay |
 
-Questions à trancher avec le mainteneur :
+Questions to decide with the maintainer:
 
 Q1
-:   Chaîner les handlers dans l'hôte (v1, aucun changement du cœur) ou ajouter
-    au cœur une API d'écouteurs multiples (`addOutputParamListener`…), ajout
-    d'API publique et donc version mineure ?
+:   Chain the handlers in the host (v1, no change to the core), or add a
+    multiple-listener API to the core (`addOutputParamListener`…), which is a
+    public API addition and therefore a minor version?
 
 Q2
-:   Bundle distant dans `@grame/faustwasm` (proposé) ou package séparé
-    (`@grame/faustwasm-remote`) ?
+:   Remote bundle in `@grame/faustwasm` (proposed) or a separate package
+    (`@grame/faustwasm-remote`)?
 
 Q3
-:   Embarquer un générateur de code QR dans `assets/`, ou n'afficher que l'URL ?
-    **Tranché :** le générateur de Project Nayuki (MIT) est intégré tel quel
-    dans `src/remote/vendor/qrcodegen.ts` (seulement exporté en module, sa
-    notice de licence conservée dans le bundle) ; `qrCodeSvg` le rend en SVG et
-    la page hôte affiche le code sous le lien d'appairage.
+:   Embed a QR code generator in `assets/`, or only display the URL?
+    **Decided:** Project Nayuki's generator (MIT) is included as is in
+    `src/remote/vendor/qrcodegen.ts` (only exported as a module, its license
+    notice kept in the bundle); `qrCodeSvg` renders it as SVG and the host
+    page displays the code under the pairing link.
 
 Q4
-:   Faut-il étudier un hôte sous Node (Web Audio et WebRTC natifs), ou s'en tenir
-    à l'hôte navigateur ?
+:   Should a host under Node (native Web Audio and WebRTC) be studied, or
+    should we stick to the browser host?
 
 Q5
-:   Signalisation pour l'usage Internet (IDE en ligne) : service hébergé par
-    GRAME, ou laissé à l'intégrateur via `FaustSignaling` ? Analyse détaillée
-    en \ref{sec:internet} : ce qui manque au serveur (CORS, origine du relais,
-    protection contre les abus, mandataires), aux pages (adresse de
-    signalisation, serveurs ICE), la traversée des NAT et le travail à faire.
+:   Signaling for Internet use (online IDE): a service hosted by GRAME, or
+    left to the integrator through `FaustSignaling`? Detailed analysis in
+    \ref{sec:internet}: what the server lacks (CORS, relay origin, abuse
+    protection, reverse proxies), what the pages lack (signaling address, ICE
+    servers), NAT traversal and the work to be done.
 
 Q6
-:   Une convention de métadonnées (`[remote:off]` sur un widget, ou
-    `declare remote "…"`) pour que le DSP déclare lui-même ce qui est pilotable,
-    en plus de l'option `expose` ?
+:   A metadata convention (`[remote:off]` on a widget, or
+    `declare remote "…"`) so that the DSP itself declares what is
+    controllable, in addition to the `expose` option?
 
 Q7
-:   Retour audio : une piste WebRTC (Opus) de l'hôte vers la télécommande, pour
-    l'écoute au casque en répétition (latence de l'ordre de 100 à 200 ms, donc
-    inutilisable pour jouer). Utile en v2 ?
+:   Audio feedback: a WebRTC track (Opus) from the host to the remote control,
+    for headphone monitoring during rehearsal (latency in the order of 100 to
+    200 ms, hence unusable for playing). Useful in v2?
 
-## 16 bis. État de la mise en œuvre
+## 16 bis. Implementation status
 
-P0, P1, P2 et P3 sont réalisées sur la branche `remote-control`.
+P0, P1, P2 and P3 are done on the `remote-control` branch.
 
 P0
-:   `src/remote/` : protocole, `FaustRemoteHost`, `FaustRemoteDsp`, transport
-    en mémoire. Tests `remote-protocol`, `remote-host`, `remote-render`.
+:   `src/remote/`: protocol, `FaustRemoteHost`, `FaustRemoteDsp`, in-memory
+    transport. Tests `remote-protocol`, `remote-host`, `remote-render`.
 
 P1
-:   `createRTCTransport`, `callHost`/`answerPeers` (exposés comme
-    `FaustRemoteDsp.connectRTC` et `FaustRemoteHost.listen`),
-    `createHttpSignaling`, `createLoopbackSignaling`, le serveur
-    `faust-remote-server-ts` (`src/faustRemoteServer.js`) et les pages
-    `test/web/remote/host.html` et `remote.html`. Tests `remote-rtc` (faux
-    `RTCPeerConnection`, strict sur l'ordre des candidats) et `remote-server`,
-    plus `test/cli/remote-server.test.mjs`.
+:   `createRTCTransport`, `callHost`/`answerPeers` (exposed as
+    `FaustRemoteDsp.connectRTC` and `FaustRemoteHost.listen`),
+    `createHttpSignaling`, `createLoopbackSignaling`, the
+    `faust-remote-server-ts` server (`src/faustRemoteServer.js`) and the
+    `test/web/remote/host.html` and `remote.html` pages. Tests `remote-rtc`
+    (fake `RTCPeerConnection`, strict about candidate order) and
+    `remote-server`, plus `test/cli/remote-server.test.mjs`.
 
-Écarts avec les sections précédentes, décidés en implémentant :
+Deviations from the preceding sections, decided during implementation:
 
-- **Signalisation** : le jeton voyage dans l'en-tête `x-faust-token` de
-  *toutes* les requêtes, y compris le flux d'évènements, lu avec `fetch` plutôt
-  qu'`EventSource` ; les points d'entrée sont `POST host`, `GET events/<id>` et
-  `POST send` sous `/signal/<room>/`.
-- **Candidats ICE** : chaque côté retient les siens jusqu'à l'envoi de sa
-  description, et l'hôte garde (en nombre borné) ceux qui arrivent avant
-  l'offre, la signalisation ne garantissant pas l'ordre de deux messages.
-- **État initial** : `setInputParamHandler` et `setOutputParamHandler` d'un
-  `FaustRemoteDsp` rejouent aussitôt les valeurs courantes, pour que
-  `createFaustUI` montre l'état de l'hôte et non les valeurs `init`.
-- **Mesure** : `FaustRemoteDsp` émet un évènement `rtt` à chaque aller-retour.
+- **Signaling**: the token travels in the `x-faust-token` header of *all*
+  requests, including the event stream, which is read with `fetch` rather
+  than `EventSource`; the endpoints are `POST host`, `GET events/<id>` and
+  `POST send` under `/signal/<room>/`.
+- **ICE candidates**: each side holds back its own until it has sent its
+  description, and the host keeps (in bounded number) those that arrive
+  before the offer, since signaling does not guarantee the order of two
+  messages.
+- **Initial state**: `setInputParamHandler` and `setOutputParamHandler` on a
+  `FaustRemoteDsp` immediately replay the current values, so that
+  `createFaustUI` shows the host's state and not the `init` values.
+- **Measurement**: `FaustRemoteDsp` emits an `rtt` event on every round trip.
 
 P2
-:   `faust2wasm-ts foo.dsp out -remote` (`copyWebRemoteAssets`, modèles dans
-    `assets/remote/`). Test `test/cli/remote-app.test.mjs`, et le mode
-    `remote` dans la matrice de `faust2wasm-modes.test.mjs`.
+:   `faust2wasm-ts foo.dsp out -remote` (`copyWebRemoteAssets`, templates in
+    `assets/remote/`). Test `test/cli/remote-app.test.mjs`, and the `remote`
+    mode in the matrix of `faust2wasm-modes.test.mjs`.
 
-Disposition produite, différente de la section 14.3 : la page hôte est à la
-racine de `out/` (à côté de `dsp-module.wasm`, comme l'application autonome)
-et la PWA télécommande dans `out/remote/`, qui réutilise `../create-node.js`,
-`../faust-ui/` et `../faustwasm-remote/` (le bundle `dist/remote`). On sert
-`out/` avec `faust-remote-server-ts`. Points notables :
+Layout produced, different from section 14.3: the host page is at the root of
+`out/` (next to `dsp-module.wasm`, like the standalone application) and the
+remote control PWA in `out/remote/`, which reuses `../create-node.js`,
+`../faust-ui/` and `../faustwasm-remote/` (the `dist/remote` bundle). `out/`
+is served with `faust-remote-server-ts`. Notable points:
 
-- La PWA télécommande a son propre service worker : celui des PWA
-  existantes met en cache toute réponse GET avant de la rendre, ce qui
-  bloquerait indéfiniment le flux de signalisation. Le sien ne répond que
-  pour ses fichiers et laisse passer `/signal/`.
-- La session (salle, jeton) est gardée dans `localStorage` des deux côtés :
-  l'hôte la retrouve au rechargement (bouton « New session » pour en changer,
-  `FaustRemoteHost.setToken`), et la PWA installée, qui démarre sans le
-  fragment du lien, retrouve son hôte. Le fragment est retiré de la barre
-  d'adresse dès qu'il est lu.
-- Masquée, la télécommande dit au revoir (l'hôte relâche ce qu'elle tenait) ;
-  visible de nouveau, elle se reconnecte ; une connexion perdue est retentée.
-- Code QR du lien d'appairage sur la page hôte (Q3), redessiné à chaque
-  nouvelle session. Testé en le décodant : un décodeur écrit dans le test
-  d'après la norme (`remote-qr.test.mjs`), et le détecteur de codes-barres
-  de Chromium.
-- Une télécommande peut se connecter avant que l'audio de l'hôte soit
-  activé ; ses écritures sont appliquées dès que l'`AudioContext` tourne.
-- Bundles par rôle : `dist/remote/client.js` (télécommande),
-  `dist/remote/host.js` (hôte, avec le générateur QR) et `dist/remote/index.js`
-  (tout, pour l'API), produits par une seule commande esbuild, chacun autonome.
-  La télécommande générée ne charge que `client.js` : 40 Ko au lieu de 109
-  (non minifiés), 6,6 Ko au lieu de 16,4 une fois minifiés et compressés.
-  L'application générée ne reçoit que `client.js` et `host.js`.
+- The remote control PWA has its own service worker: the one of the existing
+  PWAs caches every GET response before returning it, which would block the
+  signaling stream indefinitely. Its own responds only for its files and lets
+  `/signal/` through.
+- The session (room, token) is kept in `localStorage` on both sides: the host
+  finds it again on reload (a "New session" button to change it,
+  `FaustRemoteHost.setToken`), and the installed PWA, which starts without
+  the link's fragment, finds its host again. The fragment is removed from the
+  address bar as soon as it is read.
+- When hidden, the remote control says goodbye (the host releases what it was
+  holding); when visible again, it reconnects; a lost connection is retried.
+- QR code of the pairing link on the host page (Q3), redrawn for every new
+  session. Tested by decoding it: a decoder written in the test from the
+  standard (`remote-qr.test.mjs`), and Chromium's barcode detector.
+- A remote control can connect before the host's audio is activated; its
+  writes are applied as soon as the `AudioContext` is running.
+- Per-role bundles: `dist/remote/client.js` (remote control),
+  `dist/remote/host.js` (host, with the QR generator) and
+  `dist/remote/index.js` (everything, for the API), produced by a single
+  esbuild command, each self-contained. The generated remote control loads
+  only `client.js`: 40 KB instead of 109 (unminified), 6.6 KB instead of
+  16.4 once minified and compressed. The generated application receives only
+  `client.js` and `host.js`.
 
 P3
-:   Mode horodaté (`playoutDelay`, `src/remote/clock.ts`) et repli par relais
-    WebSocket (`src/remote/relay.ts`, relais dans le serveur). Les politiques
-    exclusive et répartie et les notes par télécommande existaient depuis P0.
-    Tests `remote-timed` et relais dans `remote-server`.
+:   Timed mode (`playoutDelay`, `src/remote/clock.ts`) and WebSocket relay
+    fallback (`src/remote/relay.ts`, relay in the server). The exclusive and
+    partitioned policies and per-remote-control notes had existed since P0.
+    Tests `remote-timed`, and relay tests in `remote-server`.
 
-Mode horodaté, tel qu'implémenté (la section 10.3 décrivait la conversion
-côté hôte ; elle est faite côté télécommande, plus simple) :
+Timed mode, as implemented (section 10.3 described the conversion on the host
+side; it is done on the remote control side, which is simpler):
 
-- La télécommande estime l'écart d'horloge (`FaustRemoteClock` : l'échange au
-  plus court aller-retour parmi les 16 derniers) et envoie `time` déjà dans
-  l'horloge `performance.now()` de l'hôte. Elle n'horodate que si `welcome`
-  annonce un `delay` ; elle envoie alors une salve de quatre pings pour
-  connaître l'horloge au plus tôt.
-- L'hôte applique à `currentTime + délai − âge` : à l'échantillon près pour
-  les paramètres et le MIDI (écritures horodatées du nœud), par un minuteur
-  pour les capteurs, que le nœud ne sait pas programmer. Un horodatage un peu
-  en avance (erreur d'estimation de l'horloge, la même pour tous les messages)
-  est conservé, borné à deux fois le délai ; le ramener à « maintenant »
-  recréait de la gigue. Un message plus en retard que le délai est appliqué à
-  l'arrivée.
-- À la déconnexion, les relâchements sont programmés après la dernière valeur
-  programmée de cette télécommande : sinon un « gate = 1 » encore en attente
-  passerait après le relâchement et la note resterait tenue.
-- Page hôte générée : `index.html?delay=40` pour 40 ms.
+- The remote control estimates the clock offset (`FaustRemoteClock`: the
+  exchange with the shortest round trip among the last 16) and sends `time`
+  already expressed in the host's `performance.now()` clock. It timestamps
+  only if `welcome` announces a `delay`; it then sends a burst of four pings
+  to learn the clock as early as possible.
+- The host applies at `currentTime + delay − age`: sample-accurately for
+  parameters and MIDI (the node's timed writes), through a timer for sensors,
+  which the node cannot schedule. A timestamp slightly in the future (an
+  error in the clock estimate, the same for all messages) is kept, bounded to
+  twice the delay; bringing it back to "now" reintroduced jitter. A message
+  later than the delay is applied on arrival.
+- On disconnection, the releases are scheduled after the last scheduled value
+  of that remote control: otherwise a still-pending "gate = 1" would come
+  after the release and the note would stay held.
+- Generated host page: `index.html?delay=40` for 40 ms.
 
-Gigue mesurée sur le transport en mémoire, latence tirée entre 0 et 40 ms,
-100 notes envoyées toutes les 10 ms ; écart entre l'espacement d'application
-et l'espacement d'envoi :
+Jitter measured on the in-memory transport, latency drawn between 0 and 40 ms,
+100 notes sent every 10 ms; difference between the application spacing and
+the sending spacing:
 
-```csv "Gigue avant et après le délai de lecture"
-Mode, Médiane (ms), p95 (ms), Max (ms)
-Immédiat, 9.15, 23.27, 29.28
-Délai de 80 ms, 0.00, 0.02, 0.06
+```csv "Jitter before and after the playout delay"
+Mode, Median (ms), p95 (ms), Max (ms)
+Immediate, 9.15, 23.27, 29.28
+80 ms delay, 0.00, 0.02, 0.06
 ```
 
-C'est la couche logicielle seule, sur une horloge commune : sur un vrai
-réseau s'y ajoutent l'erreur et la dérive de l'estimation d'horloge, à
-mesurer avec un téléphone.
+This is the software layer alone, on a shared clock: on a real network, the
+error and drift of the clock estimate add to it, to be measured with a phone.
 
-Relais WebSocket : `GET /relay/<room>` passé en WebSocket (RFC 6455 écrit à
-la main, messages texte seulement), premier message `{ token, role, id }`,
-puis préfixe `id\n` ajouté par le serveur. `FaustRemoteHost.listenRelay` et
-`FaustRemoteDsp.connectRelay` ; la télécommande générée essaie WebRTC (8 s)
-puis le relais, et affiche lequel elle utilise. Le relais passe par TCP : une
-perte retarde tout ce qui suit, sur les deux canaux. `listen` et `listenRelay`
-rendent leur fonction d'arrêt (pour « New session ») ; arrêter le relais
-déconnecte les télécommandes qui passaient par lui.
+WebSocket relay: `GET /relay/<room>` upgraded to WebSocket (RFC 6455
+hand-written, text messages only), first message `{ token, role, id }`, then
+an `id\n` prefix added by the server. `FaustRemoteHost.listenRelay` and
+`FaustRemoteDsp.connectRelay`; the generated remote control tries WebRTC
+(8 s), then the relay, and displays which one it is using. The relay goes
+over TCP: a loss delays everything that follows, on both channels. `listen`
+and `listenRelay` return their stop function (for "New session"); stopping the
+relay disconnects the remote controls that were using it.
 
-Vérifié dans un navigateur (Chromium intégré, deux onglets en localhost) :
-connexion par le serveur, paramètres et bouton appliqués sur l'hôte, bargraph
-de retour, accéléromètre simulé appliqué puis synchronisé, 8 connexions de suite
-ouvertes en 13 à 15 ms, aller-retour médian de 1,2 ms en boucle locale. La
-toute première tentative a expiré sans cause identifiée ; non reproduite
-ensuite. Une application générée par `-remote` a été vérifiée de la même façon
-(curseur déplacé sur la télécommande et appliqué sur l'hôte, aucun `.wasm`
-chargé côté télécommande, déconnexion quand la page est masquée et
-reconnexion quand elle redevient visible). Le service worker n'a pas pu y être
-vérifié : ce navigateur intégré refuse tout enregistrement de service worker ;
-il est testé sous Node. P3 vérifié de même : télécommande générée privée de
-WebRTC, repliée sur le relais, curseur appliqué sur l'hôte en mode horodaté
-(`?delay=40`). **Non vérifié : un vrai téléphone sur le Wi-Fi**, donc ni HTTPS avec
-certificat, ni capteurs réels, ni latence radio.
+Verified in a browser (built-in Chromium, two tabs on localhost): connection
+through the server, parameters and button applied on the host, bargraph fed
+back, simulated accelerometer applied then synchronized, 8 successive
+connections opened in 13 to 15 ms, median round trip of 1.2 ms over loopback.
+The very first attempt timed out for no identified reason; not reproduced
+since. An application generated by `-remote` was verified the same way
+(slider moved on the remote control and applied on the host, no `.wasm`
+loaded on the remote control side, disconnection when the page is hidden and
+reconnection when it becomes visible again). The service worker could not be
+verified there: this built-in browser refuses any service worker
+registration; it is tested under Node. P3 verified likewise: generated remote
+control deprived of WebRTC, fell back to the relay, slider applied on the host
+in timed mode (`?delay=40`). **Not verified: a real phone on the Wi-Fi**, hence
+neither HTTPS with a certificate, nor real sensors, nor radio latency.
 
-Défaut constaté en vérifiant, hors de cette couche, corrigé sur `master`
-(« AudioWorklet node: getParamValue reports values written on the audio
-thread ») : `getParamValue` d'un nœud AudioWorklet lisait son `AudioParam`, que
-les écritures faites sur le thread audio (correspondance des capteurs, MIDI)
-ne mettent pas à jour ; les valeurs initiales envoyées dans `welcome` pour un
-paramètre piloté par capteur pouvaient donc être en retard. Le nœud retient
-désormais ces écritures et les rend dans `getParamValue`.
+A defect found while verifying, outside this layer, fixed on `master`
+("AudioWorklet node: getParamValue reports values written on the audio
+thread"): `getParamValue` on an AudioWorklet node read its `AudioParam`, which
+writes made on the audio thread (sensor mapping, MIDI) do not update; the
+initial values sent in `welcome` for a sensor-driven parameter could
+therefore be stale. The node now records these writes and returns them in
+`getParamValue`.
 
-## 16 ter. Usage sur Internet \label{sec:internet}
+## 16 ter. Use over the Internet \label{sec:internet}
 
-Tout ce qui précède suppose que l'hôte, le serveur et les téléphones sont sur
-le **même réseau local** : `faust-remote-server` tourne sur la machine hôte, et
-les téléphones du même Wi-Fi le joignent par son adresse locale
-(`https://192.168.1.43:8443`). Cette section analyse ce qu'il faudrait pour
-s'en passer (question Q5), avec l'IDE Faust en ligne comme cas type : la page
-hôte y est l'IDE lui-même, servi par un site public, qui fait tourner le DSP
-avec faustwasm dans le navigateur de l'utilisateur. `FaustRemoteHost` s'y pose
-tel quel sur le nœud ; c'est tout ce qui entoure la connexion qui change.
+Everything above assumes that the host, the server and the phones are on the
+**same local network**: `faust-remote-server` runs on the host machine, and
+the phones on the same Wi-Fi reach it at its local address
+(`https://192.168.1.43:8443`). This section analyzes what it would take to do
+without that (question Q5), with the online Faust IDE as the typical case:
+there, the host page is the IDE itself, served by a public site, which runs
+the DSP with faustwasm in the user's browser. `FaustRemoteHost` sits on the
+node there as it is; what changes is everything surrounding the connection.
 
-### 16 ter.1. Ce qui empêche le montage actuel
+### 16 ter.1. What prevents the current setup
 
-Pas de serveur local
-:   L'utilisateur de l'IDE n'a ni Node, ni certificat, ni serveur à lancer. La
-    signalisation doit être un service déjà là.
+No local server
+:   The IDE user has no Node, no certificate and no server to launch.
+    Signaling must be a service that is already there.
 
-Contenu mixte et réseau privé
-:   Une page servie en HTTPS par un site public ne peut pas appeler
-    `http://192.168.x.x` (contenu mixte, bloqué), et Chrome restreint de plus
-    les requêtes d'un site public vers une adresse privée (*Private Network
-    Access*). Même lancé, un serveur local serait hors d'atteinte de la page.
+Mixed content and private network
+:   A page served over HTTPS by a public site cannot call
+    `http://192.168.x.x` (mixed content, blocked), and Chrome additionally
+    restricts requests from a public site to a private address (*Private
+    Network Access*). Even if launched, a local server would be out of the
+    page's reach.
 
-Une télécommande à charger
-:   Le téléphone doit obtenir la PWA télécommande quelque part : elle doit être
-    hébergée publiquement, et le lien d'appairage la désigner.
+A remote control to load
+:   The phone has to get the remote control PWA from somewhere: it must be
+    hosted publicly, and the pairing link must point to it.
 
-Réseaux différents
-:   Le téléphone peut être en 4G ou sur un autre Wi-Fi : la connexion doit
-    traverser des NAT, ce que le réseau local n'a jamais demandé.
+Different networks
+:   The phone may be on 4G or on another Wi-Fi: the connection must traverse
+    NATs, which the local network never required.
 
-### 16 ter.2. Topologie
+### 16 ter.2. Topology
 
-```mermaid "Usage sur Internet : qui parle à qui" \label{fig:internet}
+```mermaid "Use over the Internet: who talks to whom" \label{fig:internet}
 flowchart LR
-  subgraph Home["Reseau de l'utilisateur"]
-    IDE["IDE Faust<br>(page hote, faustwasm)"]
+  subgraph Home["User network"]
+    IDE["Faust IDE<br>(host page, faustwasm)"]
   end
-  subgraph Phone["Telephone (Wi-Fi ou 4G)"]
-    PWA["PWA telecommande"]
+  subgraph Phone["Phone (Wi-Fi or 4G)"]
+    PWA["Remote control PWA"]
   end
-  subgraph Public["Services publics (HTTPS)"]
-    SITE["Site de l'IDE<br>+ PWA telecommande"]
-    SIG["Signalisation<br>+ relais WebSocket"]
+  subgraph Public["Public services (HTTPS)"]
+    SITE["IDE site<br>+ remote control PWA"]
+    SIG["Signaling<br>+ WebSocket relay"]
     TURN["STUN / TURN"]
   end
   SITE --> IDE
   SITE --> PWA
   IDE <--> SIG
   PWA <--> SIG
-  IDE <-. "WebRTC direct si possible" .-> PWA
+  IDE <-. "direct WebRTC if possible" .-> PWA
   IDE <-.-> TURN
   PWA <-.-> TURN
 ```
 
-```csv "Selon où sont l'ordinateur et le téléphone" \label{tab:internet}
-Situation, Signalisation, Connexion de contrôle, Latence ajoutée
-Même Wi-Fi, par Internet (quelques messages au début), WebRTC direct sur le réseau local, aucune
-Réseaux différents et NAT ordinaires, par Internet, WebRTC direct après STUN, le trajet Internet
-Réseaux différents et NAT symétrique (4G), par Internet, TURN ou relais WebSocket, le trajet jusqu'au serveur et retour
+```csv "Depending on where the computer and the phone are" \label{tab:internet}
+Situation, Signaling, Control connection, Added latency
+Same Wi-Fi, over the Internet (a few messages at the start), direct WebRTC on the local network, none
+Different networks and ordinary NATs, over the Internet, direct WebRTC after STUN, the Internet path
+Different networks and symmetric NAT (4G), over the Internet, TURN or WebSocket relay, the path to the server and back
 ```
 
-Le cas de loin le plus courant, l'ordinateur et le téléphone dans la même
-pièce, est aussi le meilleur : seule la signalisation passe par Internet, et la
-connexion de contrôle s'établit directement sur le réseau local, avec la
-latence d'aujourd'hui.
+By far the most common case, the computer and the phone in the same room, is
+also the best: only signaling goes over the Internet, and the control
+connection is established directly on the local network, with today's
+latency.
 
-### 16 ter.3. Ce qu'il faut côté serveur
+### 16 ter.3. What the server needs
 
-`faust-remote-server` fait déjà presque tout ce qu'un service public doit
-faire (salles, jetons, signalisation, relais). Il lui manque :
+`faust-remote-server` already does almost everything a public service must
+do (rooms, tokens, signaling, relay). What it lacks:
 
 CORS
-:   La page de l'IDE et le serveur n'ont pas la même origine. Le client envoie
-    l'en-tête `x-faust-token` et du `application/json`, ce qui déclenche une
-    requête préalable `OPTIONS` : le serveur n'y répond pas aujourd'hui (elle
-    est refusée faute de jeton). Il faut répondre à `OPTIONS` sans jeton, et à
-    toutes les requêtes avec `Access-Control-Allow-Origin` (l'origine de la
-    page si elle est dans une liste autorisée, jamais `*` avec un jeton),
-    `Access-Control-Allow-Headers: content-type, x-faust-token` et
-    `Access-Control-Allow-Methods: GET, POST`. Le flux d'évènements, lu avec
-    `fetch`, est concerné de la même façon.
+:   The IDE page and the server do not have the same origin. The client sends
+    the `x-faust-token` header and `application/json`, which triggers an
+    `OPTIONS` preflight request: the server does not answer it today (it is
+    refused for lack of a token). It must answer `OPTIONS` without a token,
+    and answer all requests with `Access-Control-Allow-Origin` (the page's
+    origin if it is in an allow list, never `*` with a token),
+    `Access-Control-Allow-Headers: content-type, x-faust-token` and
+    `Access-Control-Allow-Methods: GET, POST`. The event stream, read with
+    `fetch`, is affected in the same way.
 
-Origine du relais
-:   Un WebSocket n'est pas soumis à CORS : le serveur doit vérifier lui-même
-    l'en-tête `Origin` de la demande de connexion contre la même liste, pour
-    qu'une page tierce ne puisse pas s'en servir.
+Relay origin
+:   A WebSocket is not subject to CORS: the server must itself check the
+    `Origin` header of the connection request against the same list, so that
+    a third-party page cannot use it.
 
-Protection contre les abus
-:   Ouvert à tous, le serveur doit borner ce que chacun peut lui faire coûter :
-    nombre de salles et de flux par adresse, expiration des salles inactives,
-    débit de messages de signalisation et de relais, taille des files
-    d'attente (déjà bornée : 64 messages, une minute). Les noms de salle sont
-    aléatoires (48 bits) et le premier jeton possède la salle : prendre la
-    salle d'un autre demande de deviner son nom.
+Abuse protection
+:   Open to everyone, the server must bound what each client can cost it:
+    number of rooms and streams per address, expiry of inactive rooms,
+    signaling and relay message rates, queue sizes (already bounded: 64
+    messages, one minute). Room names are random (48 bits) and the first
+    token owns the room: taking someone else's room requires guessing its
+    name.
 
-Derrière un mandataire
-:   Un serveur public est souvent placé derrière nginx ou un équivalent, qui
-    par défaut **retient** les réponses en flux : le flux d'évènements de la
-    signalisation n'arriverait qu'à sa fermeture. Le serveur doit envoyer
-    `X-Accel-Buffering: no` sur ce flux, et la documentation de déploiement
-    décrire la configuration du mandataire (`proxy_buffering off` pour
-    `/signal/`, en-têtes `Upgrade` et `Connection` pour `/relay/`, délais
-    d'inactivité supérieurs au battement de 15 s).
+Behind a reverse proxy
+:   A public server is often placed behind nginx or an equivalent, which by
+    default **buffers** streamed responses: the signaling event stream would
+    arrive only when it closes. The server must send `X-Accel-Buffering: no`
+    on this stream, and the deployment documentation must describe the
+    reverse proxy configuration (`proxy_buffering off` for `/signal/`,
+    `Upgrade` and `Connection` headers for `/relay/`, idle timeouts longer
+    than the 15 s heartbeat).
 
-Certificat
-:   Un vrai certificat (Let's Encrypt) remplace mkcert : plus rien à installer
-    sur les téléphones, ce qui est en soi un gros gain d'usage.
+Certificate
+:   A real certificate (Let's Encrypt) replaces mkcert: nothing left to
+    install on the phones, which in itself is a big usability gain.
 
-### 16 ter.4. Ce qu'il faut côté pages
+### 16 ter.4. What the pages need
 
-Adresse de signalisation configurable
-:   Les pages supposent aujourd'hui que la signalisation est servie par la même
-    origine qu'elles (`location.origin`). Il faut pouvoir la donner : option de
-    la page hôte (et du générateur, par exemple `-signal <url>`), et, côté
-    télécommande, un champ de plus dans le fragment du lien (`&signal=…`).
-    Une PWA hébergée publiquement ne doit accepter qu'une liste de serveurs
-    connus : sinon un lien piégé dirigerait le téléphone vers un serveur
-    tiers, qui verrait passer ses messages de contrôle.
+Configurable signaling address
+:   The pages currently assume that signaling is served by the same origin as
+    themselves (`location.origin`). It must be possible to specify it: an
+    option of the host page (and of the generator, for example
+    `-signal <url>`), and, on the remote control side, one more field in the
+    link's fragment (`&signal=…`). A publicly hosted PWA must accept only a
+    list of known servers: otherwise a booby-trapped link would direct the
+    phone to a third-party server, which would see its control messages go
+    through.
 
-Serveurs ICE
-:   Passer une `RTCConfiguration` avec un serveur STUN (il en existe de
-    gratuits) et, si on en a un, TURN : l'API l'accepte déjà
-    (`FaustRemoteDsp.connectRTC`, `FaustRemoteHost.listen`), il suffit que les
-    pages la transmettent.
+ICE servers
+:   Pass an `RTCConfiguration` with a STUN server (free ones exist) and, if
+    one is available, TURN: the API already accepts it
+    (`FaustRemoteDsp.connectRTC`, `FaustRemoteHost.listen`); the pages just
+    need to pass it on.
 
-PWA télécommande hébergée
-:   La télécommande générée par `-remote` convient telle quelle, servie par le
-    site de l'IDE ou par le serveur de signalisation, à condition de lui donner
-    l'adresse de signalisation comme ci-dessus.
+Hosted remote control PWA
+:   The remote control generated by `-remote` is suitable as it is, served by
+    the IDE site or by the signaling server, provided it is given the
+    signaling address as above.
 
-Intégration dans l'IDE
-:   Un bouton « Télécommande » qui crée un `FaustRemoteHost` sur le nœud en
-    cours, ouvre la session et affiche le code QR (`qrCodeSvg`) ; à refaire à
-    chaque recompilation du DSP, puisque le nœud change.
+Integration into the IDE
+:   A "Remote control" button that creates a `FaustRemoteHost` on the current
+    node, opens the session and displays the QR code (`qrCodeSvg`); to be
+    redone at every recompilation of the DSP, since the node changes.
 
-### 16 ter.5. Traverser les NAT
+### 16 ter.5. Traversing NATs
 
-Entre deux réseaux, WebRTC doit découvrir des adresses joignables. **STUN**
-suffit derrière la plupart des box. Derrière un NAT symétrique, fréquent sur
-les réseaux mobiles, il faut un **TURN**, qui relaie tout le trafic de la
-session et coûte donc de la bande passante à celui qui l'héberge (*coturn* est
-la référence libre).
+Between two networks, WebRTC has to discover reachable addresses. **STUN** is
+enough behind most home routers. Behind a symmetric NAT, common on mobile
+networks, a **TURN** server is needed, which relays all of the session's
+traffic and therefore costs bandwidth to whoever hosts it (*coturn* is the
+free reference implementation).
 
-Le **relais WebSocket** existant joue le même rôle sans serveur
-supplémentaire : l'hôte et le téléphone s'y connectent tous deux vers
-l'extérieur, ce qui passe tous les NAT. Ses limites, déjà notées en P3,
-pèsent plus sur Internet : tout transite par TCP, donc une perte retarde ce
-qui suit, sur les deux canaux. Le débit d'une session est minime (quelques
-Ko/s) : un relais sur le serveur de signalisation tient de nombreuses
-sessions. Le mode horodaté (`playoutDelay`) absorbe la gigue d'un trajet
-Internet, au prix d'un retard fixe de quelques dizaines de millisecondes,
-acceptable pour du contrôle de paramètres, moins pour du jeu de notes.
+The existing **WebSocket relay** plays the same role without an additional
+server: the host and the phone both connect to it outbound, which gets through
+every NAT. Its limits, already noted in P3, weigh more over the Internet:
+everything goes over TCP, so a loss delays what follows, on both channels. A
+session's bandwidth is tiny (a few KB/s): a relay on the signaling server can
+handle many sessions. Timed mode (`playoutDelay`) absorbs the jitter of an
+Internet path, at the cost of a fixed delay of a few tens of milliseconds,
+acceptable for parameter control, less so for playing notes.
 
-### 16 ter.6. Sécurité et confidentialité
+### 16 ter.6. Security and privacy
 
-- Le serveur de signalisation voit les noms de salle, les jetons (dans les
-  en-têtes) et les descriptions SDP, qui contiennent les adresses IP des pairs.
-  Il ne voit pas les messages de contrôle d'une connexion WebRTC, chiffrée de
-  bout en bout par DTLS.
-- Par le relais, en revanche, les messages de contrôle traversent le serveur
-  en clair pour lui (chiffrés seulement jusqu'à lui, par TLS). Pour des
-  valeurs de curseurs, c'est acceptable de la part d'un service de confiance ;
-  c'est à dire dans sa politique de confidentialité.
-- Le serveur ne doit rien journaliser de ce qui passe : ni jetons, ni SDP, ni
-  messages.
-- Le jeton dans le fragment du lien et l'appairage par code QR restent valables
-  sur Internet : le lien n'est jamais envoyé à un serveur, il passe de l'écran
-  de l'hôte à la caméra du téléphone.
+- The signaling server sees the room names, the tokens (in the headers) and
+  the SDP descriptions, which contain the peers' IP addresses. It does not see
+  the control messages of a WebRTC connection, which are end-to-end encrypted
+  by DTLS.
+- Through the relay, on the other hand, control messages pass through the
+  server in clear text as far as it is concerned (encrypted only up to it, by
+  TLS). For slider values, this is acceptable from a trusted service, which
+  must then say so in its privacy policy.
+- The server must log nothing of what passes through it: no tokens, no SDP,
+  no messages.
+- The token in the link's fragment and pairing by QR code remain valid over
+  the Internet: the link is never sent to a server; it goes from the host's
+  screen to the phone's camera.
 
-### 16 ter.7. Qui héberge
+### 16 ter.7. Who hosts
 
-| | A. Service hébergé par GRAME | B. Briques pour l'intégrateur |
+| | A. Service hosted by GRAME | B. Building blocks for the integrator |
 | :-- | :-- | :-- |
-| Pour l'utilisateur de l'IDE | rien à installer, cela marche | dépend de l'intégrateur |
-| Services | signalisation, relais, PWA télécommande, éventuellement TURN | à déployer par chacun |
-| Coût | un service à maintenir, superviser et protéger ; TURN coûte de la bande passante | la documentation de déploiement |
-| faustwasm fournit | le serveur, configuré pour l'IDE | le serveur avec CORS, `FaustSignaling` pour tout autre canal |
+| For the IDE user | nothing to install, it just works | depends on the integrator |
+| Services | signaling, relay, remote control PWA, possibly TURN | to be deployed by each integrator |
+| Cost | a service to maintain, monitor and protect; TURN costs bandwidth | the deployment documentation |
+| faustwasm provides | the server, configured for the IDE | the server with CORS, `FaustSignaling` for any other channel |
 
-Les deux ne s'excluent pas : B est de toute façon nécessaire pour A, et
-l'interface `FaustSignaling` permet à une application qui a déjà son propre
-serveur (WebSocket, Firebase, Matrix…) de s'en servir pour la signalisation.
+The two are not mutually exclusive: B is needed for A anyway, and the
+`FaustSignaling` interface lets an application that already has its own
+server (WebSocket, Firebase, Matrix…) use it for signaling.
 
-### 16 ter.8. Travail à faire, dans l'ordre
+### 16 ter.8. Work to do, in order
 
-1. *(Fait.)* **CORS et origine du relais** dans `faust-remote-server`, avec une liste
-   d'origines autorisées en option (`-allow-origin`), et `X-Accel-Buffering`
-   sur le flux d'évènements. Petit, et testable comme le reste du serveur.
-2. *(Fait.)* **Adresse de signalisation et serveurs ICE configurables** dans les pages
-   générées et le générateur (`-signal`, `-stun`), la télécommande ne suivant
-   que des serveurs connus.
-3. **Protection contre les abus** : quotas par adresse, expiration des
-   salles, débits.
-4. **Documentation de déploiement** : TLS, mandataire, supervision.
-5. **Déploiement** d'un service (option A) ou non : décision du mainteneur.
-6. **Intégration dans l'IDE**, une fois le service disponible.
-7. **TURN**, seulement si les mesures sur réseaux mobiles montrent que le
-   relais ne suffit pas.
+1. *(Done.)* **CORS and relay origin** in `faust-remote-server`, with an
+   optional list of allowed origins (`-allow-origin`), and `X-Accel-Buffering`
+   on the event stream. Small, and testable like the rest of the server.
+2. *(Done.)* **Configurable signaling address and ICE servers** in the
+   generated pages and the generator (`-signal`, `-stun`), with the remote
+   control following only known servers.
+3. **Abuse protection**: per-address quotas, room expiry, rates.
+4. **Deployment documentation**: TLS, reverse proxy, monitoring.
+5. **Deploying** a service (option A) or not: the maintainer's decision.
+6. **Integration into the IDE**, once the service is available.
+7. **TURN**, only if measurements on mobile networks show that the relay is
+   not enough.
 
-Les points 1 et 2 sont utiles même sans usage sur Internet : un serveur de
-signalisation séparé de la page hôte sert aussi sur un réseau local.
+Points 1 and 2 are useful even without Internet use: a signaling server
+separate from the host page is also useful on a local network.
 
-Ils sont faits. Côté serveur, `createFaustRemoteServer({ allowOrigins })` et
-l'option `-allow-origin` (répétable) : réponse aux requêtes préalables
-`OPTIONS` sans jeton, en-têtes CORS pour les origines de la liste, refus (403)
-de toute autre origine étrangère, relais compris (l'en-tête `Origin` de la
-demande de WebSocket est vérifié) ; les requêtes sans `Origin` et celles de
-l'origine du serveur sont servies comme avant ; `X-Accel-Buffering: no` sur le
-flux d'évènements. Côté pages, `faust2wasm -remote -signal <url> -stun <url>`
-écrit l'adresse de signalisation et les serveurs STUN dans la page hôte et la
-télécommande ; le lien porte `&signal=…`, que la télécommande ne suit que s'il
-désigne le serveur pour lequel elle a été construite ou celui de sa propre
-page. Vérifié dans Chromium avec les pages sur une origine et la
-signalisation sur une autre : connexion WebRTC et relais acceptés pour
-l'origine autorisée, requête préalable refusée pour une autre (la page hôte
-le dit, en nommant l'option), lien vers un serveur inconnu refusé sans
-qu'aucune requête ne lui soit envoyée.
+They are done. On the server side, `createFaustRemoteServer({ allowOrigins })`
+and the `-allow-origin` option (repeatable): answers to `OPTIONS` preflight
+requests without a token, CORS headers for the origins in the list, refusal
+(403) of any other foreign origin, the relay included (the `Origin` header of
+the WebSocket request is checked); requests without `Origin` and those from
+the server's own origin are served as before; `X-Accel-Buffering: no` on the
+event stream. On the page side, `faust2wasm -remote -signal <url> -stun <url>`
+writes the signaling address and the STUN servers into the host page and the
+remote control; the link carries `&signal=…`, which the remote control follows
+only if it designates the server it was built for or the one serving its own
+page. Verified in Chromium with the pages on one origin and signaling on
+another: WebRTC connection and relay accepted for the allowed origin,
+preflight request refused for another one (the host page says so, naming the
+option), link to an unknown server refused without any request being sent to
+it.
 
-## 17. Plan de mise en œuvre
+## 17. Implementation plan
 
-| Phase | Contenu | Critère de fin |
+| Phase | Content | Completion criterion |
 | :-- | :-- | :-- |
-| P0 — protocole | `protocol.ts`, `FaustRemoteHost`, `FaustRemoteDsp`, transport en mémoire, tests unitaires | `npm test` vert, rendu piloté à distance dans `remote-render.test.mjs` |
-| P1 — WebRTC | `createRTCTransport`, serveur de signalisation, pages `test/web/remote/` | téléphone réel pilotant un hôte sur le réseau local ; premières mesures de latence |
-| P2 — générateur | `-remote` dans `faust2wasm-ts`, PWA télécommande, page hôte, appairage | `npm run test-cli` vert avec les nouveaux fichiers attendus |
-| P3 — extensions | mode horodaté, politiques exclusive et répartie, notes par télécommande, repli WebSocket | mesures de gigue avant et après, documentation |
+| P0 — protocol | `protocol.ts`, `FaustRemoteHost`, `FaustRemoteDsp`, in-memory transport, unit tests | `npm test` green, remotely controlled rendering in `remote-render.test.mjs` |
+| P1 — WebRTC | `createRTCTransport`, signaling server, `test/web/remote/` pages | a real phone controlling a host on the local network; first latency measurements |
+| P2 — generator | `-remote` in `faust2wasm-ts`, remote control PWA, host page, pairing | `npm run test-cli` green with the new expected files |
+| P3 — extensions | timed mode, exclusive and partitioned policies, per-remote-control notes, WebSocket fallback | jitter measurements before and after, documentation |
 
-P0 ne dépend d'aucun choix de réseau ni de signalisation et fixe l'essentiel :
-le protocole et sa validation. C'est par là qu'il faut commencer ; les questions
-Q1 et Q2 doivent être tranchées avant sa fin, les autres peuvent attendre P2.
+P0 depends on no network or signaling choice and settles the essentials: the
+protocol and its validation. That is where to start; questions Q1 and Q2 must
+be decided before it ends, the others can wait until P2.
 
 [@ntp]: Mills, D., Martin, J., Burbank, J., Kasch, W. (2010). *Network Time Protocol Version 4: Protocol and Algorithms Specification*. RFC 5905, IETF.
 [@cristian]: Cristian, F. (1989). *Probabilistic clock synchronization*. Distributed Computing 3(3), 146-158.
