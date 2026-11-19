@@ -1019,7 +1019,7 @@ Q7
 
 ## 16 bis. État de la mise en œuvre
 
-P0 et P1 sont réalisées sur la branche `remote-control`.
+P0, P1 et P2 sont réalisées sur la branche `remote-control`.
 
 P0
 :   `src/remote/` : protocole, `FaustRemoteHost`, `FaustRemoteDsp`, transport
@@ -1048,12 +1048,43 @@ P1
   `createFaustUI` montre l'état de l'hôte et non les valeurs `init`.
 - **Mesure** : `FaustRemoteDsp` émet un évènement `rtt` à chaque aller-retour.
 
+P2
+:   `faust2wasm-ts foo.dsp out -remote` (`copyWebRemoteAssets`, modèles dans
+    `assets/remote/`). Test `test/cli/remote-app.test.mjs`, et le mode
+    `remote` dans la matrice de `faust2wasm-modes.test.mjs`.
+
+Disposition produite, différente de la section 14.3 : la page hôte est à la
+racine de `out/` (à côté de `dsp-module.wasm`, comme l'application autonome)
+et la PWA télécommande dans `out/remote/`, qui réutilise `../create-node.js`,
+`../faust-ui/` et `../faustwasm-remote/` (le bundle `dist/remote`). On sert
+`out/` avec `faust-remote-server-ts`. Points notables :
+
+- La PWA télécommande a son propre service worker : celui des PWA
+  existantes met en cache toute réponse GET avant de la rendre, ce qui
+  bloquerait indéfiniment le flux de signalisation. Le sien ne répond que
+  pour ses fichiers et laisse passer `/signal/`.
+- La session (salle, jeton) est gardée dans `localStorage` des deux côtés :
+  l'hôte la retrouve au rechargement (bouton « New session » pour en changer,
+  `FaustRemoteHost.setToken`), et la PWA installée, qui démarre sans le
+  fragment du lien, retrouve son hôte. Le fragment est retiré de la barre
+  d'adresse dès qu'il est lu.
+- Masquée, la télécommande dit au revoir (l'hôte relâche ce qu'elle tenait) ;
+  visible de nouveau, elle se reconnecte ; une connexion perdue est retentée.
+- Pas de code QR (Q3 toujours ouverte) : l'hôte affiche le lien.
+- Une télécommande peut se connecter avant que l'audio de l'hôte soit
+  activé ; ses écritures sont appliquées dès que l'`AudioContext` tourne.
+
 Vérifié dans un navigateur (Chromium intégré, deux onglets en localhost) :
 connexion par le serveur, paramètres et bouton appliqués sur l'hôte, bargraph
 de retour, accéléromètre simulé appliqué puis synchronisé, 8 connexions de suite
 ouvertes en 13 à 15 ms, aller-retour médian de 1,2 ms en boucle locale. La
 toute première tentative a expiré sans cause identifiée ; non reproduite
-ensuite. **Non vérifié : un vrai téléphone sur le Wi-Fi**, donc ni HTTPS avec
+ensuite. Une application générée par `-remote` a été vérifiée de la même façon
+(curseur déplacé sur la télécommande et appliqué sur l'hôte, aucun `.wasm`
+chargé côté télécommande, déconnexion quand la page est masquée et
+reconnexion quand elle redevient visible). Le service worker n'a pas pu y être
+vérifié : ce navigateur intégré refuse tout enregistrement de service worker ;
+il est testé sous Node. **Non vérifié : un vrai téléphone sur le Wi-Fi**, donc ni HTTPS avec
 certificat, ni capteurs réels, ni latence radio.
 
 Limite constatée, hors de cette couche : `getParamValue` d'un nœud AudioWorklet

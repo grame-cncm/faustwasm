@@ -224,6 +224,14 @@ export class FaustRemoteHost extends EventTarget {
 
     /** Take a remote control on a connection that is already open. */
     /**
+     * Change the token a remote control must give in `hello`, for a new
+     * session. Remote controls already connected stay connected.
+     */
+    setToken(token: string | undefined) {
+        this.#options.token = token;
+    }
+
+    /**
      * Answer the WebRTC offers of remote controls arriving through a
      * signaling channel, and accept each connection that opens. Stops on
      * `close()`.

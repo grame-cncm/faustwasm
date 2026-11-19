@@ -329,6 +329,13 @@ const MUTANTS = [
         from: 'if (file !== base && !file.startsWith(base + path.sep))',
         to: 'if (false)',
         tests: 'test/unit/remote-server.test.mjs'
+    },
+    {
+        what: 'the remote control service worker intercepts the signaling stream',
+        file: 'assets/remote/remote-service-worker.js',
+        from: 'if (event.request.method !== "GET" || !cached.has(url.href)) return;',
+        to: 'if (event.request.method !== "GET") return;',
+        tests: 'test/cli/remote-app.test.mjs'
     }
 ];
 

@@ -1,5 +1,5 @@
 /**
- * The four output modes of `faust2wasm.js`.
+ * The output modes of `faust2wasm.js`.
  *
  * A mode is a file set plus a set of substitutions: the templates in
  * `assets/standalone/` are copied through `cpSyncModify`, which rewrites

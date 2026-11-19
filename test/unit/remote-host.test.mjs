@@ -160,6 +160,21 @@ test('a wrong token is refused, and the connection closed', async () => {
     assert.equal(dsp.state, 'open');
 });
 
+test('a new token turns away newcomers with the old one, and keeps those connected', async () => {
+    const { host } = makeHost({ token: 'old' });
+    const { dsp } = await connect(host, { id: 'early', token: 'old' });
+    host.setToken('new');
+    const [hostEnd, remoteEnd] = createLoopbackTransports();
+    host.accept(hostEnd);
+    await assert.rejects(
+        FaustRemoteDsp.connect(remoteEnd, { token: 'old', pingInterval: 0 }),
+        (error) => error instanceof FaustRemoteError && error.code === 'token'
+    );
+    await connect(host, { id: 'late', token: 'new' });
+    assert.equal(dsp.state, 'open');
+    assert.deepEqual(host.clients.map((client) => client.id), ['early', 'late']);
+});
+
 test('another protocol version is refused', async () => {
     const { host } = makeHost();
     const raw = rawClient(host);

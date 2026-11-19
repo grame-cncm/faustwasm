@@ -1,7 +1,7 @@
 /**
  * What each `faust2wasm.js` mode is supposed to leave on disk.
  *
- * The four modes differ only by which template assets get copied next to the
+ * The modes differ only by which template assets get copied next to the
  * compiled wasm, and that copying is a chain of `cpSync` calls that nothing
  * verified. Pinning the exact file set here turns "the PWA lost its service
  * worker" into a failing test rather than a bug report from someone whose
@@ -47,8 +47,28 @@ const MODE_ASSETS = {
         'index.js',
         'manifest.json',
         'service-worker.js'
+    ],
+    // `-remote`: the host page at the top, the remote control PWA in
+    // `remote/`, and the remote control bundle both use.
+    remote: [
+        'create-node.js',
+        'faust-ui/',
+        'faustwasm/',
+        'faustwasm-remote/',
+        'index.html',
+        'index.js',
+        'remote/'
     ]
 };
+
+/** What `-remote` writes in `remote/`: the PWA, without any DSP file. */
+export const REMOTE_PWA_FILES = [
+    'icon.png',
+    'index.html',
+    'index.js',
+    'manifest.json',
+    'service-worker.js'
+];
 
 /** The modes, as the flags that select them (`template` is the no-flag one). */
 export const MODES = Object.keys(MODE_ASSETS);

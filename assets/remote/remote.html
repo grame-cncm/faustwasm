@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAUST_DSP_NAME (remote)</title>
+    <link rel="manifest" href="./manifest.json">
+    <style>
+        body {
+            color: #b0b0b0;
+            background-color: #1f1f1f;
+            font-family: sans-serif;
+            margin: 0;
+            position: absolute;
+            inset: 0;
+            display: flex;
+        }
+
+        main {
+            margin: 12px;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 100%;
+            gap: 8px;
+        }
+
+        #status {
+            font-size: 0.9em;
+        }
+
+        #error {
+            color: #f28b82;
+            white-space: pre-wrap;
+        }
+
+        #button-connect {
+            padding: 10px;
+        }
+
+        #div-faust-ui {
+            flex: 1 1 auto;
+            display: flex;
+            position: relative;
+            flex-direction: column;
+            color: black;
+        }
+    </style>
+    <link rel="stylesheet" href="../faust-ui/index.css">
+</head>
+
+<body>
+    <main>
+        <span>
+            <button id="button-connect">Connect</button>
+            <span id="status">not connected</span>
+        </span>
+        <div id="error"></div>
+        <div id="div-faust-ui"></div>
+    </main>
+    <script type="module" src="./index.js"></script>
+</body>
+
+</html>

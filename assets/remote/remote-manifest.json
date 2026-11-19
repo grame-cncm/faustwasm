@@ -1,0 +1,18 @@
+{
+  "name": "Faust FAUST_DSP_NAME remote",
+  "short_name": "FAUST_DSP_NAME",
+  "start_url": "./index.html",
+  "scope": "./",
+  "description": "Remote control for FAUST_DSP_NAME",
+  "display": "standalone",
+  "background_color": "#1f1f1f",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "390x390",
+      "type": "image/png"
+    }
+  ]
+}

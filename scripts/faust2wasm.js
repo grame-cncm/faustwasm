@@ -2,14 +2,16 @@
 //@ts-check
 import * as process from "process";
 import faust2wasmFiles from "../src/faust2wasmFiles.js";
-import { copyWebStandaloneAssets, copyWebPWAAssets, copyWebTemplateAssets } from "../src/copyWebStandaloneAssets.js";
+import { copyWebStandaloneAssets, copyWebPWAAssets, copyWebTemplateAssets, copyWebRemoteAssets } from "../src/copyWebStandaloneAssets.js";
 
 const argv = process.argv.slice(2);
 
 if (argv.includes("-help") || argv.includes("-h")) {
     console.log(`
-faust2wasm.js <file.dsp> <outputDir> [-poly] [-standalone] [-pwa] [-no-template]
+faust2wasm.js <file.dsp> <outputDir> [-poly] [-standalone] [-pwa] [-remote] [-no-template]
 Generates WebAssembly and metadata JSON files of a given Faust DSP.
+-remote writes a host page and, in remote/, a remote control PWA that drives
+it over WebRTC; serve <outputDir> with faust-remote-server-ts.
 `);
     process.exit();
 }
@@ -23,6 +25,7 @@ const takeFlag = (flag) => {
 const poly = takeFlag("-poly");
 const standalone = takeFlag("-standalone");
 const pwa = takeFlag("-pwa");
+const remote = takeFlag("-remote");
 const noTemplate = takeFlag("-no-template");
 
 // Allow Faust flags (like -I) anywhere while keeping the first two positionals as input/output.
@@ -55,6 +58,9 @@ const dspName = fileName.replace(/\.dsp$/, '');
         copyWebStandaloneAssets(outputDir, dspName, poly, !!effectMeta);
     } else if (pwa) {
         copyWebPWAAssets(outputDir, dspName, poly, !!effectMeta);
+    } else if (remote) {
+        copyWebRemoteAssets(outputDir, dspName, poly, !!effectMeta);
+        console.log(`Serve it with: npx faust-remote-server-ts ${outputDir} [-cert <file.pem> -key <file.pem>]`);
     } else if (!noTemplate) {
         copyWebTemplateAssets(outputDir, dspName, poly, !!effectMeta);
     }

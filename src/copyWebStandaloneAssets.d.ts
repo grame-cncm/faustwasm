@@ -17,4 +17,16 @@ declare const copyWebTemplateAssets: (
     effect?: boolean
 ) => void;
 
-export { copyWebStandaloneAssets, copyWebPWAAssets, copyWebTemplateAssets };
+declare const copyWebRemoteAssets: (
+    outputDir: string,
+    dspName: string,
+    poly?: boolean,
+    effect?: boolean
+) => void;
+
+export {
+    copyWebStandaloneAssets,
+    copyWebPWAAssets,
+    copyWebTemplateAssets,
+    copyWebRemoteAssets
+};
