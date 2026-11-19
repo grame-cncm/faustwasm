@@ -145,6 +145,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
     #outputs: string[] = [];
     #outValues: number[] = [];
     #voices = 0;
+    #group: string | undefined;
 
     #seq = 0;
     readonly #lastSeq = new Map<number, number>();
@@ -446,6 +447,11 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         return k === -1 ? 0 : this.#outValues[k];
     }
 
+    /** The group of controls the host gave this remote control, if it gives groups. */
+    get group() {
+        return this.#group;
+    }
+
     /** Voices sounding on the host, for a polyphonic DSP. */
     getNumActiveVoices() {
         return this.#voices;
@@ -641,6 +647,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
         this.#outputs = welcome.outputs;
         this.#outValues = [...welcome.outputValues];
         this.#voices = welcome.voices;
+        this.#group = welcome.group;
         this.#delay = welcome.delay ?? 0;
         this.#setState('open');
         const ping = () => {

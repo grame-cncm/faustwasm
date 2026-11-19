@@ -3,7 +3,12 @@ import type {
     InputParamHandler,
     OutputParamHandler
 } from '../FaustWebAudioDsp';
-import type { FaustUIInputItem } from '../types';
+import FaustSensors, { Axis } from '../FaustSensors';
+import type {
+    FaustUIDescriptor,
+    FaustUIInputItem,
+    FaustUIItem
+} from '../types';
 import {
     PROTOCOL_VERSION,
     parseClientMessage,
@@ -55,6 +60,8 @@ export type FaustRemoteHostTarget = Pick<
 export interface FaustRemoteClientInfo {
     readonly id: string;
     readonly mode: FaustRemoteMode;
+    /** The group of controls it was given, with `assign: 'groups'`. */
+    readonly group?: string;
 }
 
 export interface FaustRemoteHostOptions {
@@ -68,8 +75,16 @@ export interface FaustRemoteHostOptions {
      * Default `shared`.
      */
     policy?: 'shared' | 'exclusive';
-    /** Which addresses a given remote control may write. Default: all. */
-    assign?: (client: FaustRemoteClientInfo) => (path: string) => boolean;
+    /**
+     * Which addresses a given remote control may write. Default: all.
+     * `'groups'`: each remote control is given the next top-level group of
+     * the DSP that no other one holds, and may write only the controls in
+     * it; a remote control that finds none free may write nothing. A group
+     * is freed when its remote control leaves.
+     */
+    assign?:
+        | ((client: FaustRemoteClientInfo) => (path: string) => boolean)
+        | 'groups';
     /** Which addresses remote controls may write at all. Default: all. */
     expose?: (path: string) => boolean;
     /** Default 16. */
@@ -92,6 +107,31 @@ export interface FaustRemoteHostOptions {
      * readings, which a node cannot schedule, by a timer, to a few ms.
      */
     playoutDelay?: number | null;
+    /**
+     * What the sensors of several remote controls do to the controls with
+     * `[acc:...]` and `[gyr:...]` metadata. `shared` (default): every
+     * reading drives every one of them, the latest wins. `mean`: they follow
+     * the mean of the remote controls' latest readings (a circular mean for
+     * the compass and tilt angles of the gyroscope). `assigned`: each remote
+     * control's readings drive only the ones it may write (see `assign`),
+     * mapped by the host with the DSP's own curves.
+     */
+    sensorPolicy?: 'shared' | 'mean' | 'assigned';
+    /** Milliseconds a reading counts in the `mean`. Default 1000. */
+    sensorWindow?: number;
+}
+
+/** A control a sensor axis drives, with the DSP's curve for it. */
+interface SensorTarget {
+    readonly path: string;
+    readonly axis: Axis;
+    readonly convert: (value: number) => number;
+}
+
+/** A top-level group of the DSP, for `assign: 'groups'`. */
+interface Group {
+    readonly label: string;
+    readonly paths: ReadonlySet<string>;
 }
 
 /** `stream` bytes queued past which a remote control is skipped for a tick. */
@@ -117,6 +157,11 @@ interface Client {
     lastScheduled: number;
     /** Sensor readings waiting for their time. */
     readonly timers: Set<ReturnType<typeof setTimeout>>;
+    /** Its latest readings, sign corrected, for the `mean`. */
+    acc: { x: number; y: number; z: number; at: number } | null;
+    gyr: { alpha: number; beta: number; gamma: number; at: number } | null;
+    /** The group it holds, with `assign: 'groups'`. */
+    group: Group | null;
     /** Bargraph values as this remote control last received them. */
     outSent: Float64Array;
     lastMessageAt: number;
@@ -162,6 +207,11 @@ export class FaustRemoteHost extends EventTarget {
             FaustRemoteHostOptions,
             'token' | 'assign' | 'expose' | 'playoutDelay'
         >;
+    /** Controls driven by each sensor, for the `assigned` policy. */
+    readonly #accTargets: SensorTarget[] = [];
+    readonly #gyrTargets: SensorTarget[] = [];
+    /** Top-level groups, for `assign: 'groups'`. */
+    readonly #groups: Group[];
     readonly #session = randomId(8);
     readonly #json: string;
     #hash: Promise<string> | null = null;
@@ -210,6 +260,8 @@ export class FaustRemoteHost extends EventTarget {
             livenessTimeout: 3000,
             maxMessageRate: 200,
             echoWindow: 500,
+            sensorPolicy: 'shared',
+            sensorWindow: 1000,
             ...options
         };
         this.#json = node.getJSON();
@@ -224,6 +276,16 @@ export class FaustRemoteHost extends EventTarget {
         // controls' to drive
         this.#remoteAcc = ui.hasAcc;
         this.#remoteGyr = ui.hasGyr;
+        for (const item of ui.inputs) {
+            if (isRemoteOff(item)) continue;
+            for (const meta of item.meta ?? []) {
+                if (meta.acc)
+                    this.#accTargets.push(sensorTarget(item, meta.acc));
+                if (meta.gyr)
+                    this.#gyrTargets.push(sensorTarget(item, meta.gyr));
+            }
+        }
+        this.#groups = topLevelGroups(node.getMeta().ui);
         this.#outputs = ui.outputs.map((item) => item.address);
         this.#outputs.forEach((path, k) => this.#outputIndex.set(path, k));
         this.#outputThreshold = ui.outputs.map((item) => {
@@ -338,6 +400,9 @@ export class FaustRemoteHost extends EventTarget {
             notes: new Set(),
             lastScheduled: -Infinity,
             timers: new Set(),
+            acc: null,
+            gyr: null,
+            group: null,
             outSent: new Float64Array(this.#outputs.length),
             lastMessageAt: now(),
             windowStart: now(),
@@ -440,12 +505,21 @@ export class FaustRemoteHost extends EventTarget {
         if (this.#open().length >= this.#options.maxClients)
             return reject('full', 'too many remote controls');
 
-        const info: FaustRemoteClientInfo = {
+        let info: FaustRemoteClientInfo = {
             id: hello.id,
             mode: this.#options.mode === 'uni' ? 'uni' : hello.mode
         };
         client.info = info;
-        client.assigned = this.#options.assign?.(info) ?? (() => true);
+        if (this.#options.assign === 'groups') {
+            const held = new Set(this.#open().map((other) => other.group));
+            const group =
+                this.#groups.find((candidate) => !held.has(candidate)) ?? null;
+            client.group = group;
+            client.info = info = { ...info, group: group?.label };
+            client.assigned = (path) => group?.paths.has(path) ?? false;
+        } else {
+            client.assigned = this.#options.assign?.(info) ?? (() => true);
+        }
         client.outSent = Float64Array.from(this.#outValues);
         client.open = true;
         this.#send(client, {
@@ -464,7 +538,8 @@ export class FaustRemoteHost extends EventTarget {
             rates: { out: this.#options.outputRate },
             delay: this.#timed()
                 ? this.#options.playoutDelay! * 1000
-                : undefined
+                : undefined,
+            group: client.group?.label
         });
         this.dispatchEvent(new CustomEvent('join', { detail: info }));
     }
@@ -484,7 +559,16 @@ export class FaustRemoteHost extends EventTarget {
                     });
                     return;
                 }
-                if (!this.#mayWrite(client, item.address)) return;
+                if (!this.#mayWrite(client, item.address)) {
+                    // Refused: the real value goes back, so the writer's
+                    // control does not stay on a value nothing applied
+                    this.#send(client, {
+                        type: 'sync',
+                        i: message.i,
+                        value: finite(this.#node.getParamValue(item.address))
+                    });
+                    return;
+                }
                 if (!this.#fresh(client, `p${message.i}`, message.seq)) return;
                 const [min, max] = inputRange(item);
                 const value = Math.min(max, Math.max(min, message.value));
@@ -503,31 +587,60 @@ export class FaustRemoteHost extends EventTarget {
                 return;
             }
             case 'acc': {
-                if (
-                    !this.#node.hasAccInput ||
-                    !this.#remoteAcc ||
-                    !this.#mayDrive(client)
-                )
-                    return;
+                if (!this.#remoteAcc || !this.#mayDrive(client)) return;
                 if (!this.#fresh(client, 'acc', message.seq)) return;
-                const { x, y, z, invert } = message;
-                this.#later(client, message.time, () =>
-                    this.#node.propagateAcc({ x, y, z }, invert)
-                );
+                const policy = this.#options.sensorPolicy;
+                if (policy !== 'assigned' && !this.#node.hasAccInput) return;
+                // Android reports the opposite sign: corrected here, once,
+                // so that readings of different phones can be combined
+                const sign = message.invert ? -1 : 1;
+                const x = sign * message.x;
+                const y = sign * message.y;
+                const z = sign * message.z;
+                if (policy === 'assigned') {
+                    this.#drive(
+                        client,
+                        this.#accTargets,
+                        [x, y, z],
+                        message.time
+                    );
+                } else if (policy === 'mean') {
+                    client.acc = { x, y, z, at: t };
+                    const mean = this.#meanAcc(t);
+                    this.#later(client, message.time, () =>
+                        this.#node.propagateAcc(mean, false)
+                    );
+                } else {
+                    this.#later(client, message.time, () =>
+                        this.#node.propagateAcc({ x, y, z }, false)
+                    );
+                }
                 return;
             }
             case 'gyr': {
-                if (
-                    !this.#node.hasGyrInput ||
-                    !this.#remoteGyr ||
-                    !this.#mayDrive(client)
-                )
-                    return;
+                if (!this.#remoteGyr || !this.#mayDrive(client)) return;
                 if (!this.#fresh(client, 'gyr', message.seq)) return;
+                const policy = this.#options.sensorPolicy;
+                if (policy !== 'assigned' && !this.#node.hasGyrInput) return;
                 const { alpha, beta, gamma } = message;
-                this.#later(client, message.time, () =>
-                    this.#node.propagateGyr({ alpha, beta, gamma })
-                );
+                if (policy === 'assigned') {
+                    this.#drive(
+                        client,
+                        this.#gyrTargets,
+                        [alpha, beta, gamma],
+                        message.time
+                    );
+                } else if (policy === 'mean') {
+                    client.gyr = { alpha, beta, gamma, at: t };
+                    const mean = this.#meanGyr(t);
+                    this.#later(client, message.time, () =>
+                        this.#node.propagateGyr(mean)
+                    );
+                } else {
+                    this.#later(client, message.time, () =>
+                        this.#node.propagateGyr({ alpha, beta, gamma })
+                    );
+                }
                 return;
             }
             case 'midi': {
@@ -603,6 +716,68 @@ export class FaustRemoteHost extends EventTarget {
             (at - this.#node.context!.currentTime) * 1000
         );
         client.timers.add(timer);
+    }
+
+    /**
+     * The `assigned` policy: map one remote control's reading onto the
+     * controls of that sensor it may write, with the DSP's curves, and write
+     * them. Not recorded as its writes, so that the echo reaches it: its
+     * sliders follow its gesture, as under the other policies.
+     */
+    #drive(
+        client: Client,
+        targets: SensorTarget[],
+        axes: [number, number, number],
+        time: number | undefined
+    ) {
+        for (const target of targets) {
+            if (!this.#mayWrite(client, target.path)) continue;
+            this.#node.setParamValue(
+                target.path,
+                target.convert(axes[target.axis]),
+                this.#when(client, time)
+            );
+        }
+    }
+
+    /** The mean of the accelerometer readings of the last `sensorWindow` ms. */
+    #meanAcc(t: number) {
+        const recent = this.#open()
+            .map((client) => client.acc)
+            .filter(
+                (acc): acc is NonNullable<Client['acc']> =>
+                    acc !== null && t - acc.at <= this.#options.sensorWindow
+            );
+        const mean = (key: 'x' | 'y' | 'z') =>
+            recent.reduce((sum, acc) => sum + acc[key], 0) / recent.length;
+        return { x: mean('x'), y: mean('y'), z: mean('z') };
+    }
+
+    /**
+     * The mean of the gyroscope readings of the last `sensorWindow` ms:
+     * circular for alpha (compass, 0 to 360) and beta (-180 to 180), where
+     * 350 and 10 average to 0, not 180; plain for gamma (-90 to 90).
+     */
+    #meanGyr(t: number) {
+        const recent = this.#open()
+            .map((client) => client.gyr)
+            .filter(
+                (gyr): gyr is NonNullable<Client['gyr']> =>
+                    gyr !== null && t - gyr.at <= this.#options.sensorWindow
+            );
+        const circular = (key: 'alpha' | 'beta') => {
+            let sin = 0;
+            let cos = 0;
+            for (const gyr of recent) {
+                sin += Math.sin((gyr[key] * Math.PI) / 180);
+                cos += Math.cos((gyr[key] * Math.PI) / 180);
+            }
+            return (Math.atan2(sin, cos) * 180) / Math.PI;
+        };
+        const alpha = (circular('alpha') + 360) % 360;
+        const gamma =
+            recent.reduce((sum, gyr) => sum + gyr.gamma, 0) / recent.length;
+        return { alpha, beta: circular('beta'), gamma };
     }
 
     /** `exclusive`: only the first remote control to have joined drives. */
@@ -838,6 +1013,50 @@ export class FaustRemoteHost extends EventTarget {
 }
 
 const finite = (value: number) => (Number.isFinite(value) ? value : 0);
+
+/**
+ * The control a sensor axis drives, from its `[acc:...]` or `[gyr:...]`
+ * metadata: "axis curve amin amid amax", read as the DSP reads it, and the
+ * same curve, from `FaustSensors` (internal to the package, bundled here,
+ * not exported).
+ */
+const sensorTarget = (item: FaustUIInputItem, spec: string): SensorTarget => {
+    const [axis, curve, amin, amid, amax] = spec.trim().split(' ').map(Number);
+    const converter = FaustSensors.buildHandler(
+        FaustSensors.convertToCurve(curve),
+        amin,
+        amid,
+        amax,
+        item.min ?? 0,
+        item.init ?? 0,
+        item.max ?? 1
+    );
+    return {
+        path: item.address,
+        axis: FaustSensors.convertToAxis(axis),
+        convert: (value) => converter.uiToFaust(value)
+    };
+};
+
+/**
+ * The groups directly under the DSP's top group, with the addresses of the
+ * controls each holds, however deep: what `assign: 'groups'` hands out.
+ */
+const topLevelGroups = (ui: FaustUIDescriptor): Group[] => {
+    const paths = (item: FaustUIItem): string[] =>
+        'items' in item ? item.items.flatMap(paths) : [item.address];
+    return ui.flatMap((root) =>
+        root.items
+            .filter(
+                (item): item is Extract<FaustUIItem, { items: unknown }> =>
+                    'items' in item
+            )
+            .map((group) => ({
+                label: group.label,
+                paths: new Set(paths(group))
+            }))
+    );
+};
 
 /** Keep the set of notes a remote control holds in step with its MIDI. */
 const trackNotes = (notes: Set<number>, data: number[]) => {

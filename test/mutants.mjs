@@ -385,6 +385,20 @@ const MUTANTS = [
         from: 'if (this.#remoteOff.has(message.i)) {',
         to: 'if (false) {',
         tests: 'test/unit/remote-host.test.mjs'
+    },
+    {
+        what: 'assign: groups gives a group already held to the next phone',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: 'this.#groups.find((candidate) => !held.has(candidate)) ?? null;',
+        to: 'this.#groups.find(() => true) ?? null;',
+        tests: 'test/unit/remote-sensors.test.mjs'
+    },
+    {
+        what: 'the mean of gyroscope compass angles is a plain mean',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: "return { alpha, beta: circular('beta'), gamma };",
+        to: "return { alpha: recent.reduce((sum, gyr) => sum + gyr.alpha, 0) / recent.length, beta: circular('beta'), gamma };",
+        tests: 'test/unit/remote-sensors.test.mjs'
     }
 ];
 

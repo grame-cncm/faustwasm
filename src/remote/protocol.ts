@@ -132,6 +132,8 @@ export interface FaustRemoteWelcomeMessage {
      * control then stamps its messages with `time`.
      */
     delay?: number;
+    /** The group of controls the host gave this remote control (`assign: 'groups'`). */
+    group?: string;
 }
 
 export interface FaustRemoteRejectMessage {
@@ -311,7 +313,8 @@ export const parseHostMessage = (
                 typeof m.rates === 'object' &&
                 m.rates !== null &&
                 isNumber((m.rates as Fields).out) &&
-                isOptional(m.delay, isNumber)
+                isOptional(m.delay, isNumber) &&
+                isOptional(m.group, isString)
                 ? (m as unknown as FaustRemoteWelcomeMessage)
                 : null;
         case 'reject':

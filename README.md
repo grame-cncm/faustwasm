@@ -154,6 +154,17 @@ Variants:
 - **Timed mode**: open the host as [http://localhost:8443/?delay=40](http://localhost:8443/?delay=40). Values from the remote controls are then applied 40 ms after they were sent, as regularly as they were sent, instead of when the network delivers them.
 - **Relay fallback**: in the remote control tab's console, run `window.RTCPeerConnection = undefined` before clicking **Connect**. The status then reads `connected (relay)`: the messages go through the server.
 
+Several phones can control the host at once. By default they share every control, and every phone's sensors drive the same `[acc:]`/`[gyr:]` controls (the latest reading wins). Options in the host page's URL change that:
+
+- `?assign=groups`: each phone gets a top-level group of the DSP of its own (one per player, such as `hgroup("p1", ...)` and `hgroup("p2", ...)`) and may change only that; the remote control shows its group.
+- `?sensors=assigned`: each phone's sensors drive only the controls it may change (with `assign=groups`, its group's), mapped with the DSP's own curves.
+- `?sensors=mean`: the sensor controls follow the mean of the phones' readings: the room tilts together.
+
+```faust
+player(i) = hgroup("p%i", os.osc(220 * i) * button("gate") * hslider("tilt [acc: 0 0 -10 0 10]", 0.5, 0, 1, 0.001));
+process = player(1) + player(2) : *(0.2);   // open the host with ?assign=groups&sensors=assigned
+```
+
 The DSP decides what remote controls may change: a control with `[remote:off]` in its label is shown on the remote controls and follows the host's value, but cannot be changed from them (the host refuses the write and sends the value back). To hide it from the remote controls as well, add `[hidden:1]`, which faust-ui honours:
 
 ```faust

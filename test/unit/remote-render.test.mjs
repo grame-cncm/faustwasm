@@ -214,6 +214,67 @@ process = os.osc(hslider("freq [remote:off]", 440, 20, 3000, 1)) * button("gate"
         host.close();
     });
 
+        test(`two phones drive their own group of ${kind} with the DSP's own curves`, async () => {
+        const DUO = `import("stdfaust.lib");
+player(i) = hgroup("p%i", os.osc(220 * i) * hslider("tilt [acc: 0 0 -10 0 10]", 0.5, 0, 1, 0.001));
+process = player(1) + player(2) : *(0.2);`;
+        const create = async () => {
+            const generator = new FaustMonoDspGenerator();
+            await generator.compile(compiler, 'remoteduo', DUO, '-ftz 2');
+            assert.ok(generator.factory, 'remoteduo has to have compiled');
+            const node = await generator.createNode(
+                audioContext(),
+                'remoteduo',
+                generator.factory,
+                sp,
+                BLOCK
+            );
+            assert.ok(node, 'createNode returned nothing');
+            return node;
+        };
+        const P1 = '/remoteduo/p1/tilt';
+        const P2 = '/remoteduo/p2/tilt';
+
+        // What the node's own mapping makes of each tilt
+        const local = await create();
+        const mapped = (x) => {
+            local.propagateAcc({ x, y: 0, z: 0 }, false);
+            renderNode(local, BLOCK);
+            return local.getParamValue(P1);
+        };
+        const up = mapped(5);
+        const down = mapped(-5);
+        assert.ok(up > 0.5 && down < 0.5, `the curve: ${down}, ${up}`);
+
+        // Two phones, a group each, tilted opposite ways
+        const node = await create();
+        const host = new FaustRemoteHost(node, {
+            outputRate: 1e6,
+            assign: 'groups',
+            sensorPolicy: 'assigned'
+        });
+        const phones = [];
+        for (const id of ['one', 'two']) {
+            const [hostEnd, remoteEnd] = createLoopbackTransports();
+            host.accept(hostEnd);
+            phones.push(
+                await FaustRemoteDsp.connect(remoteEnd, { id, pingInterval: 0, gestureEnd: 0 })
+            );
+        }
+        assert.deepEqual(phones.map((phone) => phone.group), ['p1', 'p2']);
+        phones[0].propagateAcc({ x: 5, y: 0, z: 0 }, false);
+        phones[1].propagateAcc({ x: -5, y: 0, z: 0 }, false);
+        await settle();
+        renderNode(node, BLOCK);
+        const close = (a, b, what) =>
+            assert.ok(Math.abs(a - b) < 1e-6, `${what}: ${a}, the node's own mapping gives ${b}`);
+        close(node.getParamValue(P1), up, 'p1');
+        close(node.getParamValue(P2), down, 'p2');
+
+        for (const phone of phones) phone.close();
+        host.close();
+    });
+
         test(`a note held by a vanished remote control dies away on ${kind}`, async () => {
         const generator = new FaustPolyDspGenerator();
         await generator.compile(compiler, 'remotepoly', INSTRUMENT, '-ftz 2');

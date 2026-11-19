@@ -484,7 +484,7 @@ test('MIDI All Notes Off forgets the notes of its channel', async () => {
 
 // ---------------------------------------------------------------- sensors
 
-test('sensor readings reach the node raw, with the remote device platform', async () => {
+test('sensor readings reach the node with the sign of the remote device', async () => {
     const { host, node } = makeHost();
     const { dsp } = await connect(host);
     dsp.propagateAcc({ x: 1, y: 2, z: 3 }, true);
@@ -493,8 +493,11 @@ test('sensor readings reach the node raw, with the remote device platform', asyn
     dsp.propagateAcc({ x: 4, y: 5, z: 6 }, false);
     dsp.propagateGyr({ alpha: 10, beta: 20, gamma: 30 });
     await settle();
+    // An Android reading (invert) is corrected by the host, once, so that
+    // readings of different phones can be combined; the node gets it with
+    // nothing left to invert, which is the same to the DSP
     assert.deepEqual(node.acc, [
-        [1, 2, 3, true],
+        [-1, -2, -3, false],
         [4, 5, 6, false]
     ]);
     assert.deepEqual(node.gyr, [[10, 20, 30]]);

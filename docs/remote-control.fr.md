@@ -699,9 +699,42 @@ Le nombre de connexions WebRTC qu'une page hôte supporte confortablement est de
 l'ordre de quelques dizaines (coût DTLS et SCTP par pair, et le retour `out`
 multiplié par le nombre de clients) ; il est à mesurer. Au-delà (une salle
 entière), il faut un relais côté serveur qui agrège, et le mode unidirectionnel.
-L'agrégation de capteurs de plusieurs téléphones sur un même paramètre (somme,
-moyenne) est faisable par une fonction de réduction sur l'hôte mais reste hors
-v1.
+Capteurs de plusieurs téléphones (réalisé après P3). Le nœud applique toutes
+les correspondances `[acc:]`/`[gyr:]` en un seul appel à
+`propagateAcc`/`propagateGyr` : il ne peut pas envoyer l'inclinaison d'un
+téléphone à un curseur et celle d'un autre à un autre. L'option `sensorPolicy`
+de l'hôte offre donc trois comportements :
+
+Partagé (`shared`, par défaut)
+:   Chaque lecture pilote tous les contrôles à capteur, par le nœud ; la
+    dernière l'emporte. Les curseurs sautent d'un téléphone à l'autre.
+
+Moyenne (`mean`)
+:   L'hôte garde la dernière lecture de chaque téléphone, signe corrigé
+    (Android donne le signe opposé), et passe au nœud la moyenne de celles des
+    `sensorWindow` dernières ms (1000 par défaut) : la salle s'incline
+    ensemble. Les angles alpha (boussole) et beta du gyroscope ont une moyenne
+    circulaire, pour que 350° et 10° donnent 0° et non 180° ; gamma une
+    moyenne simple.
+
+Attribué (`assigned`)
+:   Chaque téléphone ne pilote que les contrôles à capteur qu'il a le droit
+    d'écrire (`assign`, `expose`, hors `[remote:off]`). L'hôte fait lui-même
+    la correspondance, avec la courbe des métadonnées de chaque contrôle, par
+    le `FaustSensors` du paquet, intégré à `host.js` et toujours pas exporté,
+    puis écrit les valeurs (horodatées s'il y a un délai de lecture). Vérifié
+    sur de vrais nœuds : les valeurs sont celles que donne la correspondance
+    du nœud lui-même.
+
+Avec `assign: 'groups'`, chaque télécommande reçoit le prochain groupe de
+premier niveau du DSP qu'aucune autre ne tient (un par joueur :
+`hgroup("p1", ...)`, `hgroup("p2", ...)`), libéré quand elle part ; une
+télécommande qui n'en trouve plus de libre ne peut rien écrire. Le groupe est
+annoncé dans `welcome` (`group`) et affiché par les pages générées. Toute
+écriture refusée, quelle qu'en soit la raison, reçoit la vraie valeur en
+retour, pour que le curseur d'une télécommande ne reste jamais sur une valeur
+que rien n'a appliquée. Sur la page hôte générée :
+`?assign=groups&sensors=assigned`, ou `?sensors=mean`.
 
 ## 12. Sécurité et robustesse \label{sec:securite}
 

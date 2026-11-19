@@ -701,9 +701,38 @@ order of a few dozen (DTLS and SCTP cost per peer, and the `out` feedback
 multiplied by the number of clients); it remains to be measured. Beyond that
 (a whole audience), a server-side relay that aggregates is needed, along with
 one-way mode.
-Aggregating sensors from several phones onto the same parameter (sum,
-average) is feasible with a reduction function on the host but stays outside
-v1.
+Sensors of several phones (implemented after P3). A node applies every
+`[acc:]`/`[gyr:]` mapping in one `propagateAcc`/`propagateGyr` call: it
+cannot send one phone's tilt to one slider and another phone's to another.
+The host's `sensorPolicy` option therefore offers three behaviours:
+
+Shared (`shared`, default)
+:   Every reading drives every sensor control through the node; the latest
+    wins. The phones' sliders jump from one phone to the next.
+
+Mean (`mean`)
+:   The host keeps each phone's latest reading, sign corrected (Android
+    reports the opposite sign), and passes the node the mean of those of the
+    last `sensorWindow` ms (1000 by default): the room tilts together. The
+    gyroscope's alpha (compass) and beta angles get a circular mean, so that
+    350° and 10° make 0°, not 180°; gamma a plain one.
+
+Assigned (`assigned`)
+:   Each phone drives only the sensor controls it may write (`assign`,
+    `expose`, outside `[remote:off]`). The host maps the reading itself, with
+    the curve of each control's metadata, through the package's own
+    `FaustSensors`, bundled in `host.js` and still not exported, then writes
+    the values (timed when there is a playout delay). Checked on real nodes:
+    the values are those the node's own mapping gives.
+
+With `assign: 'groups'`, each remote control is given the next top-level
+group of the DSP that no other holds (one per player: `hgroup("p1", ...)`,
+`hgroup("p2", ...)`), freed when it leaves; a remote control that finds none
+free may write nothing. The group is announced in `welcome` (`group`) and
+shown by the generated pages. Any refused write, whatever the reason, is
+answered with the real value, so that a remote control's slider never stays
+on a value nothing applied. On the generated host page:
+`?assign=groups&sensors=assigned`, or `?sensors=mean`.
 
 ## 12. Security and robustness \label{sec:securite}
 

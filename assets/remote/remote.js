@@ -130,7 +130,7 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
             $("div-faust-ui").replaceChildren();
             await createFaustUI($("div-faust-ui"), dsp);
             dsp.startSensors();
-            setStatus(`connected (${transport})`);
+            setStatus(`connected (${transport})${dsp.group ? `, group ${dsp.group}` : ""}`);
             $("button-connect").hidden = true;
         } catch (error) {
             setStatus("not connected");
@@ -159,6 +159,9 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     setInterval(() => {
         if (dsp?.state !== "open" || rtts.length === 0) return;
         const sorted = [...rtts].sort((a, b) => a - b);
-        setStatus(`connected (${transport}), round trip ${sorted[Math.floor(sorted.length / 2)].toFixed(1)} ms`);
+        setStatus(
+            `connected (${transport})${dsp.group ? `, group ${dsp.group}` : ""}, ` +
+                `round trip ${sorted[Math.floor(sorted.length / 2)].toFixed(1)} ms`
+        );
     }, 1000);
 })().catch(showError);

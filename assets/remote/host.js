@@ -59,18 +59,28 @@ const showError = (error) => ($("error").textContent = String(error?.message ?? 
     // The local UI first: the host chains the handlers it finds on the node
     await createFaustUI($("div-faust-ui"), faustNode);
 
-    // `?delay=40` on this page's URL: values from the remote controls are
-    // played 40 ms after they were sent, as regularly as they were sent,
-    // instead of when the network delivers them
-    const delay = Number(new URLSearchParams(location.search).get("delay"));
+    // Options, in this page's URL:
+    // - `?delay=40`: values from the remote controls are played 40 ms after
+    //   they were sent, as regularly as they were sent, instead of when the
+    //   network delivers them;
+    // - `?assign=groups`: each remote control gets a top-level group of the
+    //   DSP of its own (one per player), and may change only that;
+    // - `?sensors=mean`: the sensor controls follow the mean of the phones'
+    //   readings; `?sensors=assigned`: each phone's sensors drive only the
+    //   controls it may change (with `assign=groups`, its group's).
+    const query = new URLSearchParams(location.search);
+    const delay = Number(query.get("delay"));
+    const sensors = query.get("sensors");
     const host = new FaustRemoteHost(faustNode, {
-        playoutDelay: delay > 0 ? delay / 1000 : null
+        playoutDelay: delay > 0 ? delay / 1000 : null,
+        assign: query.get("assign") === "groups" ? "groups" : undefined,
+        sensorPolicy: sensors === "mean" || sensors === "assigned" ? sensors : "shared"
     });
     let signaling = null;
     let stopListening = [];
 
     const showClients = () => {
-        const ids = host.clients.map((client) => client.id);
+        const ids = host.clients.map((client) => (client.group ? `${client.id} (${client.group})` : client.id));
         $("clients").textContent = ids.length ? `${ids.length} remote control(s): ${ids.join(", ")}` : "no remote control";
     };
     host.addEventListener("join", showClients);
