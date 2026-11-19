@@ -162,9 +162,12 @@ Phones need HTTPS for their motion sensors and for installing a PWA, so the serv
 
 ```bash
 mkcert -install
-mkcert -cert-file cert.pem -key-file key.pem 192.168.1.20 localhost
-node scripts/faust-remote-server.js /tmp/remote-app -port 8443 -cert cert.pem -key key.pem
+mkdir -p ~/.faust-remote-certs
+mkcert -cert-file ~/.faust-remote-certs/cert.pem -key-file ~/.faust-remote-certs/key.pem 192.168.1.20 localhost
+node scripts/faust-remote-server.js /tmp/remote-app -port 8443 -cert ~/.faust-remote-certs/cert.pem -key ~/.faust-remote-certs/key.pem
 ```
+
+The certificates are made outside the repository on purpose: `key.pem` is a private key, and must never be committed (`.gitignore` ignores `*.pem` and `*.key` in case one lands there anyway).
 
 The phone must trust mkcert's authority, `rootCA.pem` in the folder `mkcert -CAROOT` prints. On iOS, send it to the phone (AirDrop), install the profile, then enable it in Settings > General > About > Certificate Trust Settings. On Android, Settings > Security > Install a certificate > CA certificate.
 
