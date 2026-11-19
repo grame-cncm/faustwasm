@@ -32,6 +32,7 @@ faustwasm — remote control | | {page} / {pages}
 - **Risks and open questions** — what remains to be decided with the maintainer.
 - **Implementation status** — what is done, phase by phase, and the deviations from the preceding sections.
 - **Use over the Internet** — what the online IDE would need: public server, pages, NAT, security, hosting.
+- **Sound on the phone** — host audio over WebRTC or the DSP on the phone: the two uses, the bridge, a hub without DSP, limits and plan.
 - **Implementation plan** — the phases and their order.
 :::
 
@@ -1062,7 +1063,9 @@ Q6
 Q7
 :   Audio feedback: a WebRTC track (Opus) from the host to the remote control,
     for headphone monitoring during rehearsal (latency in the order of 100 to
-    200 ms, hence unusable for playing). Useful in v2?
+    200 ms, hence unusable for playing). Useful in v2? Designed in
+    \ref{sec:audio}, which compares it with running the DSP on the phone
+    itself, the recommended first step.
 
 ## 16 bis. Implementation status
 
@@ -1418,6 +1421,155 @@ another: WebRTC connection and relay accepted for the allowed origin,
 preflight request refused for another one (the host page says so, naming the
 option), link to an unknown server refused without any request being sent to
 it.
+
+## 16 quater. Sound on the phone \label{sec:audio}
+
+So far the remote control receives values only: parameters and bargraphs.
+This section studies how a phone could also give sound (question Q7), and
+compares two ways: sending the host's audio to the phone, or running the
+DSP on the phone itself. It is a design, not yet implemented.
+
+### 16 quater.1. What for
+
+- **Monitoring during rehearsal**: a musician or technician far from the
+  loudspeakers, or in another room, listening on headphones.
+- **Remote session** (with Internet use, \ref{sec:internet}): someone
+  driving a DSP running elsewhere who wants to hear it.
+- **Phones as instruments**: each phone plays its own part on its own
+  loudspeaker, a phone orchestra, the server only coordinating the
+  controls.
+
+### 16 quater.2. Two ways
+
+Host audio over WebRTC
+:   The output of the host's node is also routed to a
+    `MediaStreamAudioDestinationNode`
+    (`context.createMediaStreamDestination()`), whose track is added to the
+    peer connection (`addTrack`); the phone plays the track it receives
+    (`ontrack`) in an `<audio>` element or through Web Audio. WebRTC brings
+    Opus (mandatory, 48 kHz, suited to music when set for it: stereo, 96 to
+    128 kbit/s), encryption (SRTP), congestion control, a jitter buffer and
+    loss concealment. Its voice processing (echo cancellation, gain control,
+    noise suppression) applies to microphone tracks only, not to a track
+    produced by Web Audio.
+
+DSP on the phone
+:   The remote control becomes a standard standalone application, with the
+    compiled DSP (`dsp-module.wasm`, no compiler) and its own sound, as the
+    standalone PWA already is, plus the control messages that exist. The
+    phone hears its own computation, with the same parameters as the host.
+
+```csv "Sound on the phone: the two ways" \label{tab:audio}
+Criterion, Host audio over WebRTC, DSP on the phone
+Latency of what is heard while playing, about 100 to 250 ms, local audio latency (about 10 to 30 ms)
+Network, one audio track per phone (64 to 128 kbit/s), control messages only (a few KB/s)
+Number of phones, bounded by encoding on the host, not bounded by audio
+Through the WebSocket relay, no sound, works (messages only)
+Same sound as the host, yes (it is the same), no: same parameters but an independent computation
+Download on the phone, nothing more, faustwasm and the DSP's wasm (cached by the service worker)
+```
+
+Latency of host audio over WebRTC, orders of magnitude to be measured: Opus
+frame 10 to 20 ms; adaptive jitter buffer 20 to 80 ms, more on a busy
+Wi-Fi; network a few ms to a few tens; phone audio output 10 to 20 ms on
+iOS, often 50 to 150 ms on Android. Chrome lets the jitter buffer be
+lowered (`RTCRtpReceiver.jitterBufferTarget`), at the cost of more
+dropouts. This is monitoring latency, not playing latency: a loop where one
+plays by gesture while listening on the phone is unusable at 150 ms.
+
+**Recommendation: the DSP on the phone first.** Host audio over WebRTC
+remains the answer only when the sound must be exactly the host's: a DSP
+that processes the host's audio input (microphone, line), uses sounds only
+the host has, or is too heavy for a phone.
+
+### 16 quater.3. DSP on the phone: two uses
+
+Local monitoring
+:   The host remains the reference sound, on the PA system; the phone runs
+    a copy of the DSP so that one hears it on headphones. The direct
+    replacement for Q7.
+
+Phones as instruments
+:   No sound on the server side, necessarily: each phone plays its part,
+    the server coordinates (a conductor sending settings to all, players
+    influencing one another). `assign: 'groups'` takes a natural meaning:
+    each phone plays and hears its group.
+
+### 16 quater.4. Architecture on the phone
+
+Two objects side by side: a **local Faust node**, created as in the
+standalone PWA (`createFaustNode` of `create-node.js`), and the existing
+**`FaustRemoteDsp`**, joined by a small bridge.
+
+```mermaid "DSP on the phone: the bridge" \label{fig:audio}
+flowchart LR
+  UI["faust-ui"] --> BR["Bridge"]
+  SENS["Sensors"] --> BR
+  BR --> NODE["Local Faust node<br>(own sound)"]
+  BR --> RD["FaustRemoteDsp"]
+  RD --> BR
+  NODE --> UI
+  RD <--> HOST["Host or hub"]
+```
+
+- **A local action** (UI) applies at once to the local node, then goes to
+  the host as today: one hears oneself with no network delay.
+- **A change from elsewhere** (the host, another phone) arrives as the
+  existing `sync` and applies to the local node. The host already does not
+  echo a write back to its writer, so there is no loop.
+- **Sensors** drive the local node directly (`propagateAcc`), with no
+  delay, and also go to the host according to its `sensorPolicy`.
+- **Bargraphs** are computed by the local DSP: no need to receive them
+  (`uni` mode is enough when nothing else is needed from the host).
+
+The bridge belongs in `client.js`, so that an application of one's own can
+use it; the generated remote control would offer a "Play locally" choice.
+
+### 16 quater.5. A hub without DSP
+
+For phones as instruments, the server need not compute anything: a **hub**
+keeps the parameter state, applies the rules (groups, `[remote:off]`,
+rights, sensor policies) and broadcasts changes. `FaustRemoteHost` only
+needs an object that looks like a node (`FaustRemoteHostTarget`): an object
+storing values, built from `dsp-meta.json`, is enough. Such a hub no longer
+needs Web Audio, which also brings the host under Node (Q4) closer: with
+the WebSocket relay, the server could be a Node process alone.
+
+### 16 quater.6. Limits
+
+- **The sound is not the host's.** Same settings, two independent
+  computations: oscillators and LFOs out of phase, different noise, a note
+  starting slightly later on one side. A good approximation for
+  monitoring, not a replacement when the host's sound depends on what the
+  phone lacks (see 16 quater.2).
+- **Rhythm between phones.** Each phone has its own audio clock. Events a
+  conductor wants played together need the timed mode **the other way**:
+  scheduled at a common instant converted into each phone's audio clock.
+  The existing clock estimate (`FaustRemoteClock`) is the basis; it is a
+  step of its own.
+- **Load and battery.** The phone computes the DSP: a heavy DSP may not fit
+  an older phone, and continuous audio drains the battery.
+- **iOS.** Audio needs a gesture to start (the **Connect** tap provides
+  it), and the remote control currently disconnects when the screen locks:
+  to keep playing screen off, it would have to stay connected then.
+- **File locations.** `create-node.js` fetches `dsp-meta.json` and
+  `dsp-module.wasm` next to the page; the generated remote control lives in
+  `remote/` while those files are at the top: it must be told where they
+  are, which is simple.
+
+### 16 quater.7. Plan
+
+1. **Local monitoring**: the local node ↔ remote control bridge in
+   `client.js`, and "Play locally" in the generated remote control (which
+   then also loads `faustwasm` and the DSP's wasm, cached by its service
+   worker). The most useful and least risky step.
+2. **The hub without DSP**, for phones as instruments.
+3. **Rhythmic synchronization** between phones, if needed.
+4. **Host audio over WebRTC**, only for the cases where the sound must be
+   exactly the host's: an `audio` option chosen at connection (the offer
+   must carry the audio track; changing it later means renegotiating over
+   the control channel), no sound through the relay, one encoded track per
+   phone.
 
 ## 17. Implementation plan
 

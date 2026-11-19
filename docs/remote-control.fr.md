@@ -32,6 +32,7 @@ faustwasm — contrôle à distance | | {page} / {pages}
 - **Risques et questions ouvertes** — ce qui reste à trancher avec le mainteneur.
 - **État de la mise en œuvre** — ce qui est fait, phase par phase, et les écarts avec ce qui précède.
 - **Usage sur Internet** — ce qu'il faudrait pour l'IDE en ligne : serveur public, pages, NAT, sécurité, hébergement.
+- **Du son sur le téléphone** — audio de l'hôte par WebRTC ou DSP sur le téléphone : les deux usages, le pont, un hub sans DSP, limites et plan.
 - **Plan de mise en œuvre** — les phases et leur ordre.
 :::
 
@@ -1069,7 +1070,9 @@ Q6
 Q7
 :   Retour audio : une piste WebRTC (Opus) de l'hôte vers la télécommande, pour
     l'écoute au casque en répétition (latence de l'ordre de 100 à 200 ms, donc
-    inutilisable pour jouer). Utile en v2 ?
+    inutilisable pour jouer). Utile en v2 ? Conçu en \ref{sec:audio}, qui le
+    compare au DSP tournant sur le téléphone lui-même, la première étape
+    recommandée.
 
 ## 16 bis. État de la mise en œuvre
 
@@ -1426,6 +1429,161 @@ signalisation sur une autre : connexion WebRTC et relais acceptés pour
 l'origine autorisée, requête préalable refusée pour une autre (la page hôte
 le dit, en nommant l'option), lien vers un serveur inconnu refusé sans
 qu'aucune requête ne lui soit envoyée.
+
+## 16 quater. Du son sur le téléphone \label{sec:audio}
+
+Jusqu'ici la télécommande ne reçoit que des valeurs : paramètres et
+bargraphs. Cette section étudie comment un téléphone pourrait aussi donner du
+son (question Q7), et compare deux voies : envoyer l'audio de l'hôte au
+téléphone, ou faire tourner le DSP sur le téléphone lui-même. C'est une
+conception, pas encore réalisée.
+
+### 16 quater.1. Pour quoi faire
+
+- **Écoute de contrôle en répétition** : un musicien ou un technicien loin
+  des haut-parleurs, ou dans une autre pièce, au casque.
+- **Session à distance** (avec l'usage sur Internet, \ref{sec:internet}) :
+  quelqu'un qui pilote un DSP tournant ailleurs et veut l'entendre.
+- **Téléphones-instruments** : chaque téléphone joue sa partie sur son propre
+  haut-parleur, un orchestre de téléphones, le serveur ne faisant que
+  coordonner les contrôles.
+
+### 16 quater.2. Deux voies
+
+Audio de l'hôte par WebRTC
+:   La sortie du nœud de l'hôte est aussi branchée sur un
+    `MediaStreamAudioDestinationNode`
+    (`context.createMediaStreamDestination()`), dont la piste est ajoutée à la
+    connexion (`addTrack`) ; le téléphone joue la piste reçue (`ontrack`) dans
+    un élément `<audio>` ou par Web Audio. WebRTC apporte Opus (obligatoire,
+    48 kHz, adapté à la musique s'il est réglé pour : stéréo, 96 à
+    128 kbit/s), le chiffrement (SRTP), l'adaptation au débit, un tampon de
+    gigue et le masquage des pertes. Ses traitements de voix (annulation
+    d'écho, gain automatique, réduction de bruit) ne s'appliquent qu'aux
+    pistes de micro, pas à une piste produite par Web Audio.
+
+DSP sur le téléphone
+:   La télécommande devient une application autonome normale, avec le DSP
+    compilé (`dsp-module.wasm`, sans compilateur) et son propre son, comme
+    l'est déjà la PWA autonome, plus les messages de contrôle qui existent. Le
+    téléphone entend son propre calcul, avec les mêmes paramètres que l'hôte.
+
+```csv "Du son sur le téléphone : les deux voies" \label{tab:audio}
+Critère, Audio de l'hôte par WebRTC, DSP sur le téléphone
+Latence de ce qu'on entend en jouant, environ 100 à 250 ms, celle de l'audio local (environ 10 à 30 ms)
+Réseau, une piste audio par téléphone (64 à 128 kbit/s), des messages de contrôle seulement (quelques ko/s)
+Nombre de téléphones, limité par l'encodage sur l'hôte, sans limite liée à l'audio
+Par le relais WebSocket, pas de son, fonctionne (messages seulement)
+Son identique à l'hôte, oui (c'est le même), non : mêmes paramètres mais un calcul indépendant
+Téléchargement sur le téléphone, rien de plus, faustwasm et le wasm du DSP (mis en cache par le service worker)
+```
+
+Latence de l'audio de l'hôte par WebRTC, en ordres de grandeur à mesurer :
+trame Opus de 10 à 20 ms ; tampon de gigue adaptatif de 20 à 80 ms, plus sur
+un Wi-Fi chargé ; réseau de quelques ms à quelques dizaines ; sortie audio du
+téléphone de 10 à 20 ms sur iOS, souvent 50 à 150 ms sur Android. Chrome
+permet de réduire le tampon de gigue (`RTCRtpReceiver.jitterBufferTarget`), au
+prix de plus de coupures. C'est une latence d'écoute de contrôle, pas de jeu :
+une boucle où l'on joue par le geste en s'écoutant sur le téléphone est
+inutilisable à 150 ms.
+
+**Recommandation : d'abord le DSP sur le téléphone.** L'audio de l'hôte par
+WebRTC ne reste la réponse que lorsque le son doit être exactement celui de
+l'hôte : un DSP qui traite l'entrée audio de l'hôte (micro, ligne), utilise
+des sons que seul l'hôte possède, ou est trop lourd pour un téléphone.
+
+### 16 quater.3. DSP sur le téléphone : deux usages
+
+Écoute locale
+:   L'hôte reste le son de référence, sur la sono ; le téléphone fait tourner
+    une copie du DSP pour qu'on l'entende au casque. Le remplaçant direct de
+    Q7.
+
+Téléphones-instruments
+:   Pas forcément de son côté serveur : chaque téléphone joue sa partie, le
+    serveur coordonne (un chef qui envoie des réglages à tous, des joueurs qui
+    s'influencent). `assign: 'groups'` prend un sens naturel : chaque
+    téléphone joue et entend son groupe.
+
+### 16 quater.4. Architecture sur le téléphone
+
+Deux objets côte à côte : un **nœud Faust local**, créé comme dans la PWA
+autonome (`createFaustNode` de `create-node.js`), et le **`FaustRemoteDsp`**
+existant, reliés par un petit pont.
+
+```mermaid "DSP sur le téléphone : le pont" \label{fig:audio}
+flowchart LR
+  UI["faust-ui"] --> BR["Pont"]
+  SENS["Capteurs"] --> BR
+  BR --> NODE["Noeud Faust local<br>(son propre)"]
+  BR --> RD["FaustRemoteDsp"]
+  RD --> BR
+  NODE --> UI
+  RD <--> HOST["Hote ou hub"]
+```
+
+- **Une action locale** (interface) s'applique tout de suite au nœud local,
+  puis part vers l'hôte comme aujourd'hui : on s'entend sans aucun délai
+  réseau.
+- **Un changement venu d'ailleurs** (l'hôte, un autre téléphone) arrive par
+  le `sync` existant et s'applique au nœud local. L'hôte ne renvoie déjà pas
+  son écriture à celui qui l'a faite, donc pas de boucle.
+- **Les capteurs** pilotent directement le nœud local (`propagateAcc`), sans
+  délai, et partent aussi vers l'hôte selon sa `sensorPolicy`.
+- **Les bargraphs** sont calculés par le DSP local : plus besoin de les
+  recevoir (le mode `uni` suffit quand rien d'autre n'est attendu de l'hôte).
+
+Le pont a sa place dans `client.js`, pour qu'une application personnelle
+puisse s'en servir ; la télécommande générée proposerait un choix « Play
+locally ».
+
+### 16 quater.5. Un hub sans DSP
+
+Pour les téléphones-instruments, le serveur n'a rien à calculer : un **hub**
+garde l'état des paramètres, applique les règles (groupes, `[remote:off]`,
+droits, politiques de capteurs) et diffuse les changements.
+`FaustRemoteHost` ne demande qu'un objet qui ressemble à un nœud
+(`FaustRemoteHostTarget`) : un objet qui stocke les valeurs, construit à
+partir de `dsp-meta.json`, suffit. Un tel hub n'a même plus besoin de Web
+Audio, ce qui rapproche aussi de l'hôte sous Node (Q4) : avec le relais
+WebSocket, le serveur pourrait être un simple processus Node.
+
+### 16 quater.6. Limites
+
+- **Le son n'est pas celui de l'hôte.** Mêmes réglages, deux calculs
+  indépendants : oscillateurs et LFO déphasés, bruits différents, une note
+  qui démarre un peu plus tard d'un côté. Une bonne approximation pour
+  l'écoute de contrôle, pas un remplaçant quand le son de l'hôte dépend de ce
+  que le téléphone n'a pas (voir 16 quater.2).
+- **Le rythme entre téléphones.** Chaque téléphone a sa propre horloge audio.
+  Les évènements qu'un chef veut faire jouer ensemble demandent le mode
+  horodaté **dans l'autre sens** : programmés à un instant commun converti
+  dans l'horloge audio de chaque téléphone. L'estimation d'horloge existante
+  (`FaustRemoteClock`) en est la base ; c'est une étape en soi.
+- **Charge et batterie.** Le téléphone calcule le DSP : un DSP lourd peut ne
+  pas tenir sur un téléphone ancien, et l'audio continu use la batterie.
+- **iOS.** L'audio doit démarrer sur un geste (le **Connect** le fournit), et
+  la télécommande se déconnecte aujourd'hui quand l'écran se verrouille :
+  pour continuer à jouer écran éteint, il faudrait qu'elle reste connectée
+  dans ce cas.
+- **Emplacement des fichiers.** `create-node.js` va chercher `dsp-meta.json`
+  et `dsp-module.wasm` à côté de la page ; la télécommande générée est dans
+  `remote/` alors que ces fichiers sont à la racine : il faut lui dire où ils
+  sont, ce qui est simple.
+
+### 16 quater.7. Plan
+
+1. **Écoute locale** : le pont nœud local ↔ télécommande dans `client.js`,
+   et « Play locally » dans la télécommande générée (qui charge alors aussi
+   `faustwasm` et le wasm du DSP, mis en cache par son service worker).
+   L'étape la plus utile et la moins risquée.
+2. **Le hub sans DSP**, pour les téléphones-instruments.
+3. **La synchronisation rythmique** entre téléphones, si besoin.
+4. **L'audio de l'hôte par WebRTC**, seulement pour les cas où le son doit
+   être exactement celui de l'hôte : une option `audio` choisie à la
+   connexion (l'offre doit porter la piste audio ; la changer ensuite demande
+   une renégociation par le canal de contrôle), pas de son par le relais, une
+   piste encodée par téléphone.
 
 ## 17. Plan de mise en œuvre
 
