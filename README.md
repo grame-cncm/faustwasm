@@ -160,6 +160,8 @@ Several phones can control the host at once. By default they share every control
 - `?sensors=assigned`: each phone's sensors drive only the controls it may change (with `assign=groups`, its group's), mapped with the DSP's own curves.
 - `?sensors=mean`: the sensor controls follow the mean of the phones' readings: the room tilts together.
 
+With `?assign=groups`, a phone that arrives when every group is taken may change nothing (it still sees everything); a group is freed when its phone leaves, and the next phone to connect gets it. Whatever the reason a change is refused (a control of another player's group, `[remote:off]` below), the host sends the real value back, and the slider on the phone returns to it.
+
 ```faust
 player(i) = hgroup("p%i", os.osc(220 * i) * button("gate") * hslider("tilt [acc: 0 0 -10 0 10]", 0.5, 0, 1, 0.001));
 process = player(1) + player(2) : *(0.2);   // open the host with ?assign=groups&sensors=assigned
@@ -213,6 +215,49 @@ The phone must trust mkcert's authority, `rootCA.pem` in the folder `mkcert -CAR
 4. Add the remote control to the home screen to try the installed PWA: it finds its host again when launched, without the link.
 
 On its first run, macOS may ask whether to allow incoming connections for `node`: allow them.
+
+##### Using the API
+
+The generated pages use the remote control library, which can also be used directly, to add remote control to an application of one's own. It has one bundle per role, so that a phone downloads none of the host's code: `dist/remote/host.js` for the page running the DSP, `dist/remote/client.js` for the remote control (`dist/remote/index.js` has both). It is experimental, not exported by the main package, and may change.
+
+On the host, around any Faust node, AudioWorklet or ScriptProcessor, mono or polyphonic:
+
+```js
+import { FaustRemoteHost, createHttpSignaling, qrCodeSvg } from "@grame/faustwasm/dist/remote/host.js";
+
+const host = new FaustRemoteHost(faustNode, {
+    token,                       // the session's secret, also in the pairing link
+    playoutDelay: 0.04,          // seconds; null (default) applies values on arrival
+    assign: "groups",            // or (client) => (path) => boolean
+    sensorPolicy: "assigned",    // "shared" (default), "mean" or "assigned"
+    // policy: "exclusive", expose: (path) => boolean, maxClients: 16, sensorWindow: 1000, ...
+});
+const signaling = createHttpSignaling(location.origin, room, token, { role: "host" });
+await signaling.ready;
+host.listen(signaling);                              // WebRTC
+host.listenRelay(location.origin, room, token);      // the relay, where WebRTC cannot connect
+host.addEventListener("join", (event) => console.log(event.detail));   // { id, mode, group }
+document.querySelector("#qr").innerHTML = qrCodeSvg(pairingLink);
+```
+
+`listen` and `listenRelay` return a function that stops them; `host.close()` stops everything, releases what the remote controls held, and gives the node back its handlers. `host.clients` lists the remote controls connected.
+
+On the remote control, the object returned has the control part of a node's API (`setParamValue`, `getParamValue`, `getUI`, `setOutputParamHandler`, `setInputParamHandler`, `startSensors`, `midiMessage`...), so a faust-ui interface can be built on it as on a node:
+
+```js
+import { FaustRemoteDsp, createHttpSignaling } from "@grame/faustwasm/dist/remote/client.js";
+
+let dsp;
+try {
+    dsp = await FaustRemoteDsp.connectRTC(createHttpSignaling(signalingUrl, room, token, { role: "remote" }), { token });
+} catch {
+    dsp = await FaustRemoteDsp.connectRelay(signalingUrl, room, { token });
+}
+dsp.startSensors();   // after asking for the motion sensor permission on iOS
+console.log(dsp.state, dsp.group, dsp.rtt);
+```
+
+See [docs/remote-control.md](docs/remote-control.md) for the design, every option and the protocol.
 
 #### Generate SVG Diagrams of a Faust DSP
 
