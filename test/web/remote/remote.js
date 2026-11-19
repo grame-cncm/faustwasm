@@ -32,7 +32,7 @@ const connect = async () => {
     if (!room || !token) throw new Error("open this page from the link the host shows");
 
     await requestPermissions();
-    const { FaustRemoteDsp, createHttpSignaling } = await import("../../../dist/remote/index.js");
+    const { FaustRemoteDsp, createHttpSignaling } = await import("../../../dist/remote/client.js");
     $("state").textContent = "connecting";
     const dsp = await FaustRemoteDsp.connectRTC(
         createHttpSignaling(location.origin, room, token, { role: "remote" }),

@@ -364,6 +364,13 @@ const MUTANTS = [
         from: 'parts.push(`M${x + border},${y + border}h1v1h-1z`);',
         to: 'parts.push(`M${y + border},${x + border}h1v1h-1z`);',
         tests: 'test/unit/remote-qr.test.mjs'
+    },
+    {
+        what: 'the remote control page loads the complete bundle, host code included',
+        file: 'assets/remote/remote.js',
+        from: 'await import("../faustwasm-remote/client.js")',
+        to: 'await import("../faustwasm-remote/index.js")',
+        tests: 'test/cli/remote-app.test.mjs'
     }
 ];
 

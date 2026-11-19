@@ -1080,6 +1080,12 @@ et la PWA télécommande dans `out/remote/`, qui réutilise `../create-node.js`,
   de Chromium.
 - Une télécommande peut se connecter avant que l'audio de l'hôte soit
   activé ; ses écritures sont appliquées dès que l'`AudioContext` tourne.
+- Bundles par rôle : `dist/remote/client.js` (télécommande),
+  `dist/remote/host.js` (hôte, avec le générateur QR) et `dist/remote/index.js`
+  (tout, pour l'API), produits par une seule commande esbuild, chacun autonome.
+  La télécommande générée ne charge que `client.js` : 40 Ko au lieu de 109
+  (non minifiés), 6,6 Ko au lieu de 16,4 une fois minifiés et compressés.
+  L'application générée ne reçoit que `client.js` et `host.js`.
 
 P3
 :   Mode horodaté (`playoutDelay`, `src/remote/clock.ts`) et repli par relais

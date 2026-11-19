@@ -7,7 +7,7 @@ const start = async () => {
     $("start").setAttribute("disabled", "");
     const { instantiateFaustModule, LibFaust, FaustCompiler, FaustMonoDspGenerator } =
         await import("../../../dist/esm-bundle/index.js");
-    const { FaustRemoteHost, createHttpSignaling, qrCodeSvg } = await import("../../../dist/remote/index.js");
+    const { FaustRemoteHost, createHttpSignaling, qrCodeSvg } = await import("../../../dist/remote/host.js");
 
     const context = new AudioContext({ latencyHint: "interactive" });
     await context.resume();

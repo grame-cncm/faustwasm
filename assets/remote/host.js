@@ -41,7 +41,7 @@ const showError = (error) => ($("error").textContent = String(error?.message ?? 
 
 (async () => {
     const { createFaustNode, createFaustUI } = await import("./create-node.js");
-    const { FaustRemoteHost, createHttpSignaling, qrCodeSvg } = await import("./faustwasm-remote/index.js");
+    const { FaustRemoteHost, createHttpSignaling, qrCodeSvg } = await import("./faustwasm-remote/host.js");
 
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioCtx({ latencyHint: "interactive" });

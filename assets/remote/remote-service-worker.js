@@ -25,7 +25,7 @@ const RESOURCES = [
     "../create-node.js",
     "../faust-ui/index.js",
     "../faust-ui/index.css",
-    "../faustwasm-remote/index.js"
+    "../faustwasm-remote/client.js"
 ];
 
 /** @type {ServiceWorkerGlobalScope} */

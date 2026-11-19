@@ -1,10 +1,12 @@
 /**
  * Remote control of a Faust node, from another page or device.
  *
- * A bundle of its own (`dist/remote/index.js`), separate from the main one:
- * a remote control loads this and faust-ui, never the compiler or the wasm.
- * Experimental: not re-exported by `src/exports.ts`, and free to change until
- * it is. See `docs/remote-control.md`.
+ * Bundles of their own in `dist/remote/`, separate from the main one: a
+ * remote control never loads the compiler or the wasm. This one
+ * (`index.js`) has everything; `client.js` has only the remote control's
+ * side and `host.js` only the host's, so that a phone does not download the
+ * host's code. Experimental: not re-exported by `src/exports.ts`, and free to
+ * change until it is. See `docs/remote-control.md`.
  */
 export {
     FaustRemoteHost,

@@ -132,7 +132,7 @@ A Faust DSP can run on one machine (the *host*, the one connected to the speaker
 ```bash
 node scripts/faust2wasm.js mydsp.dsp out -remote
 ```
-writes the host page at the top of `out` (`index.html`, `index.js`, `create-node.js`, the compiled DSP, and the `faustwasm`, `faust-ui` folders), the remote control PWA in `out/remote` (no DSP file: its interface comes from the host), and the remote control library in `out/faustwasm-remote`. Add `-poly` for a polyphonic host. The folder is served by `faust-remote-server-ts` (`scripts/faust-remote-server.js`), which also relays the signaling between the host and its remote controls, and their messages when WebRTC cannot connect.
+writes the host page at the top of `out` (`index.html`, `index.js`, `create-node.js`, the compiled DSP, and the `faustwasm`, `faust-ui` folders), the remote control PWA in `out/remote` (no DSP file: its interface comes from the host), and the remote control library in `out/faustwasm-remote`, one file per role: `host.js` for the host page, `client.js` for the remote control, which downloads nothing of the host's code. Add `-poly` for a polyphonic host. The folder is served by `faust-remote-server-ts` (`scripts/faust-remote-server.js`), which also relays the signaling between the host and its remote controls, and their messages when WebRTC cannot connect.
 
 The generated pages need `npm run build` to have been run: it builds the remote control library and copies `faustwasm` and `faust-ui` into `assets/standalone`.
 

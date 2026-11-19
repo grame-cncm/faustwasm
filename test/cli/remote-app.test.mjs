@@ -37,7 +37,20 @@ test('the remote control is a PWA without any DSP', () => {
             `remote/${file} refers to a DSP file`
         );
     }
-    assert.ok(fs.existsSync(path.join(dir, 'faustwasm-remote', 'index.js')));
+    // One bundle per role, and not the complete one
+    assert.deepEqual(listDir(path.join(dir, 'faustwasm-remote')), [
+        'client.js',
+        'client.js.map',
+        'host.js',
+        'host.js.map'
+    ]);
+});
+
+test('each page loads the bundle of its role', () => {
+    assert.match(readOut(dir, 'remote/index.js'), /import\("\.\.\/faustwasm-remote\/client\.js"\)/);
+    assert.doesNotMatch(readOut(dir, 'remote/index.js'), /faustwasm-remote\/(host|index)\.js/);
+    assert.match(readOut(dir, 'index.js'), /import\("\.\/faustwasm-remote\/host\.js"\)/);
+    assert.doesNotMatch(readOut(dir, 'index.js'), /faustwasm-remote\/(client|index)\.js/);
 });
 
 test('every placeholder of the remote control is replaced', () => {
@@ -119,7 +132,9 @@ test('the service worker caches files the build actually wrote', async () => {
 test('the service worker answers for its files and leaves signaling alone', () => {
     const { fetchEvent } = runWorker();
     assert.equal(fetchEvent('./index.js'), true);
-    assert.equal(fetchEvent('../faustwasm-remote/index.js'), true);
+    assert.equal(fetchEvent('../faustwasm-remote/client.js'), true);
+    // The host's bundle is not the remote control's to cache
+    assert.equal(fetchEvent('../faustwasm-remote/host.js'), false);
     assert.equal(fetchEvent('/signal/room/events/peer'), false);
     assert.equal(fetchEvent('/signal/room/send', 'POST'), false);
     // The host page is not the remote control's to cache

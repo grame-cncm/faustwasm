@@ -284,8 +284,9 @@ const copyWebTemplateAssets = (
  * A remote-controlled application: the host page at the top of `outputDir`
  * (the DSP, its sound, a local UI, the pairing link), and the remote control
  * PWA in `outputDir/remote/` (no DSP, no wasm: its interface comes from the
- * host). Both use the remote control bundle, copied from `dist/remote` into
- * `faustwasm-remote/`. Serve `outputDir` with `faust-remote-server-ts`.
+ * host). The remote control bundles are copied from `dist/remote` into
+ * `faustwasm-remote/`: the host page loads `host.js`, the remote control
+ * `client.js`. Serve `outputDir` with `faust-remote-server-ts`.
  *
  * @param {string} outputDir - The output directory.
  * @param {string} dspName - The name of the DSP to be loaded.
@@ -300,10 +301,13 @@ const copyWebRemoteAssets = (
 ) => {
     console.log(`Writing assets files.`);
     const remoteBundle = path.join(__dirname, '../dist/remote');
-    if (!fs.existsSync(path.join(remoteBundle, 'index.js')))
-        throw new Error(
-            `${remoteBundle}/index.js is missing: build the package first (npm run build-esm)`
-        );
+    // One bundle per role; the complete index.js is for the API, not for pages
+    const remoteFiles = ['client.js', 'host.js'];
+    for (const file of remoteFiles)
+        if (!fs.existsSync(path.join(remoteBundle, file)))
+            throw new Error(
+                `${remoteBundle}/${file} is missing: build the package first (npm run build-esm)`
+            );
     fs.mkdirSync(path.join(outputDir, 'remote'), { recursive: true });
 
     const findAndReplace = [
@@ -340,7 +344,16 @@ const copyWebRemoteAssets = (
     );
     cpSync(asset('standalone/faustwasm'), path.join(outputDir, 'faustwasm'));
     cpSync(asset('standalone/faust-ui'), path.join(outputDir, 'faust-ui'));
-    cpSync(remoteBundle, path.join(outputDir, 'faustwasm-remote'));
+    fs.mkdirSync(path.join(outputDir, 'faustwasm-remote'), {
+        recursive: true
+    });
+    for (const file of remoteFiles) {
+        for (const name of [file, `${file}.map`]) {
+            const from = path.join(remoteBundle, name);
+            if (fs.existsSync(from))
+                cpSync(from, path.join(outputDir, 'faustwasm-remote', name));
+        }
+    }
 };
 
 export {

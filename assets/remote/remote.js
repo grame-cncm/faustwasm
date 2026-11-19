@@ -49,7 +49,7 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
 
 (async () => {
     const { createFaustUI, requestPermissions } = await import("../create-node.js");
-    const { FaustRemoteDsp, createHttpSignaling } = await import("../faustwasm-remote/index.js");
+    const { FaustRemoteDsp, createHttpSignaling } = await import("../faustwasm-remote/client.js");
 
     const session = findSession();
     if (!session) {
@@ -58,7 +58,7 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
         return;
     }
 
-    /** @type {import("../faustwasm-remote/index.js").FaustRemoteDsp | null} */
+    /** @type {import("../faustwasm-remote/client.js").FaustRemoteDsp | null} */
     let dsp = null;
     /** Whether the user wants to be connected: then reconnect when shown again. */
     let wanted = false;
