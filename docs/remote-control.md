@@ -28,6 +28,8 @@ faustwasm — contrôle à distance | | {page} / {pages}
 - **Intégration dans le package** — fichiers, construction, générateur, dépendances, version.
 - **Tests et mesures** — comment vérifier sans navigateur, puis mesurer en vrai.
 - **Risques et questions ouvertes** — ce qui reste à trancher avec le mainteneur.
+- **État de la mise en œuvre** — ce qui est fait, phase par phase, et les écarts avec ce qui précède.
+- **Usage sur Internet** — ce qu'il faudrait pour l'IDE en ligne : serveur public, pages, NAT, sécurité, hébergement.
 - **Plan de mise en œuvre** — les phases et leur ordre.
 :::
 
@@ -1009,7 +1011,10 @@ Q4
 
 Q5
 :   Signalisation pour l'usage Internet (IDE en ligne) : service hébergé par
-    GRAME, ou laissé à l'intégrateur via `FaustSignaling` ?
+    GRAME, ou laissé à l'intégrateur via `FaustSignaling` ? Analyse détaillée
+    en \ref{sec:internet} : ce qui manque au serveur (CORS, origine du relais,
+    protection contre les abus, mandataires), aux pages (adresse de
+    signalisation, serveurs ICE), la traversée des NAT et le travail à faire.
 
 Q6
 :   Une convention de métadonnées (`[remote:off]` sur un widget, ou
@@ -1158,6 +1163,208 @@ les écritures faites sur le thread audio (correspondance des capteurs, MIDI)
 ne mettent pas à jour ; les valeurs initiales envoyées dans `welcome` pour un
 paramètre piloté par capteur pouvaient donc être en retard. Le nœud retient
 désormais ces écritures et les rend dans `getParamValue`.
+
+## 16 ter. Usage sur Internet \label{sec:internet}
+
+Tout ce qui précède suppose que l'hôte, le serveur et les téléphones sont sur
+le **même réseau local** : `faust-remote-server` tourne sur la machine hôte, et
+les téléphones du même Wi-Fi le joignent par son adresse locale
+(`https://192.168.1.43:8443`). Cette section analyse ce qu'il faudrait pour
+s'en passer (question Q5), avec l'IDE Faust en ligne comme cas type : la page
+hôte y est l'IDE lui-même, servi par un site public, qui fait tourner le DSP
+avec faustwasm dans le navigateur de l'utilisateur. `FaustRemoteHost` s'y pose
+tel quel sur le nœud ; c'est tout ce qui entoure la connexion qui change.
+
+### 16 ter.1. Ce qui empêche le montage actuel
+
+Pas de serveur local
+:   L'utilisateur de l'IDE n'a ni Node, ni certificat, ni serveur à lancer. La
+    signalisation doit être un service déjà là.
+
+Contenu mixte et réseau privé
+:   Une page servie en HTTPS par un site public ne peut pas appeler
+    `http://192.168.x.x` (contenu mixte, bloqué), et Chrome restreint de plus
+    les requêtes d'un site public vers une adresse privée (*Private Network
+    Access*). Même lancé, un serveur local serait hors d'atteinte de la page.
+
+Une télécommande à charger
+:   Le téléphone doit obtenir la PWA télécommande quelque part : elle doit être
+    hébergée publiquement, et le lien d'appairage la désigner.
+
+Réseaux différents
+:   Le téléphone peut être en 4G ou sur un autre Wi-Fi : la connexion doit
+    traverser des NAT, ce que le réseau local n'a jamais demandé.
+
+### 16 ter.2. Topologie
+
+```mermaid "Usage sur Internet : qui parle à qui" \label{fig:internet}
+flowchart LR
+  subgraph Home["Reseau de l'utilisateur"]
+    IDE["IDE Faust<br>(page hote, faustwasm)"]
+  end
+  subgraph Phone["Telephone (Wi-Fi ou 4G)"]
+    PWA["PWA telecommande"]
+  end
+  subgraph Public["Services publics (HTTPS)"]
+    SITE["Site de l'IDE<br>+ PWA telecommande"]
+    SIG["Signalisation<br>+ relais WebSocket"]
+    TURN["STUN / TURN"]
+  end
+  SITE --> IDE
+  SITE --> PWA
+  IDE <--> SIG
+  PWA <--> SIG
+  IDE <-. "WebRTC direct si possible" .-> PWA
+  IDE <-.-> TURN
+  PWA <-.-> TURN
+```
+
+```csv "Selon où sont l'ordinateur et le téléphone" \label{tab:internet}
+Situation, Signalisation, Connexion de contrôle, Latence ajoutée
+Même Wi-Fi, par Internet (quelques messages au début), WebRTC direct sur le réseau local, aucune
+Réseaux différents et NAT ordinaires, par Internet, WebRTC direct après STUN, le trajet Internet
+Réseaux différents et NAT symétrique (4G), par Internet, TURN ou relais WebSocket, le trajet jusqu'au serveur et retour
+```
+
+Le cas de loin le plus courant, l'ordinateur et le téléphone dans la même
+pièce, est aussi le meilleur : seule la signalisation passe par Internet, et la
+connexion de contrôle s'établit directement sur le réseau local, avec la
+latence d'aujourd'hui.
+
+### 16 ter.3. Ce qu'il faut côté serveur
+
+`faust-remote-server` fait déjà presque tout ce qu'un service public doit
+faire (salles, jetons, signalisation, relais). Il lui manque :
+
+CORS
+:   La page de l'IDE et le serveur n'ont pas la même origine. Le client envoie
+    l'en-tête `x-faust-token` et du `application/json`, ce qui déclenche une
+    requête préalable `OPTIONS` : le serveur n'y répond pas aujourd'hui (elle
+    est refusée faute de jeton). Il faut répondre à `OPTIONS` sans jeton, et à
+    toutes les requêtes avec `Access-Control-Allow-Origin` (l'origine de la
+    page si elle est dans une liste autorisée, jamais `*` avec un jeton),
+    `Access-Control-Allow-Headers: content-type, x-faust-token` et
+    `Access-Control-Allow-Methods: GET, POST`. Le flux d'évènements, lu avec
+    `fetch`, est concerné de la même façon.
+
+Origine du relais
+:   Un WebSocket n'est pas soumis à CORS : le serveur doit vérifier lui-même
+    l'en-tête `Origin` de la demande de connexion contre la même liste, pour
+    qu'une page tierce ne puisse pas s'en servir.
+
+Protection contre les abus
+:   Ouvert à tous, le serveur doit borner ce que chacun peut lui faire coûter :
+    nombre de salles et de flux par adresse, expiration des salles inactives,
+    débit de messages de signalisation et de relais, taille des files
+    d'attente (déjà bornée : 64 messages, une minute). Les noms de salle sont
+    aléatoires (48 bits) et le premier jeton possède la salle : prendre la
+    salle d'un autre demande de deviner son nom.
+
+Derrière un mandataire
+:   Un serveur public est souvent placé derrière nginx ou un équivalent, qui
+    par défaut **retient** les réponses en flux : le flux d'évènements de la
+    signalisation n'arriverait qu'à sa fermeture. Le serveur doit envoyer
+    `X-Accel-Buffering: no` sur ce flux, et la documentation de déploiement
+    décrire la configuration du mandataire (`proxy_buffering off` pour
+    `/signal/`, en-têtes `Upgrade` et `Connection` pour `/relay/`, délais
+    d'inactivité supérieurs au battement de 15 s).
+
+Certificat
+:   Un vrai certificat (Let's Encrypt) remplace mkcert : plus rien à installer
+    sur les téléphones, ce qui est en soi un gros gain d'usage.
+
+### 16 ter.4. Ce qu'il faut côté pages
+
+Adresse de signalisation configurable
+:   Les pages supposent aujourd'hui que la signalisation est servie par la même
+    origine qu'elles (`location.origin`). Il faut pouvoir la donner : option de
+    la page hôte (et du générateur, par exemple `-signal <url>`), et, côté
+    télécommande, un champ de plus dans le fragment du lien (`&signal=…`).
+    Une PWA hébergée publiquement ne doit accepter qu'une liste de serveurs
+    connus : sinon un lien piégé dirigerait le téléphone vers un serveur
+    tiers, qui verrait passer ses messages de contrôle.
+
+Serveurs ICE
+:   Passer une `RTCConfiguration` avec un serveur STUN (il en existe de
+    gratuits) et, si on en a un, TURN : l'API l'accepte déjà
+    (`FaustRemoteDsp.connectRTC`, `FaustRemoteHost.listen`), il suffit que les
+    pages la transmettent.
+
+PWA télécommande hébergée
+:   La télécommande générée par `-remote` convient telle quelle, servie par le
+    site de l'IDE ou par le serveur de signalisation, à condition de lui donner
+    l'adresse de signalisation comme ci-dessus.
+
+Intégration dans l'IDE
+:   Un bouton « Télécommande » qui crée un `FaustRemoteHost` sur le nœud en
+    cours, ouvre la session et affiche le code QR (`qrCodeSvg`) ; à refaire à
+    chaque recompilation du DSP, puisque le nœud change.
+
+### 16 ter.5. Traverser les NAT
+
+Entre deux réseaux, WebRTC doit découvrir des adresses joignables. **STUN**
+suffit derrière la plupart des box. Derrière un NAT symétrique, fréquent sur
+les réseaux mobiles, il faut un **TURN**, qui relaie tout le trafic de la
+session et coûte donc de la bande passante à celui qui l'héberge (*coturn* est
+la référence libre).
+
+Le **relais WebSocket** existant joue le même rôle sans serveur
+supplémentaire : l'hôte et le téléphone s'y connectent tous deux vers
+l'extérieur, ce qui passe tous les NAT. Ses limites, déjà notées en P3,
+pèsent plus sur Internet : tout transite par TCP, donc une perte retarde ce
+qui suit, sur les deux canaux. Le débit d'une session est minime (quelques
+Ko/s) : un relais sur le serveur de signalisation tient de nombreuses
+sessions. Le mode horodaté (`playoutDelay`) absorbe la gigue d'un trajet
+Internet, au prix d'un retard fixe de quelques dizaines de millisecondes,
+acceptable pour du contrôle de paramètres, moins pour du jeu de notes.
+
+### 16 ter.6. Sécurité et confidentialité
+
+- Le serveur de signalisation voit les noms de salle, les jetons (dans les
+  en-têtes) et les descriptions SDP, qui contiennent les adresses IP des pairs.
+  Il ne voit pas les messages de contrôle d'une connexion WebRTC, chiffrée de
+  bout en bout par DTLS.
+- Par le relais, en revanche, les messages de contrôle traversent le serveur
+  en clair pour lui (chiffrés seulement jusqu'à lui, par TLS). Pour des
+  valeurs de curseurs, c'est acceptable de la part d'un service de confiance ;
+  c'est à dire dans sa politique de confidentialité.
+- Le serveur ne doit rien journaliser de ce qui passe : ni jetons, ni SDP, ni
+  messages.
+- Le jeton dans le fragment du lien et l'appairage par code QR restent valables
+  sur Internet : le lien n'est jamais envoyé à un serveur, il passe de l'écran
+  de l'hôte à la caméra du téléphone.
+
+### 16 ter.7. Qui héberge
+
+| | A. Service hébergé par GRAME | B. Briques pour l'intégrateur |
+| :-- | :-- | :-- |
+| Pour l'utilisateur de l'IDE | rien à installer, cela marche | dépend de l'intégrateur |
+| Services | signalisation, relais, PWA télécommande, éventuellement TURN | à déployer par chacun |
+| Coût | un service à maintenir, superviser et protéger ; TURN coûte de la bande passante | la documentation de déploiement |
+| faustwasm fournit | le serveur, configuré pour l'IDE | le serveur avec CORS, `FaustSignaling` pour tout autre canal |
+
+Les deux ne s'excluent pas : B est de toute façon nécessaire pour A, et
+l'interface `FaustSignaling` permet à une application qui a déjà son propre
+serveur (WebSocket, Firebase, Matrix…) de s'en servir pour la signalisation.
+
+### 16 ter.8. Travail à faire, dans l'ordre
+
+1. **CORS et origine du relais** dans `faust-remote-server`, avec une liste
+   d'origines autorisées en option (`-allow-origin`), et `X-Accel-Buffering`
+   sur le flux d'évènements. Petit, et testable comme le reste du serveur.
+2. **Adresse de signalisation et serveurs ICE configurables** dans les pages
+   générées et le générateur (`-signal`, `-stun`), la télécommande ne suivant
+   que des serveurs connus.
+3. **Protection contre les abus** : quotas par adresse, expiration des
+   salles, débits.
+4. **Documentation de déploiement** : TLS, mandataire, supervision.
+5. **Déploiement** d'un service (option A) ou non : décision du mainteneur.
+6. **Intégration dans l'IDE**, une fois le service disponible.
+7. **TURN**, seulement si les mesures sur réseaux mobiles montrent que le
+   relais ne suffit pas.
+
+Les points 1 et 2 sont utiles même sans usage sur Internet : un serveur de
+signalisation séparé de la page hôte sert aussi sur un réseau local.
 
 ## 17. Plan de mise en œuvre
 
