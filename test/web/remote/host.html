@@ -9,6 +9,7 @@
             body { font-family: sans-serif; margin: 12px; }
             textarea { width: 100%; max-width: 720px; font-family: monospace; }
             #pairing a { word-break: break-all; }
+            #qrcode svg { display: block; width: 200px; height: 200px; }
             #ui { height: 340px; border: 1px solid #ccc; margin-top: 8px; }
             #error { color: #a12a12; }
         </style>
@@ -29,6 +30,7 @@ process = os.osc(freq * (0.5 + turn)) * level * 0.3
         <button id="start">Start</button>
         <pre id="error"></pre>
         <div id="pairing"></div>
+        <div id="qrcode"></div>
         <div id="clients"></div>
         <div id="ui"></div>
         <script type="module" src="host.js"></script>

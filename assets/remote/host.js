@@ -41,7 +41,7 @@ const showError = (error) => ($("error").textContent = String(error?.message ?? 
 
 (async () => {
     const { createFaustNode, createFaustUI } = await import("./create-node.js");
-    const { FaustRemoteHost, createHttpSignaling } = await import("./faustwasm-remote/index.js");
+    const { FaustRemoteHost, createHttpSignaling, qrCodeSvg } = await import("./faustwasm-remote/index.js");
 
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioCtx({ latencyHint: "interactive" });
@@ -95,6 +95,9 @@ const showError = (error) => ($("error").textContent = String(error?.message ?? 
         link.target = "_blank";
         link.textContent = url.href;
         $("pairing").replaceChildren("Remote control: ", link);
+        // The same link, for a phone's camera. Generated here from the URL,
+        // which the SVG does not contain as text
+        $("qrcode").innerHTML = qrCodeSvg(url.href, { border: 2 });
     };
 
     $("button-audio").onclick = async () => {

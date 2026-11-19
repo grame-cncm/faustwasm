@@ -146,7 +146,7 @@ node scripts/faust2wasm.js mydsp.dsp /tmp/remote-app -remote
 node scripts/faust-remote-server.js /tmp/remote-app -port 8443
 ```
 
-1. Open [http://localhost:8443/](http://localhost:8443/): the host page. Click **Activate audio**.
+1. Open [http://localhost:8443/](http://localhost:8443/): the host page, with its pairing link and the same link as a QR code. Click **Activate audio**.
 2. Open the *Remote control* link it shows, in another tab or browser, and click **Connect**. The status reads `connected (WebRTC)` with the round trip time; moving a control there moves it on the host.
 
 Variants:
@@ -168,8 +168,8 @@ node scripts/faust-remote-server.js /tmp/remote-app -port 8443 -cert cert.pem -k
 
 The phone must trust mkcert's authority, `rootCA.pem` in the folder `mkcert -CAROOT` prints. On iOS, send it to the phone (AirDrop), install the profile, then enable it in Settings > General > About > Certificate Trust Settings. On Android, Settings > Security > Install a certificate > CA certificate.
 
-1. On the host machine, open the host page **by its address**, `https://192.168.1.20:8443/`, not by `localhost`: the link it shows is built from that address, and the phone cannot reach `localhost`. Click **Activate audio**.
-2. Open the *Remote control* link on the phone, on the same Wi-Fi network, and tap **Connect**. On iOS, this tap is when the motion sensor permission is asked.
+1. On the host machine, open the host page **by its address**, `https://192.168.1.20:8443/`, not by `localhost`: the link and the QR code it shows are built from that address, and the phone cannot reach `localhost`. Click **Activate audio**.
+2. On the phone, on the same Wi-Fi network, scan the QR code with the camera (or open the *Remote control* link), and tap **Connect**. On iOS, this tap is when the motion sensor permission is asked.
 3. Tilt the phone: a slider with `[acc:]` metadata follows. Bargraphs move, and the status shows the round trip time over the real network.
 4. Add the remote control to the home screen to try the installed PWA: it finds its host again when launched, without the link.
 

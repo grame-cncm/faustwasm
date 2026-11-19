@@ -357,6 +357,13 @@ const MUTANTS = [
         from: 'if (retry) clearTimeout(retry);',
         to: '',
         tests: 'test/unit/remote-server.test.mjs'
+    },
+    {
+        what: 'the pairing QR code is drawn transposed',
+        file: 'src/remote/qr.ts',
+        from: 'parts.push(`M${x + border},${y + border}h1v1h-1z`);',
+        to: 'parts.push(`M${y + border},${x + border}h1v1h-1z`);',
+        tests: 'test/unit/remote-qr.test.mjs'
     }
 ];
 

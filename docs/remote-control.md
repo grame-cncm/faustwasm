@@ -998,6 +998,10 @@ Q2
 
 Q3
 :   Embarquer un générateur de code QR dans `assets/`, ou n'afficher que l'URL ?
+    **Tranché :** le générateur de Project Nayuki (MIT) est intégré tel quel
+    dans `src/remote/vendor/qrcodegen.ts` (seulement exporté en module, sa
+    notice de licence conservée dans le bundle) ; `qrCodeSvg` le rend en SVG et
+    la page hôte affiche le code sous le lien d'appairage.
 
 Q4
 :   Faut-il étudier un hôte sous Node (Web Audio et WebRTC natifs), ou s'en tenir
@@ -1070,7 +1074,10 @@ et la PWA télécommande dans `out/remote/`, qui réutilise `../create-node.js`,
   d'adresse dès qu'il est lu.
 - Masquée, la télécommande dit au revoir (l'hôte relâche ce qu'elle tenait) ;
   visible de nouveau, elle se reconnecte ; une connexion perdue est retentée.
-- Pas de code QR (Q3 toujours ouverte) : l'hôte affiche le lien.
+- Code QR du lien d'appairage sur la page hôte (Q3), redessiné à chaque
+  nouvelle session. Testé en le décodant : un décodeur écrit dans le test
+  d'après la norme (`remote-qr.test.mjs`), et le détecteur de codes-barres
+  de Chromium.
 - Une télécommande peut se connecter avant que l'audio de l'hôte soit
   activé ; ses écritures sont appliquées dès que l'`AudioContext` tourne.
 

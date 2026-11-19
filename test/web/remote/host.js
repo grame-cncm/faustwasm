@@ -7,7 +7,7 @@ const start = async () => {
     $("start").setAttribute("disabled", "");
     const { instantiateFaustModule, LibFaust, FaustCompiler, FaustMonoDspGenerator } =
         await import("../../../dist/esm-bundle/index.js");
-    const { FaustRemoteHost, createHttpSignaling } = await import("../../../dist/remote/index.js");
+    const { FaustRemoteHost, createHttpSignaling, qrCodeSvg } = await import("../../../dist/remote/index.js");
 
     const context = new AudioContext({ latencyHint: "interactive" });
     await context.resume();
@@ -40,6 +40,7 @@ const start = async () => {
     link.target = "_blank";
     link.textContent = url.href;
     $("pairing").append("Remote control: ", link);
+    $("qrcode").innerHTML = qrCodeSvg(url.href, { border: 2 });
 
     const showClients = () => {
         $("clients").textContent = `Connected: ${host.clients.map((client) => client.id).join(", ") || "none"}`;
