@@ -1028,7 +1028,8 @@ Ajout de fonctionnalité et d'API : **version mineure** (0.22.0 → 0.23.0) selo
 `AGENTS.md`, à convenir avec le mainteneur. Le Faust C++ n'a pas d'équivalent
 WebRTC ; en revanche le protocole reprend l'espace d'adresses de ses interfaces
 OSC[@osc] et HTTP, ce qui rendrait possible une passerelle WebRTC vers OSC pour
-piloter une application native (`faust2xxx -osc`) depuis la même PWA.
+piloter une application native (`faust2xxx -osc`) depuis la même PWA. Un
+`RemoteUI` C++, qui parle le protocole lui-même, est commencé (20.8, étape 7).
 
 # 15. Tests et mesures \label{sec:tests}
 
@@ -2202,10 +2203,28 @@ sous `node.script` peut compiler lui-même avec faustwasm.
      polyphonique, dont le JSON dans faustgen~ (l'interface de
      `mydsp_poly`) peut ne pas correspondre à la voix du téléphone ; un
      vrai téléphone.
-7. **Plus tard, si les étapes 2 à 4 ne suffisent pas** (précision à
-   l'échantillon, WebRTC sans Node, Max 8 sans Node for Max) : le mode
-   serveur C++ comme `RemoteUI` Faust générique, ou la passerelle OSC pour
-   les applications natives.
+7. **Commencé : le mode serveur C++ comme `RemoteUI` Faust générique**,
+   pour la précision à l'échantillon et pour toutes les cibles natives
+   (`faust2caqt`, `faust2juce`...), pas seulement `faustgen~`. Décisions du
+   2026-11-20 :
+   - une classe d'architecture en en-têtes seuls dans grame-cncm/faust ;
+   - d'abord un hôte qui passe par le relais du serveur Node, sans TLS ni
+     WebRTC dans le C++ ;
+   - le mode horodaté par `timed_dsp`, qui applique déjà les valeurs datées
+     dans le bloc pour le MIDI ;
+   - plus tard et en option, un serveur embarqué, WebRTC et `faustgen~` ;
+   - un test de conformance qui joue les mêmes scénarios contre l'hôte C++
+     et l'hôte TypeScript.
+
+   *Fait ici* (phase 0) : l'option `-host-port` de `faust-remote-server`, et
+   `hostListener()` de `createFaustRemoteServer`. C'est un second écouteur
+   HTTP en clair, sur `127.0.0.1`. Il ne sert que le relais, et seulement aux
+   hôtes (`role: 'host'`), avec la même règle de jeton. Il refuse toute
+   requête qui porte un `Origin` (une page de navigateur) ou qui vient
+   d'ailleurs que la boucle locale. Un hôte natif atteint ainsi le relais
+   d'un serveur HTTPS sans faire de TLS ; les télécommandes restent sur le
+   port HTTPS. La passerelle OSC reste possible pour les applications qui
+   n'intègrent pas le `RemoteUI`.
 
 # 21. Plan de mise en œuvre
 

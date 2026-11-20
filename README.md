@@ -195,6 +195,16 @@ node scripts/faust-remote-server.js <dir> -allow-origin https://pages.example.or
 
 `-allow-origin` can be repeated; requests from any other page origin are refused, the relay included. Behind a reverse proxy, the event stream must not be buffered (the server sends `X-Accel-Buffering: no`, which nginx honours). See section 18 of [docs/remote-control.md](docs/remote-control.md) for what using it over the Internet involves.
 
+##### Hosts outside Node on the same computer
+
+A host that runs outside Node, such as a native Faust application, can reach the relay without TLS through a second, plain port that only hosts may use:
+
+```bash
+node scripts/faust-remote-server.js <dir> -cert cert.pem -key key.pem -host-port 8444
+```
+
+It listens on `127.0.0.1` only, serves nothing but `ws://127.0.0.1:8444/relay/<room>`, takes the room's token as the HTTPS port does, and refuses remote controls, browser pages and other computers; the phones keep using the HTTPS port. In code, `server.hostListener()` gives the same listener, closed with the server.
+
 ##### Testing with a phone
 
 Phones need HTTPS for their motion sensors and for installing a PWA, so the server needs a certificate the phone trusts. With [mkcert](https://github.com/FiloSottile/mkcert) (`brew install mkcert` or `sudo port install mkcert`), and the address of the host machine on the local network (`ipconfig getifaddr en0` on macOS) in place of `192.168.1.20`:

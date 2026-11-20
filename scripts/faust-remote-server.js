@@ -9,13 +9,15 @@ const argv = process.argv.slice(2);
 
 if (argv.includes("-help") || argv.includes("-h") || argv.length === 0) {
     console.log(`
-faust-remote-server.js <rootDir> [-port <n>] [-host <address>] [-cert <file.pem> -key <file.pem>] [-allow-origin <origin>]...
+faust-remote-server.js <rootDir> [-port <n>] [-host <address>] [-cert <file.pem> -key <file.pem>] [-allow-origin <origin>]... [-host-port <n>]
 Serves <rootDir> and relays the signaling of Faust remote control sessions.
 With -cert and -key, serves HTTPS: phones need it for their sensors and
 for a PWA, anywhere but on localhost. Default port 8443, default address
 0.0.0.0 (every interface). -allow-origin (repeatable) lets pages served
 from another origin, such as https://example.org, use the signaling and
-the relay.
+the relay. -host-port opens a second, plain HTTP port on 127.0.0.1 that
+only hosts may use, to reach the relay without TLS: for a native Faust
+application on this computer (RemoteUI), when the server runs HTTPS.
 `);
     process.exit(argv.length === 0 ? 1 : 0);
 }
@@ -56,6 +58,8 @@ const port = Number(takeValue("-port") ?? 8443);
 const host = takeValue("-host") ?? "0.0.0.0";
 const certFile = takeValue("-cert");
 const keyFile = takeValue("-key");
+const hostPortValue = takeValue("-host-port");
+const hostPort = hostPortValue === undefined ? undefined : Number(hostPortValue);
 const [root] = argv;
 
 if (!root || !fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
@@ -64,6 +68,10 @@ if (!root || !fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
 }
 if (!Number.isInteger(port) || port < 0 || port > 65535) {
     console.error(`invalid port ${port}`);
+    process.exit(1);
+}
+if (hostPort !== undefined && (!Number.isInteger(hostPort) || hostPort < 0 || hostPort > 65535)) {
+    console.error(`invalid host port ${hostPortValue}`);
     process.exit(1);
 }
 if (!!certFile !== !!keyFile) {
@@ -94,3 +102,12 @@ server.listen(port, host, () => {
     if (!certFile)
         console.log("Without -cert and -key, phones get no sensors and no PWA (HTTPS only, except on localhost).");
 });
+
+if (hostPort !== undefined) {
+    const hosts = server.hostListener();
+    hosts.listen(hostPort, "127.0.0.1", () => {
+        const address = hosts.address();
+        const actualPort = typeof address === "object" && address ? address.port : hostPort;
+        console.log(`Relay for hosts on this computer: ws://127.0.0.1:${actualPort}/relay/<room>`);
+    });
+}

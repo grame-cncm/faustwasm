@@ -24,6 +24,11 @@
  * after the prefix says that end has closed. Same token rule as signaling: a
  * relaying host registers the room as `POST host` does.
  *
+ * Hosts outside Node on this computer (the `RemoteUI` of a native Faust
+ * application): `hostListener()` gives a second, plain HTTP listener that
+ * serves only the relay, and only to hosts. Listening on `127.0.0.1`, it
+ * spares them TLS, which the relay of an HTTPS server otherwise requires.
+ *
  * Other origins: a page served elsewhere (an online editor, say) may use
  * this server's signaling and relay if its origin is in `allowOrigins`. The
  * server then answers CORS preflights and adds the CORS headers; it refuses
@@ -280,7 +285,7 @@ const acceptWebSocket = (req, socket) => {
  *   `root` is the directory served; with `cert` and `key` (PEM), HTTPS;
  *   `allowOrigins`, the origins of pages served elsewhere that may use the
  *   signaling and the relay (`https://example.org`, no path).
- * @returns {(http.Server | https.Server) & { hostRoom: (room: string, token: string) => RelayPort }}
+ * @returns {(http.Server | https.Server) & { hostRoom: (room: string, token: string) => RelayPort, hostListener: () => http.Server }}
  */
 export const createFaustRemoteServer = ({
     root,
@@ -550,8 +555,9 @@ export const createFaustRemoteServer = ({
      *
      * @param {WebSocketPeer} ws
      * @param {string} roomName
+     * @param {boolean} [hostsOnly] refuse remote controls (`hostListener`)
      */
-    const relay = (ws, roomName) => {
+    const relay = (ws, roomName, hostsOnly = false) => {
         /** @type {Room | null} */
         let room = null;
         let id = '';
@@ -579,7 +585,7 @@ export const createFaustRemoteServer = ({
                 if (!candidate) return ws.close();
                 candidate.relayHost?.close();
                 candidate.relayHost = ws;
-            } else if (role === 'remote') {
+            } else if (role === 'remote' && !hostsOnly) {
                 if (
                     !candidate ||
                     candidate.token !== token ||
@@ -674,36 +680,93 @@ export const createFaustRemoteServer = ({
     // for them forever, so it closes them itself
     /** @type {Set<import('stream').Duplex>} */
     const upgraded = new Set();
+    /** The listeners `hostListener` made, closed with the server. */
+    /** @type {Set<http.Server>} */
+    const hostListeners = new Set();
     const closeServer = server.close.bind(server);
     server.close = (callback) => {
         for (const socket of upgraded) socket.destroy();
         for (const port of [...ports]) port.close();
+        for (const listener of hostListeners) listener.close();
+        hostListeners.clear();
         return closeServer(callback);
     };
-    server.on('upgrade', (req, socket) => {
+    /**
+     * Track an upgraded socket, and give the room of a `/relay/<room>` URL.
+     *
+     * @param {http.IncomingMessage} req
+     * @param {import('stream').Duplex} socket
+     */
+    const relayRoom = (req, socket) => {
         upgraded.add(socket);
         socket.on('close', () => upgraded.delete(socket));
-        let match;
         try {
-            match = new URL(req.url ?? '/', 'http://localhost').pathname.match(
-                /^\/relay\/([^/]+)$/
-            );
+            const match = new URL(
+                req.url ?? '/',
+                'http://localhost'
+            ).pathname.match(/^\/relay\/([^/]+)$/);
+            return match ? decodeURIComponent(match[1]) : null;
         } catch {
-            match = null;
+            return null;
         }
+    };
+
+    /**
+     * A plain HTTP listener for hosts running on this computer outside
+     * Node, such as the `RemoteUI` of a native Faust application, which
+     * would otherwise need TLS to reach the relay of an HTTPS server. It
+     * answers only the relay, and only to hosts (`role: 'host'`), with the
+     * same token rule; remote controls stay on the server's own port.
+     * Requests from a browser page (with an `Origin`) and from another
+     * address than this computer's loopback are refused, whatever address
+     * it is made to listen on: listen on `127.0.0.1`.
+     *
+     * @returns {http.Server} to `listen` on; closed with the server
+     */
+    const hostListener = () => {
+        const listener = http.createServer((req, res) =>
+            reply(res, 404, 'not found')
+        );
+        const closeListener = listener.close.bind(listener);
+        listener.close = (callback) => {
+            hostListeners.delete(listener);
+            return closeListener(callback);
+        };
+        listener.on('upgrade', (req, socket) => {
+            const roomName = relayRoom(req, socket);
+            const address = socket.remoteAddress ?? '';
+            const loopback =
+                address === '::1' || /^(::ffff:)?127\./.test(address);
+            if (req.headers.origin !== undefined || !loopback) {
+                socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+                return;
+            }
+            const ws = roomName !== null ? acceptWebSocket(req, socket) : null;
+            if (roomName === null || !ws) {
+                socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+                return;
+            }
+            relay(ws, roomName, true);
+        });
+        hostListeners.add(listener);
+        return listener;
+    };
+
+    server.on('upgrade', (req, socket) => {
+        const roomName = relayRoom(req, socket);
         // CORS does not apply to a WebSocket: the origin is checked here
-        if (match && !checkOrigin(req).allowed) {
+        if (roomName !== null && !checkOrigin(req).allowed) {
             socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
             return;
         }
-        const ws = match ? acceptWebSocket(req, socket) : null;
-        if (!match || !ws) {
+        const ws = roomName !== null ? acceptWebSocket(req, socket) : null;
+        if (roomName === null || !ws) {
             socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
             return;
         }
-        relay(ws, decodeURIComponent(match[1]));
+        relay(ws, roomName);
     });
-    return Object.assign(server, { hostRoom });
+    return Object.assign(server, { hostRoom, hostListener });
 };
 
 export default createFaustRemoteServer;

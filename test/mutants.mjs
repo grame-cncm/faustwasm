@@ -471,6 +471,36 @@ const MUTANTS = [
         tests: 'test/unit/remote-inprocess.test.mjs'
     },
     {
+        what: 'the host listener lets remote controls into the relay',
+        file: 'src/faustRemoteServer.js',
+        from: "} else if (role === 'remote' && !hostsOnly) {",
+        to: "} else if (role === 'remote') {",
+        tests: 'test/unit/remote-server.test.mjs'
+    },
+    {
+        what: 'the host listener answers browser pages',
+        file: 'src/faustRemoteServer.js',
+        from: 'if (req.headers.origin !== undefined || !loopback) {',
+        to: 'if (!loopback) {',
+        tests: 'test/unit/remote-server.test.mjs'
+    },
+    {
+        // Killed only where the computer has a network interface besides
+        // loopback: the test skips itself otherwise
+        what: 'the host listener answers other computers',
+        file: 'src/faustRemoteServer.js',
+        from: 'if (req.headers.origin !== undefined || !loopback) {',
+        to: 'if (req.headers.origin !== undefined) {',
+        tests: 'test/unit/remote-server.test.mjs'
+    },
+    {
+        what: 'closing the server leaves its host listeners open',
+        file: 'src/faustRemoteServer.js',
+        from: 'for (const listener of hostListeners) listener.close();',
+        to: '',
+        tests: 'test/unit/remote-server.test.mjs'
+    },
+    {
         what: 'a remote control waits for its timeout when the room has no WebRTC host',
         file: 'src/remote/rtc.ts',
         from: '        signaling.onerror = reject;',

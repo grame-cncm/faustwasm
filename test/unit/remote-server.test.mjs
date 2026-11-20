@@ -10,6 +10,7 @@
  */
 import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { request as httpRequest } from 'node:http';
@@ -413,5 +414,124 @@ test('the relay checks the origin itself, which CORS does not cover', async () =
         assert.equal((await upgrade(null)).status, 101);
     } finally {
         server.close();
+    }
+});
+
+// ------------------------------------------------------- the host listener
+
+/**
+ * The server's `hostListener`, listening on `address`, and its base URL as
+ * a host on this computer would use it.
+ *
+ * @param {string} [address]
+ */
+const hostListener = async (address = '127.0.0.1') => {
+    const listener = /** @type {any} */ (server).hostListener();
+    await new Promise((resolve) => listener.listen(0, address, () => resolve(null)));
+    return { listener, port: listener.address().port };
+};
+
+/** A WebSocket upgrade of `/relay/<name>`, raw, to read the status. */
+const relayUpgrade = (/** @type {string} */ url, /** @type {string | null} */ origin = null) =>
+    raw(url, 'GET', {
+        connection: 'Upgrade',
+        upgrade: 'websocket',
+        'sec-websocket-version': '13',
+        'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
+        ...(origin ? { origin } : {})
+    });
+
+test('a host on this computer comes through the host listener, remote controls through the server', async () => {
+    const { listener, port } = await hostListener();
+    toClose.push(listener);
+    const name = room();
+    const node = new FakeNode();
+    const host = new FaustRemoteHost(node, { token: 'secret', outputRate: 1e6 });
+    toClose.push(host);
+    host.listenRelay(`http://127.0.0.1:${port}`, name, 'secret', { retry: 50 });
+    await settle(100);
+
+    const dsp = await FaustRemoteDsp.connectRelay(base, name, {
+        token: 'secret',
+        pingInterval: 0,
+        gestureEnd: 0
+    });
+    toClose.push(dsp);
+    /** @type {number[]} */
+    const levels = [];
+    dsp.setOutputParamHandler((path, value) => levels.push(value));
+    dsp.setParamValue(GATE, 1);
+    await settle();
+    assert.deepEqual(node.writesTo(GATE), [1]);
+    node.emit('/t/level', 0.5);
+    await settle();
+    assert.equal(levels.at(-1), 0.5);
+    dsp.close();
+    await settle();
+    assert.deepEqual(node.writesTo(GATE), [1, 0]);
+});
+
+test('the host listener serves hosts only, and no browser page', async () => {
+    const { listener, port } = await hostListener();
+    toClose.push(listener);
+    const local = `http://127.0.0.1:${port}`;
+    const name = room();
+    const host = new FaustRemoteHost(new FakeNode(), { token: 'secret' });
+    toClose.push(host);
+    host.listenRelay(local, name, 'secret', { retry: 50 });
+    await settle(100);
+
+    // A remote control, even with the token, is refused here...
+    await assert.rejects(
+        FaustRemoteDsp.connectRelay(local, name, { token: 'secret' }),
+        /refused/
+    );
+    // ...and accepted on the server's own port
+    const dsp = await FaustRemoteDsp.connectRelay(base, name, {
+        token: 'secret',
+        pingInterval: 0
+    });
+    toClose.push(dsp);
+    // A browser page cannot reach it, whatever its origin
+    assert.equal((await relayUpgrade(`${local}/relay/${name}`, base)).status, 403);
+    assert.equal((await relayUpgrade(`${local}/relay/${name}`)).status, 101);
+    // Nothing but the relay
+    assert.equal((await fetch(`${local}/package.json`)).status, 404);
+    assert.equal((await relayUpgrade(`${local}/signal/${name}/host`)).status, 400);
+    // The host's token rule is the server's: another token cannot take the room
+    const { listenRelay } = await import('../../dist/remote/index.js');
+    const errors = [];
+    const stop = listenRelay(local, name, 'other', () => {}, { retry: 50 }, (error) => {
+        errors.push(error);
+        setTimeout(stop, 5);
+    });
+    await settle(300);
+    assert.equal(errors.length, 1);
+});
+
+test('the host listener refuses what does not come from this computer\'s loopback', async (t) => {
+    const lan = Object.values(os.networkInterfaces())
+        .flat()
+        .find((i) => i && i.family === 'IPv4' && !i.internal);
+    if (!lan) return t.skip('no network interface besides loopback');
+    // Made to listen everywhere, it still refuses an outside address
+    const { listener, port } = await hostListener('0.0.0.0');
+    toClose.push(listener);
+    assert.equal((await relayUpgrade(`http://${lan.address}:${port}/relay/r1`)).status, 403);
+    assert.equal((await relayUpgrade(`http://127.0.0.1:${port}/relay/r1`)).status, 101);
+});
+
+test('closing the server closes its host listeners', async () => {
+    const server = /** @type {any} */ (createFaustRemoteServer({ root: ROOT }));
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(null)));
+    const listener = server.hostListener();
+    await new Promise((resolve) => listener.listen(0, '127.0.0.1', () => resolve(null)));
+    assert.ok(listener.listening);
+    try {
+        await new Promise((resolve) => server.close(() => resolve(null)));
+        assert.ok(!listener.listening);
+    } finally {
+        // Left open, it would keep this test file from ever ending
+        if (listener.listening) listener.close();
     }
 });

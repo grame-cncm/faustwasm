@@ -1019,7 +1019,8 @@ A feature and API addition: **minor version** (0.22.0 → 0.23.0) according to
 equivalent; on the other hand, the protocol reuses the address space of its
 OSC[@osc] and HTTP interfaces, which would make a WebRTC-to-OSC gateway
 possible, to control a native application (`faust2xxx -osc`) from the same
-PWA.
+PWA. A C++ `RemoteUI`, which speaks the protocol itself, has been started
+(20.8, step 7).
 
 # 15. Tests and measurements \label{sec:tests}
 
@@ -2145,9 +2146,26 @@ phones the wasm of the DSP it runs, and a JavaScript host under
      new module and JSON again for its local node. Not tried: a
      polyphonic DSP, whose JSON in faustgen~ (the `mydsp_poly` interface)
      may not match the phone's voice; a real phone.
-7. **Later, if steps 2 to 4 fall short** (sample-accurate timing, WebRTC
-   without Node, Max 8 without Node for Max): the C++ server mode as a
-   generic Faust `RemoteUI`, or the OSC gateway for native applications.
+7. **Started: the C++ server mode as a generic Faust `RemoteUI`**, for
+   sample accuracy and for every native target (`faust2caqt`,
+   `faust2juce`...), not just `faustgen~`. Decisions of 2026-11-20:
+   - a header-only architecture class in grame-cncm/faust;
+   - first a host that goes through the Node server's relay, with neither
+     TLS nor WebRTC in the C++ code;
+   - the timestamped mode through `timed_dsp`, which already applies dated
+     values inside the block for MIDI;
+   - later, as options, an embedded server, WebRTC and `faustgen~`;
+   - a conformance test that plays the same scenarios against the C++ host
+     and the TypeScript host.
+
+   *Done here* (phase 0): the `-host-port` option of `faust-remote-server`,
+   and `hostListener()` of `createFaustRemoteServer`. It is a second, plain
+   HTTP listener on `127.0.0.1`. It serves only the relay, and only to hosts
+   (`role: 'host'`), with the same token rule. It refuses any request that
+   carries an `Origin` (a browser page) or that comes from anywhere but
+   loopback. A native host thus reaches the relay of an HTTPS server without
+   doing TLS; remote controls stay on the HTTPS port. The OSC gateway remains
+   possible for applications that do not include `RemoteUI`.
 
 # 21. Implementation plan
 
