@@ -1654,7 +1654,8 @@ The goal: the same remote control (PWA, sliders, sensors, local sound)
 driving a **Max patch** instead of a Web Audio page. Two things are to be
 decided: **what speaks to the phones** inside Max, and **what it drives**:
 a `faustgen~` DSP, or any patch through its parameters. This section is a
-feasibility study and a plan; nothing is implemented.
+feasibility study and a plan; steps 1 to 4 of the plan (20.8) are now
+implemented, and tried in Max 9.2.1.
 
 What Max offers was read in the Cycling '74 documentation (Max 9.2) and in
 the `faustgen~` sources (`faust/embedded/faustgen`); what could only be read,
@@ -1924,8 +1925,16 @@ phones the wasm of the DSP it runs, and a JavaScript host under
   jitter spikes, not losses. WebRTC needs `node.script` with a native
   module, or the C++ mode.
 - **Max's main thread**: `v8` handles the network where Max draws and
-  handles the mouse; a heavy patch delays messages (*to be measured*).
-  `node.script` messages arrive on the scheduler thread.
+  handles the mouse; a heavy patch delays messages. On an idle patch, a
+  round trip from a remote control to the patch and back (over the
+  loopback, 200 writes) takes 12 ms (median, 15 ms at the 99th percentile)
+  through `v8`, and the same through `node.script`; under load, not
+  measured. `node.script` messages arrive on the scheduler thread.
+- **What `v8` lacks besides WebRTC** (step 4): the computer's network
+  addresses, so the pairing link needs `address`; `crypto`, so a token is
+  drawn from the handshake keys of Max's own WebSocket client; folders, so
+  the session is kept only where `~/.faust-remote/` already exists, with
+  the default permissions of a new file.
 - **Timed mode** keeps its meaning (values played at regular intervals) but
   with the precision of the Max thread that applies them, not of the audio
   sample; only the C++ mode would make it sample-accurate.
@@ -1933,8 +1942,11 @@ phones the wasm of the DSP it runs, and a JavaScript host under
   only once `faustgen~` produces it (20.6), and it is the same DSP, not the
   same samples: Max computes the LLVM code, the phone the wasm, each with
   its own phases and noise, as in 19.6.
-- **Untested**: everything in this section was read, not run in Max;
-  `v8` networking is recent (9.2) and documented as minimal.
+- **Tried, and only read**: steps 1 to 4 ran in Max 9.2.1 (20.8); the
+  rest of this section (`faustgen~` additions, its wasm, the C++ mode) was
+  only read. `v8` networking is recent (9.2) and documented as minimal:
+  what step 4 relies on was read in the JavaScript Max embeds in `v8`, and
+  tried there.
 
 ## 20.8. Plan
 
@@ -2013,9 +2025,38 @@ phones the wasm of the DSP it runs, and a JavaScript host under
    `max-remote.test.mjs`), and in Max 9.2.1: the JSON built from two
    `live.dial`, a `live.toggle` and a `live.numbox`, a phone's write moving
    the dial, and a `metro`-driven parameter reaching the phone.
-4. **`v8`**: the same in one file in the patch, Max 9.2 and later, relay
-   only (20.3, point 4). Measure the latency against
+4. *(Done.)* **`v8`**: the same in one file in the patch, Max 9.2 and
+   later, relay only (20.3, point 4). Measure the latency against
    `node.script`.
+
+   As implemented: `faust-remote-v8.js`, one self-contained file built
+   into `assets/max/` by `npm run build-esm` from `src/max/v8.ts`, takes
+   the `node.script`'s place in a patch, with the same arguments (without
+   `@args`, paths relative to the patch's folder) and the same messages
+   (`faust-remote-v8-demo.maxpat`). What the patch and the phones say to
+   each other is now shared by the two scripts, `src/max/bridge.ts`, which
+   the `node.script` loads from `dist/remote/max-bridge.js`. The server,
+   `src/max/v8server.ts`, is rebuilt on what `v8` has: its `http` and
+   `https` modules (a subset of Node's, with the `upgrade` event), its
+   `WebSocketServer` (`noServer`, `handleUpgrade`), and Max's `File` for
+   the PWA's files; it serves one room, whose host is in the same object,
+   answers signaling with HTTP 409 so that a remote control goes to the
+   relay at once, and lets only that room's remote controls into the
+   relay. What `v8` lacks, read in the JavaScript Max embeds in it and
+   tried there: no `crypto` (a new token is drawn from Max's WebSocket
+   client, whose RFC 6455 handshake key is 16 random bytes: two handshakes
+   with a throwaway server on the loopback, hashed with SHA-256), no
+   network interfaces (the link names `address`, given by the user;
+   `127.0.0.1` otherwise, with a word in the console), `require` only by
+   absolute path (hence one bundle), and a file written in a folder that
+   does not exist reports success (the session is read back to check).
+   The session file is the `node.script`'s, same name for the same root
+   and port. A JSON that comes before the server is up is kept. Tested in
+   Node with fakes of Max (`test/cli/max-v8.test.mjs`), and in Max 9.2.1
+   with `faustgen~`: the PWA served, signaling's 409, a remote control's
+   write reaching `faustgen~` and a change made in the patch reaching the
+   remote control; round trips as fast as through `node.script` (20.7).
+   Not done: `trace`, a test on a real phone.
 5. **`faustgen~` additions** (20.4), in grame-cncm/faust.
 6. **`faustgen~` compiles for the phones** (20.6): the wasm written at each
    compilation, the protocol message that tells connected phones the DSP

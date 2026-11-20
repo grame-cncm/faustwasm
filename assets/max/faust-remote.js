@@ -6,7 +6,9 @@
  *
  * It runs, in Node, faustwasm's remote control server (the phones' PWA,
  * signaling and the WebSocket relay) and a FaustRemoteHost on a
- * FaustRemoteHub, which stands in for the DSP: what the phones write comes
+ * FaustRemoteHub, which stands in for the DSP (src/max/bridge.ts, loaded
+ * from dist/remote/max-bridge.js and shared with faust-remote-v8.js, the
+ * same in a `v8` object): what the phones write comes
  * out of this object as messages for faustgen~, and what faustgen~ reports
  * (bargraphs, and its controls when asked with `dump`) comes back in. The
  * phones connect through the relay: Node has no WebRTC (section 20 of
@@ -62,9 +64,6 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const maxAPI = require('max-api');
 
-/** How often faustgen~ is asked for its controls, while phones are connected. */
-const DUMP_PERIOD = 250;
-
 const parseArgs = (argv) => {
     const args = {};
     for (let i = 0; i + 1 < argv.length; i += 2) args[String(argv[i])] = String(argv[i + 1]);
@@ -72,25 +71,6 @@ const parseArgs = (argv) => {
 };
 
 const error = (message) => maxAPI.post(message, maxAPI.POST_LEVELS.ERROR);
-
-/** Each control's label and address, both ways, from a Faust UI tree. */
-const labels = (ui) => {
-    const byLabel = new Map();
-    const byAddress = new Map();
-    const walk = (items) => {
-        for (const item of items ?? []) {
-            if (item.items) walk(item.items);
-            else if (item.address && item.label !== undefined) {
-                if (byLabel.has(item.label))
-                    error(`faust-remote: two controls are labelled "${item.label}"; the first one is kept`);
-                else byLabel.set(item.label, item.address);
-                byAddress.set(item.address, item.label);
-            }
-        }
-    };
-    walk(ui);
-    return { byLabel, byAddress };
-};
 
 /** This machine's first local network IPv4 address, for the pairing link. */
 const localAddress = () => {
@@ -104,7 +84,8 @@ const localAddress = () => {
 
 /**
  * The room and token, kept from one run to the next so that a phone that
- * was paired once finds its host again; outside the folder served.
+ * was paired once finds its host again; outside the folder served. The
+ * v8 version (faust-remote-v8.js) uses the same file.
  */
 const session = (root, port, args) => {
     const dir = path.join(os.homedir(), '.faust-remote');
@@ -156,10 +137,19 @@ const main = async () => {
     const root = path.resolve(__dirname, args.root);
     if (!fs.existsSync(path.join(root, 'remote', 'index.html')))
         return error(`faust-remote: ${root} has no remote/index.html (generate it with faust2wasm -remote)`);
+    let ui;
+    if (args.ui) {
+        const file = path.resolve(__dirname, args.ui);
+        try {
+            ui = fs.readFileSync(file, 'utf8');
+        } catch (e) {
+            return error(`faust-remote: cannot read ${file} (${e.message})`);
+        }
+    }
     const pkg = path.resolve(args.faustwasm ?? path.join(__dirname, '..', '..'));
     const load = (file) => import(pathToFileURL(path.join(pkg, file)).href);
     const { default: createFaustRemoteServer } = await load('src/faustRemoteServer.js');
-    const { FaustRemoteHost, FaustRemoteHub } = await load('dist/remote/host.js');
+    const { createMaxBridge } = await load('dist/remote/max-bridge.js');
 
     const port = Number(args.port ?? 8443);
     const secure = Boolean(args.cert && args.key);
@@ -174,117 +164,29 @@ const main = async () => {
     });
     const { room, token } = session(root, port, args);
     const origin = `${secure ? 'https' : 'http'}://${args.address ?? localAddress()}:${port}`;
-    const link = `${origin}/remote/index.html#room=${room}&token=${token}`;
     maxAPI.post(`faust-remote: serving ${root} on ${origin}`);
 
-    const params = args.target === 'params';
-    const hostOptions = {
-        token,
-        sensorPolicy: args.sensors,
-        assign: args.assign === 'groups' ? 'groups' : undefined,
-        playoutDelay: args.delay ? Number(args.delay) / 1000 : undefined
-    };
-
-    /** The current DSP: its JSON, hub, host and relay port. */
-    let current = null;
-    let dumpTimer = null;
-
-    const clientsChanged = () => {
-        const count = current?.host.clients.length ?? 0;
-        outlet('clients', count);
-        // faustgen~ says nothing of its controls unless asked; parameters
-        // report their own changes
-        if (params) return;
-        if (count > 0 && !dumpTimer) dumpTimer = setInterval(() => outlet('dump'), DUMP_PERIOD);
-        if (count === 0 && dumpTimer) {
-            clearInterval(dumpTimer);
-            dumpTimer = null;
-        }
-    };
-
-    /** A new DSP (or the first): a new hub and host; phones reconnect. */
-    const setDSP = (json) => {
-        if (json === current?.json) return;
-        let hub;
-        let names;
-        try {
-            hub = new FaustRemoteHub(json, {
-                onwrite: (address, value) =>
-                    params
-                        ? outlet('pset', names.byAddress.get(address) ?? address, value)
-                        : outlet('param', address, value),
-                onmidi: (data) => outlet('midi', ...data)
-            });
-            names = labels(hub.getMeta().ui);
-        } catch (e) {
-            return error(`faust-remote: not a Faust JSON (${e.message})`);
-        }
-        if (current) {
-            current.host.close();
-            current.port.close();
-            current.hub.close();
-        }
-        const host = new FaustRemoteHost(hub, hostOptions);
-        host.addEventListener('join', (event) => {
-            maxAPI.post(`faust-remote: phone ${event.detail.id} joined${event.detail.group ? ` (${event.detail.group})` : ''}`);
-            clientsChanged();
-        });
-        host.addEventListener('leave', (event) => {
-            maxAPI.post(`faust-remote: phone ${event.detail.id} left`);
-            clientsChanged();
-        });
-        host.addEventListener('error', (event) => error(`faust-remote: ${event.detail?.message ?? event.detail}`));
-        const relay = server.hostRoom(room, token);
-        host.acceptRelay(relay);
-        current = { json, hub, host, port: relay, names, inputs: new Set(hub.getParams()) };
-        clientsChanged();
-        maxAPI.post(`faust-remote: ${hub.getMeta().name ?? 'DSP'} ready, remote control: ${link}`);
-        outlet('link', link);
-    };
-
-    /** A value reported by the patch: a control that moved, or a bargraph. */
-    const report = (address, value) => {
-        if (!Number.isFinite(value)) return;
-        if (current.inputs.has(address)) {
-            // What a phone wrote comes back the same: only a change made in
-            // the patch goes to the phones
-            if (value !== current.hub.getParamValue(address)) current.hub.update(address, value);
-        } else {
-            current.hub.output(address, value);
-        }
-    };
-
-    // With `ui`, the interface is the file's, whatever the patch sends
-    const uiFile = args.ui ? path.resolve(__dirname, args.ui) : null;
-    on('json', (...parts) => {
-        if (!uiFile) setDSP(parts.join(' '));
-    });
-    on('values', (...pairs) => {
-        if (!current) return;
-        for (let i = 0; i + 1 < pairs.length; i += 2) report(String(pairs[i]), Number(pairs[i + 1]));
-    });
-    on('pvalues', (...pairs) => {
-        if (!current) return;
-        for (let i = 0; i + 1 < pairs.length; i += 2) {
-            const address = current.names.byLabel.get(String(pairs[i]));
-            if (address) report(address, Number(pairs[i + 1]));
+    // What the patch and the phones say to each other: src/max/bridge.ts,
+    // shared with faust-remote-v8.js
+    const bridge = createMaxBridge({
+        outlet,
+        post: (message) => maxAPI.post(message),
+        error,
+        hostRoom: () => server.hostRoom(room, token),
+        link: `${origin}/remote/index.html#room=${room}&token=${token}`,
+        params: args.target === 'params',
+        ui,
+        hostOptions: {
+            token,
+            sensorPolicy: args.sensors,
+            assign: args.assign === 'groups' ? 'groups' : undefined,
+            playoutDelay: args.delay ? Number(args.delay) / 1000 : undefined
         }
     });
-
-    if (uiFile) {
-        try {
-            setDSP(fs.readFileSync(uiFile, 'utf8'));
-        } catch (e) {
-            return error(`faust-remote: cannot read ${uiFile} (${e.message})`);
-        }
-        // Parameters report only their changes: their current values are
-        // asked for once, through the JSON faust-params.js builds
-        if (params) outlet('getjson');
-        return;
-    }
-    // The JSON the patch already has, until it has given one
-    const ask = setInterval(() => (current ? clearInterval(ask) : outlet('getjson')), 1000);
-    outlet('getjson');
+    on('json', (...parts) => bridge.json(parts.join(' ')));
+    on('values', (...pairs) => bridge.values(...pairs));
+    on('pvalues', (...pairs) => bridge.pvalues(...pairs));
+    bridge.start();
 };
 
 main().catch((e) => error(`faust-remote: ${e.message}`));

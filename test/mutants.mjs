@@ -478,11 +478,39 @@ const MUTANTS = [
         tests: 'test/unit/remote-inprocess.test.mjs'
     },
     {
-        what: "the Max host script takes faustgen~'s bargraphs for changes of its controls",
-        file: 'assets/max/faust-remote.js',
-        from: '                current.hub.output(address, value);',
-        to: '                current.hub.update(address, value);',
+        what: "the Max host takes faustgen~'s bargraphs for changes of its controls",
+        file: 'src/max/bridge.ts',
+        from: '            current.hub.output(address, value);',
+        to: '            current.hub.update(address, value);',
         tests: 'test/cli/max-remote.test.mjs'
+    },
+    {
+        what: 'the same, seen from the v8 script',
+        file: 'src/max/bridge.ts',
+        from: '            current.hub.output(address, value);',
+        to: '            current.hub.update(address, value);',
+        tests: 'test/cli/max-v8.test.mjs'
+    },
+    {
+        what: "the v8 relay lets a second host into the room of the one in Max",
+        file: 'src/max/v8server.ts',
+        from: "hello?.role !== 'remote' ||",
+        to: '',
+        tests: 'test/cli/max-v8.test.mjs'
+    },
+    {
+        what: 'the v8 script keeps its session under another name than the node.script',
+        file: 'src/max/v8.ts',
+        from: '`${root}:${port}`',
+        to: '`${root}|${port}`',
+        tests: 'test/cli/max-v8.test.mjs'
+    },
+    {
+        what: 'the v8 script drops a JSON that comes before its server is up',
+        file: 'src/max/v8.ts',
+        from: 'else early = text;',
+        to: 'else early = undefined;',
+        tests: 'test/cli/max-v8.test.mjs'
     },
     {
         what: "faust-json.js ignores faustgen~'s control outlet lists, as it first did in Max",

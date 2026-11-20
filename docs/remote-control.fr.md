@@ -1673,7 +1673,8 @@ Le but : la même télécommande (PWA, curseurs, capteurs, son local) qui pilote
 un **patch Max** au lieu d'une page Web Audio. Deux choses sont à décider :
 **qui parle aux téléphones** dans Max, et **ce qu'il pilote** : un DSP
 `faustgen~`, ou n'importe quel patch à travers ses paramètres. Cette section
-est une étude de faisabilité et un plan ; rien n'est réalisé.
+a commencé comme une étude de faisabilité et un plan ; les étapes 1 à 4 du
+plan (20.8) sont maintenant réalisées, et essayées dans Max 9.2.1.
 
 Ce que Max offre a été lu dans la documentation de Cycling '74 (Max 9.2) et
 dans les sources de `faustgen~` (`faust/embedded/faustgen`) ; ce qui n'a pu
@@ -1959,8 +1960,17 @@ sous `node.script` peut compiler lui-même avec faustwasm.
   tête de file) : de rares pics de gigue, pas de pertes. WebRTC demande
   `node.script` avec un module natif, ou le mode C++.
 - **Le fil principal de Max** : `v8` traite le réseau là où Max dessine et
-  gère la souris ; un patch chargé retarde les messages (*à mesurer*). Les
-  messages de `node.script` arrivent sur le fil de l'ordonnanceur.
+  gère la souris ; un patch chargé retarde les messages. Sur un patch au
+  repos, un aller-retour d'une télécommande au patch et retour (par la
+  boucle locale, 200 écritures) prend 12 ms (médiane, 15 ms au 99e
+  centile) par `v8`, et autant par `node.script` ; sous charge, non mesuré.
+  Les messages de `node.script` arrivent sur le fil de l'ordonnanceur.
+- **Ce qui manque à `v8` en plus de WebRTC** (étape 4) : les adresses
+  réseau de l'ordinateur, donc le lien d'appairage demande `address` ;
+  `crypto`, donc un jeton est tiré des clés de poignée de main du client
+  WebSocket de Max lui-même ; les dossiers, donc la session n'est gardée que
+  là où `~/.faust-remote/` existe déjà, avec les permissions par défaut
+  d'un nouveau fichier.
 - **Le mode horodaté** garde son sens (des valeurs jouées à intervalles
   réguliers), mais avec la précision du fil de Max qui les applique, pas de
   l'échantillon audio ; seul le mode C++ le rendrait exact à l'échantillon.
@@ -1968,8 +1978,11 @@ sous `node.script` peut compiler lui-même avec faustwasm.
   qu'une fois que `faustgen~` le produit (20.6), et c'est le même DSP, pas
   les mêmes échantillons : Max calcule le code LLVM, le téléphone le wasm,
   chacun avec ses phases et son bruit, comme en 19.6.
-- **Non essayé** : tout ce qui est dans cette section a été lu, pas exécuté
-  dans Max ; le réseau de `v8` est récent (9.2) et documenté comme minimal.
+- **Essayé, et seulement lu** : les étapes 1 à 4 ont tourné dans Max 9.2.1
+  (20.8) ; le reste de cette section (les ajouts à `faustgen~`, son wasm,
+  le mode C++) a seulement été lu. Le réseau de `v8` est récent (9.2) et
+  documenté comme minimal : ce sur quoi l'étape 4 s'appuie a été lu dans le
+  JavaScript que Max embarque dans `v8`, et essayé là.
 
 ## 20.8. Plan
 
@@ -2057,9 +2070,41 @@ sous `node.script` peut compiler lui-même avec faustwasm.
    construit à partir de deux `live.dial`, d'un `live.toggle` et d'un
    `live.numbox`, l'écriture d'un téléphone qui fait bouger le cadran, et
    un paramètre mené par un `metro` qui atteint le téléphone.
-4. **`v8`** : la même chose en un fichier dans le patch, Max 9.2 et
-   suivantes, relais seulement (20.3, point 4). Mesurer la
-   latence par rapport à `node.script`.
+4. *(Fait.)* **`v8`** : la même chose en un fichier dans le patch, Max 9.2
+   et suivantes, relais seulement (20.3, point 4). Mesurer la latence par
+   rapport à `node.script`.
+
+   Tel que réalisé : `faust-remote-v8.js`, un seul fichier autonome
+   construit dans `assets/max/` par `npm run build-esm` à partir de
+   `src/max/v8.ts`, prend la place du `node.script` dans un patch, avec les
+   mêmes arguments (sans `@args`, chemins relatifs au dossier du patch) et
+   les mêmes messages (`faust-remote-v8-demo.maxpat`). Ce que le patch et
+   les téléphones se disent est maintenant partagé par les deux scripts,
+   `src/max/bridge.ts`, que le `node.script` charge depuis
+   `dist/remote/max-bridge.js`. Le serveur, `src/max/v8server.ts`, est
+   refait sur ce que `v8` a : ses modules `http` et `https` (un
+   sous-ensemble de ceux de Node, avec l'événement `upgrade`), son
+   `WebSocketServer` (`noServer`, `handleUpgrade`), et le `File` de Max pour
+   les fichiers de la PWA ; il sert une salle, dont l'hôte est dans le même
+   objet, répond à la signalisation par HTTP 409 pour qu'une télécommande
+   passe au relais tout de suite, et ne laisse entrer dans le relais que
+   les télécommandes de cette salle. Ce qui manque à `v8`, lu dans le
+   JavaScript que Max y embarque et essayé là : pas de `crypto` (un nouveau
+   jeton est tiré du client WebSocket de Max, dont la clé de poignée de
+   main RFC 6455 fait 16 octets aléatoires : deux poignées de main avec un
+   serveur jetable sur la boucle locale, hachées en SHA-256), pas
+   d'interfaces réseau (le lien nomme `address`, donnée par l'utilisateur ;
+   `127.0.0.1` sinon, avec un mot dans la console), `require` seulement par
+   chemin absolu (d'où un seul paquet), et un fichier écrit dans un dossier
+   qui n'existe pas dit avoir réussi (la session est relue pour vérifier).
+   Le fichier de session est celui du `node.script`, même nom pour la même
+   racine et le même port. Un JSON arrivé avant que le serveur soit prêt
+   est gardé. Testé sous Node avec des faux de Max
+   (`test/cli/max-v8.test.mjs`), et dans Max 9.2.1 avec `faustgen~` : la
+   PWA servie, le 409 de la signalisation, l'écriture d'une télécommande
+   qui atteint `faustgen~` et un changement fait dans le patch qui atteint
+   la télécommande ; des allers-retours aussi rapides que par `node.script`
+   (20.7). Pas fait : `trace`, un essai sur un vrai téléphone.
 5. **Les ajouts à `faustgen~`** (20.4), dans grame-cncm/faust.
 6. **`faustgen~` compile pour les téléphones** (20.6) : le wasm écrit à
    chaque compilation, le message du protocole qui prévient les téléphones
