@@ -2005,10 +2005,33 @@ sous `node.script` peut compiler lui-même avec faustwasm.
      serveur répond à l'offre d'une télécommande par un HTTP 409, et
      l'erreur de signalisation atteint maintenant la télécommande, qui passe
      au relais tout de suite au lieu d'attendre son délai de 8 s.
-2. **`node.script` d'abord** : le serveur existant et l'hôte sans
-   changement, l'adaptateur `faustgen~`, un patch d'exemple et une
-   abstraction. WebRTC avec un `node-datachannel` facultatif. Le chemin le
-   plus court vers un téléphone qui pilote `faustgen~`, sur Max 8 et 9.
+2. *(Fait, sans WebRTC.)* **`node.script` d'abord** : le serveur existant
+   et l'hôte sans changement, l'adaptateur `faustgen~`, un patch d'exemple
+   et une abstraction. WebRTC avec un `node-datachannel` facultatif. Le
+   chemin le plus court vers un téléphone qui pilote `faustgen~`, sur Max 8
+   et 9.
+
+   Tel que réalisé, dans `assets/max/` : `faust-remote.js`, le
+   `node.script`, fait tourner `createFaustRemoteServer` et un hôte sur un
+   `FaustRemoteHub` (étape 1), avec le relais de la salle par `hostRoom` ;
+   ce qu'écrivent les téléphones en sort sous la forme `param <chemin>
+   <valeur>` pour l'entrée de faustgen~, et `midi` pour `midievent`.
+   `faust-json.js`, un objet `js` classique, capte le JSON que faustgen~
+   envoie à chaque `js` de son patcher quand il compile (transmis en
+   `json`, de nouveau sur `getjson`), et réduit ce que la sortie de
+   contrôle de faustgen~ signale à chaque bloc aux valeurs qui ont changé,
+   30 fois par seconde au plus (`values <chemin> <valeur> ...`) ;
+   faustgen~ les envoie sous forme de listes. Tant que des téléphones sont
+   connectés, le script demande un `dump` quatre fois par seconde et
+   transmet les contrôles changés dans le patch. Un DSP recompilé relance
+   l'hôte, et les téléphones se reconnectent (le message de protocole de
+   l'étape 6 n'existe pas encore). `faust-remote-demo.maxpat` relie le
+   tout, et `trace <fichier>` consigne chaque message entrant et sortant
+   du script. Testé sous Node avec un faux `max-api`
+   (`test/cli/max-remote.test.mjs`), et dans Max 9.2.1 avec faustgen~ :
+   l'écriture d'un téléphone a atteint faustgen~, dont le `dump` l'a
+   rendue, et son bargraph est revenu au serveur. Pas fait : WebRTC par
+   `node-datachannel`, une abstraction, un essai sur un vrai téléphone.
 3. **L'adaptateur paramètres du patch** : un JSON tiré de
    `ParameterInfoProvider`, ou d'un `.dsp` fait seulement d'interface.
 4. **`v8`** : la même chose en un fichier dans le patch, Max 9.2 et

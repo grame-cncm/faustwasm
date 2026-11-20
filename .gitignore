@@ -104,3 +104,6 @@ src/generated/
 # a private key must never be committed
 *.pem
 *.key
+
+# The remote control a user generates next to the Max example (README)
+assets/max/app/

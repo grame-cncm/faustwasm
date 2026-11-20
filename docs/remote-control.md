@@ -1967,10 +1967,30 @@ phones the wasm of the DSP it runs, and a JavaScript host under
      server answers a remote control's offer with HTTP 409: the signaling
      error now reaches the remote control, which goes to the relay at once
      instead of after its 8 s timeout.
-2. **`node.script` first**: the existing server and the host unchanged, the
-   `faustgen~` adapter, an example patch and abstraction. WebRTC with an
-   optional `node-datachannel`. The fastest way to a phone driving
-   `faustgen~` on Max 8 and 9.
+2. *(Done, without WebRTC.)* **`node.script` first**: the existing server
+   and the host unchanged, the `faustgen~` adapter, an example patch and
+   abstraction. WebRTC with an optional `node-datachannel`. The fastest way
+   to a phone driving `faustgen~` on Max 8 and 9.
+
+   As implemented, in `assets/max/`: `faust-remote.js`, the `node.script`,
+   runs `createFaustRemoteServer` and a host on a `FaustRemoteHub` (step
+   1), with the room's relay through `hostRoom`; what the phones write
+   leaves it as `param <path> <value>` for faustgen~'s inlet, and `midi`
+   for `midievent`. `faust-json.js`, a classic `js` object, catches the
+   JSON faustgen~ sends to every `js` of its patcher when it compiles
+   (passed on as `json`, again on `getjson`), and thins what faustgen~'s
+   control outlet reports at every block to the values that changed, 30
+   times a second at most (`values <path> <value> ...`); faustgen~ sends
+   them as lists. While phones are connected, the script asks for `dump`
+   four times a second and passes on the controls that changed in the
+   patch. A recompiled DSP restarts the host, and the phones connect
+   again (the protocol message of step 6 is not there yet).
+   `faust-remote-demo.maxpat` wires it all, and `trace <file>` records
+   every message in and out of the script. Tested in Node with a fake
+   `max-api` (`test/cli/max-remote.test.mjs`), and in Max 9.2.1 with
+   faustgen~: a phone's write reached faustgen~, whose `dump` gave it
+   back, and its bargraph came back to the server. Not done: WebRTC
+   through `node-datachannel`, an abstraction, a test on a real phone.
 3. **The patch-parameter adapter**: JSON from `ParameterInfoProvider`, or
    from an interface-only `.dsp`.
 4. **`v8`**: the same in one file in the patch, Max 9.2 and later, relay

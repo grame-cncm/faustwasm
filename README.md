@@ -217,6 +217,16 @@ The phone must trust mkcert's authority, `rootCA.pem` in the folder `mkcert -CAR
 
 On its first run, macOS may ask whether to allow incoming connections for `node`: allow them.
 
+##### A faustgen~ in a Max patch
+
+Phones can drive a [faustgen~](https://github.com/grame-cncm/faust/tree/master-dev/embedded/faustgen) in Max 8 or 9 the same way, through a `node.script` object (Node for Max) that runs the server and the host in the patch. The files are in [assets/max](assets/max): `faust-remote.js` (the `node.script`), `faust-json.js` (a `js` object that catches faustgen~'s JSON and thins its bargraphs) and an example, `faust-remote-demo.maxpat` with its DSP `faust-remote-demo.dsp`.
+
+1. Generate the phones' remote control from the same DSP, next to the patch: `node scripts/faust2wasm.js assets/max/faust-remote-demo.dsp assets/max/app -remote` (or with your own DSP). Give the DSP a `declare name`: faustgen~ names its controls after it, and "Play locally" then finds them on the phone.
+2. Open `faust-remote-demo.maxpat`. The `node.script` starts by itself (`@autostart 1`) and serves the folder given in its `@args` (`root app`); the pairing link appears in the patch and in the Max console. For a phone's sensors, add `cert <file> key <file>` to `@args`, as in [Testing with a phone](#testing-with-a-phone), and open the link by the machine's address.
+3. Open the link on a phone and tap **Connect**: the phone's sliders move faustgen~'s, its bargraphs follow faustgen~'s, and a change made in the patch reaches the phone.
+
+Other `@args`: `port`, `address`, `room` and `token` (otherwise kept from one run to the next, in `~/.faust-remote/`), `sensors shared|mean|assigned`, `assign groups`, `delay <ms>`, and `trace <file>`, which writes every message in and out of the script to a file. Phones connect through the relay: Node has no WebRTC. When the DSP is edited in faustgen~, the host restarts on the new one and the phones have to connect again. See section 20 of [docs/remote-control.md](docs/remote-control.md).
+
 ##### Using the API
 
 The generated pages use the remote control library, which can also be used directly, to add remote control to an application of one's own. It has one bundle per role, so that a phone downloads none of the host's code: `dist/remote/host.js` for the page running the DSP, `dist/remote/client.js` for the remote control (`dist/remote/index.js` has both). It is experimental, not exported by the main package, and may change.

@@ -1,0 +1,6 @@
+{
+    "name": "faust-remote-max",
+    "private": true,
+    "description": "The node.script of faust-remote-demo.maxpat: CommonJS, whatever the package around it says.",
+    "type": "commonjs"
+}

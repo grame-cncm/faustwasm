@@ -476,6 +476,13 @@ const MUTANTS = [
         from: '        signaling.onerror = reject;',
         to: '',
         tests: 'test/unit/remote-inprocess.test.mjs'
+    },
+    {
+        what: "the Max host script takes faustgen~'s bargraphs for changes of its controls",
+        file: 'assets/max/faust-remote.js',
+        from: '                current.hub.output(address, value);',
+        to: '                current.hub.update(address, value);',
+        tests: 'test/cli/max-remote.test.mjs'
     }
 ];
 
