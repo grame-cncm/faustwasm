@@ -205,6 +205,12 @@ node scripts/faust-remote-server.js <dir> -cert cert.pem -key key.pem -host-port
 
 It listens on `127.0.0.1` only, serves nothing but `ws://127.0.0.1:8444/relay/<room>`, takes the room's token as the HTTPS port does, and refuses remote controls, browser pages and other computers; the phones keep using the HTTPS port. In code, `server.hostListener()` gives the same listener, closed with the server.
 
+Native Faust applications use it through `RemoteUI`, an architecture class of the Faust compiler (`faust2caqt`, `faust2jaqt` and `faust2jackconsole` with `-remote`; in development, see grame-cncm/faust). Serve a folder that holds the remote control's `remote/` (for instance an output folder of `faust2wasm.js -remote`), then start the application with the host port, and the origin the phones open for its pairing link ("Play locally" is not available there: the phones receive the native application's interface, not its wasm):
+
+```bash
+./mydsp -remote ws://127.0.0.1:8444 -remote-origin https://192.168.1.20:8443
+```
+
 ##### Testing with a phone
 
 Phones need HTTPS for their motion sensors and for installing a PWA, so the server needs a certificate the phone trusts. With [mkcert](https://github.com/FiloSottile/mkcert) (`brew install mkcert` or `sudo port install mkcert`), and the address of the host machine on the local network (`ipconfig getifaddr en0` on macOS) in place of `192.168.1.20`:

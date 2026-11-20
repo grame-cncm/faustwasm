@@ -2167,6 +2167,33 @@ phones the wasm of the DSP it runs, and a JavaScript host under
    doing TLS; remote controls stay on the HTTPS port. The OSC gateway remains
    possible for applications that do not include `RemoteUI`.
 
+   *Done in grame-cncm/faust* (phase 1, branch `remote-ui`):
+   - `architecture/faust/gui/RemoteHost.h`, the protocol and the host's
+     rules, ported from `protocol.ts` and `FaustRemoteHost.ts`, with neither
+     network nor DSP;
+   - `RemoteSocket.h`, a minimal WebSocket client (SHA-1, base64, SHA-256 for
+     the `hash`);
+   - `RemoteUI.h`, the architecture class. It derives from `APIUI`, which
+     already gives the addresses, ranges, metadata and `[acc:]`/`[gyr:]`
+     curves; the JSON comes from `JSONUI`. A network thread writes the zones,
+     and sends back bargraphs and changes 30 times a second.
+
+   Wired into `ca-qt.cpp`, `jack-qt.cpp` and `jack-console.cpp` (`-remote` of
+   `faust2caqt`, `faust2jaqt` and `faust2jackconsole`). `shared` policy only,
+   no playout delay: the policies and the timestamped mode are phases 2 and
+   3.
+
+   Checked:
+   - 219 unit tests of the C++ code (`tests/remoteui-tests`);
+   - `test/cli/remote-native.test.mjs` here, which plays four scenarios
+     against both hosts and requires the same messages. The interfaces
+     described by `JSONUI`'s JSON and by libfaust's are the same for this
+     DSP, `[acc:]` curve included;
+   - a `faust2caqt -remote` application driven through the relay.
+
+   Not tried: a real phone; Linux and Windows (only compiled on macOS). The
+   voice count of a polyphonic DSP is not wired into the architectures yet.
+
 # 21. Implementation plan
 
 | Phase | Content | Completion criterion |
