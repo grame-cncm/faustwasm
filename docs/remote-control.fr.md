@@ -9,8 +9,6 @@ status: étude de faisabilité et spécification, brouillon
 faustwasm — contrôle à distance | | {page} / {pages}
 ```
 
-# Contrôle à distance des applications Faust Web Audio par WebRTC
-
 *La version anglaise de ce document est dans [remote-control.md](remote-control.md).*
 
 ::: toc+
@@ -37,7 +35,7 @@ faustwasm — contrôle à distance | | {page} / {pages}
 - **Plan de mise en œuvre** — les phases et leur ordre.
 :::
 
-## 1. Résumé
+# 1. Résumé
 
 **L'extension est faisable sans modifier le runtime DSP.** Tout ce dont une
 télécommande a besoin existe déjà dans l'API publique des nœuds faustwasm :
@@ -80,9 +78,9 @@ Le principal obstacle n'est pas technique mais pratique : capteurs et service
 worker exigent un **contexte sécurisé (HTTPS)**, ce qui impose un certificat
 sur le réseau local (\ref{sec:signal}).
 
-## 2. Contexte et objectifs
+# 2. Contexte et objectifs
 
-### 2.1. Cas d'usage
+## 2.1. Cas d'usage
 
 - **Concert, installation** : un ordinateur relié à la sonorisation exécute une
   application Faust ; des musiciens ou le public la pilotent depuis leur
@@ -97,7 +95,7 @@ sur le réseau local (\ref{sec:signal}).
   Faust en ligne, par exemple) propose « télécommande » et affiche un code QR ;
   les téléphones présents pilotent le DSP en cours d'écriture.
 
-### 2.2. Objectifs
+## 2.2. Objectifs
 
 O1
 :   Piloter depuis une PWA tous les widgets d'entrée d'un DSP Faust
@@ -122,7 +120,7 @@ O5
     dépendance, pas de surcoût dans le bundle principal, comportement mono/poly
     bit à bit identique.
 
-### 2.3. Non-objectifs
+## 2.3. Non-objectifs
 
 - Transporter de l'audio du téléphone vers l'hôte ou l'inverse (une extension
   possible est décrite en \ref{sec:risques}, hors v1).
@@ -133,7 +131,7 @@ O5
 - Les nœuds FFT (`createFFTNode`) : leur interface de paramètres est la même et
   devrait fonctionner, mais ils ne sont pas visés par la v1.
 
-## 3. Ce que faustwasm fournit déjà
+# 3. Ce que faustwasm fournit déjà
 
 Tout ce qui suit est de l'API publique, commune à `FaustMonoAudioWorkletNode`,
 `FaustPolyAudioWorkletNode` et à leurs équivalents ScriptProcessor.
@@ -183,9 +181,9 @@ C5 — Rien sur le thread audio
     l'AudioWorklet. Le processeur ne voit aucune différence entre une écriture
     locale et une écriture distante.
 
-## 4. Architecture
+# 4. Architecture
 
-### 4.1. Rôles
+## 4.1. Rôles
 
 Hôte
 :   La page (ou le processus) qui possède le nœud faustwasm et l'`AudioContext`
@@ -202,7 +200,7 @@ Signalisation
     et candidats ICE avant que le canal WebRTC existe. Il ne voit passer aucun
     message de contrôle.
 
-### 4.2. Schéma d'ensemble
+## 4.2. Schéma d'ensemble
 
 ```mermaid "Architecture de la couche distante" \label{fig:archi}
 flowchart LR
@@ -224,7 +222,7 @@ flowchart LR
   RH <--> SIG
 ```
 
-### 4.3. Topologies de déploiement
+## 4.3. Topologies de déploiement
 
 Réseau local (cas principal)
 :   Hôte et téléphones sur le même Wi-Fi. Le serveur Node tourne sur la machine
@@ -241,9 +239,9 @@ Même page
 :   Hôte et télécommande dans la même page, reliés par un transport en mémoire.
     Sans intérêt en production, c'est le support des tests unitaires (\ref{sec:tests}).
 
-## 5. Transport
+# 5. Transport
 
-### 5.1. Pourquoi WebRTC
+## 5.1. Pourquoi WebRTC
 
 | Critère | WebRTC DataChannel | WebSocket (via relais) | WebTransport |
 | :-- | :-- | :-- | :-- |
@@ -265,7 +263,7 @@ signalisation et ICE.
 Le transport est néanmoins abstrait (interface `FaustRemoteTransport`, \ref{sec:api}) : un transport WebSocket par relais reste un repli simple pour
 les réseaux où ICE échoue, sans toucher au protocole.
 
-### 5.2. Canaux de données
+## 5.2. Canaux de données
 
 Deux canaux, créés en mode *négocié* (`negotiated: true`, identifiants fixes)
 par les deux pairs : ils sont utilisables dès l'ouverture de la connexion SCTP,
@@ -289,7 +287,7 @@ Comme `faust-stream` n'est pas ordonné, chaque message y porte un numéro de
 séquence par émetteur ; le récepteur ignore, pour une même clé (paramètre,
 capteur), tout message plus ancien que le dernier appliqué.
 
-### 5.3. ICE, STUN, TURN
+## 5.3. ICE, STUN, TURN
 
 Sur un réseau local, les candidats *host* suffisent. Les navigateurs masquent
 désormais les adresses locales derrière des noms mDNS (`….local`) ; la
@@ -299,7 +297,7 @@ cas il faut un STUN (accessible) ou un TURN, ou le repli WebSocket. Le
 diagnostic doit être visible : la télécommande affiche l'état ICE
 (`checking`, `connected`, `failed`) plutôt qu'un échec silencieux.
 
-### 5.4. Contrôle de flux
+## 5.4. Contrôle de flux
 
 Les flux continus ne doivent jamais s'accumuler : une file d'attente est une
 latence. Avant chaque envoi sur `faust-stream`, l'émetteur consulte
@@ -309,9 +307,9 @@ au prochain évènement `bufferedamountlow`. Le débit utile est d'ailleurs
 minime : un capteur à 60 Hz en messages JSON d'environ 80 octets représente
 environ 5 Ko/s.
 
-## 6. Signalisation \label{sec:signal}
+# 6. Signalisation \label{sec:signal}
 
-### 6.1. Besoin
+## 6.1. Besoin
 
 Avant toute connexion WebRTC, les deux pairs doivent échanger une offre SDP,
 une réponse SDP et leurs candidats ICE. La télécommande est l'*appelant* (elle
@@ -325,7 +323,7 @@ Signal ::= Offer(peer, sdp)              (* télécommande vers hôte *)
          | Bye(peer)
 ```
 
-### 6.2. Options
+## 6.2. Options
 
 | Option | Avantages | Inconvénients |
 | :-- | :-- | :-- |
@@ -334,7 +332,7 @@ Signal ::= Offer(peer, sdp)              (* télécommande vers hôte *)
 | Service tiers ou serveur public | fonctionne sur Internet, convient à l'IDE en ligne | dépendance externe, confidentialité, disponibilité |
 | Manuelle (SDP dans un code QR) | aucun serveur | il faut aussi rapporter la réponse vers l'hôte (caméra), fragile ; écartée |
 
-### 6.3. Recommandation
+## 6.3. Recommandation
 
 Un script `faust-remote-server-ts`, sans dépendance, qui :
 
@@ -364,7 +362,7 @@ C'est le principal coût d'usage de l'extension, et la documentation doit le
 traiter en premier.
 :::
 
-### 6.4. Séquence d'établissement
+## 6.4. Séquence d'établissement
 
 ```mermaid "Établissement d'une session" \label{fig:seq}
 sequenceDiagram
@@ -392,9 +390,9 @@ L'interface `FaustSignaling` (\ref{sec:api}) rend ce mécanisme
 remplaçable : un environnement qui possède déjà un canal (l'IDE en ligne, un
 serveur d'application) l'adapte en quelques lignes.
 
-## 7. Protocole applicatif
+# 7. Protocole applicatif
 
-### 7.1. Principes
+## 7.1. Principes
 
 - **Messages texte JSON**, un objet par message, discriminé par `type` (comme
   les messages actuels entre nœud et processeur). Les messages binaires sont
@@ -412,7 +410,7 @@ serveur d'application) l'adapte en quelques lignes.
 - **Version** : `hello` et `welcome` portent `v` (1). Un hôte refuse une
   version majeure qu'il ne connaît pas avec `reject`.
 
-### 7.2. Messages
+## 7.2. Messages
 
 ```adt
 ClientMsg ::= Hello(v, id, token, mode, hash?)     (* ctl *)
@@ -442,7 +440,7 @@ négociée). L'hôte découpe alors `welcome` en fragments
 `{"type":"chunk","id":…,"part":k,"of":n,"data":…}` sur `faust-ctl` ; l'ordre et
 la fiabilité du canal rendent le réassemblage trivial.
 
-### 7.3. Exemples
+## 7.3. Exemples
 
 ```json
 {"type":"hello","v":1,"id":"c-7f3a","token":"Zq3…","mode":"bi"}
@@ -454,7 +452,7 @@ la fiabilité du canal rendent le réassemblage trivial.
 {"type":"sync","i":0,"value":523.25}
 ```
 
-### 7.4. Modes unidirectionnel et bidirectionnel
+## 7.4. Modes unidirectionnel et bidirectionnel
 
 La poignée de main est toujours bidirectionnelle ; le mode décide de ce que
 l'hôte émet *ensuite*.
@@ -475,7 +473,7 @@ autres cas, le bidirectionnel est préférable : il évite de distribuer le JSON
 avec la PWA, il garde les télécommandes cohérentes entre elles et avec l'hôte,
 et il rend l'affichage des bargraphs possible, ce que rien d'autre ne permet.
 
-### 7.5. Cycle de vie d'une session
+## 7.5. Cycle de vie d'une session
 
 ```mermaid "États d'une télécommande vue par l'hôte"
 stateDiagram-v2
@@ -497,7 +495,7 @@ Le passage par `Closed` déclenche toujours la panique décrite en
 ouvre une nouvelle connexion avec le même `id` ; l'hôte la traite comme une
 nouvelle session et lui renvoie l'état complet dans `welcome`.
 
-### 7.6. Validation côté hôte
+## 7.6. Validation côté hôte
 
 Pour chaque message reçu, l'hôte applique dans l'ordre :
 
@@ -512,9 +510,9 @@ Pour chaque message reçu, l'hôte applique dans l'ordre :
 7. pour `midi` : messages de canal uniquement (notes, contrôleurs, pitch bend,
    pression, programme), pas de SysEx.
 
-## 8. Capteurs \label{sec:capteurs}
+# 8. Capteurs \label{sec:capteurs}
 
-### 8.1. Option retenue : valeurs brutes, mapping sur l'hôte
+## 8.1. Option retenue : valeurs brutes, mapping sur l'hôte
 
 La télécommande lit `devicemotion` (`accelerationIncludingGravity`) et
 `deviceorientation` (`alpha`, `beta`, `gamma`), et les envoie telles quelles
@@ -531,7 +529,7 @@ qui est déjà testé ; `FaustSensors` reste interne (C4) ; la télécommande n'
 calcule à partir du JSON comme le fait le nœud, suffisent à décider s'il faut
 demander la permission et écouter les capteurs.
 
-### 8.2. Option écartée : mapping sur le téléphone
+## 8.2. Option écartée : mapping sur le téléphone
 
 Appliquer les courbes sur la télécommande et n'envoyer que des valeurs de
 paramètres dupliquerait le mapping hors du thread audio et obligerait à exporter
@@ -539,7 +537,7 @@ paramètres dupliquerait le mapping hors du thread audio et obligerait à export
 axes utilisés, s'obtient aussi en n'envoyant pas `gyr` quand `hasGyrInput` est
 faux.
 
-### 8.3. Contraintes des navigateurs mobiles
+## 8.3. Contraintes des navigateurs mobiles
 
 - **Permission iOS** : `DeviceMotionEvent.requestPermission()` doit être appelé
   depuis un geste de l'utilisateur ; la PWA reprend `requestPermissions()` de
@@ -555,9 +553,9 @@ faux.
 - **Plusieurs capteurs, un paramètre** : si deux télécommandes envoient `acc`,
   la dernière écriture gagne (\ref{sec:multi}).
 
-## 9. Retour de l'hôte vers la télécommande
+# 9. Retour de l'hôte vers la télécommande
 
-### 9.1. Bargraphs
+## 9.1. Bargraphs
 
 L'hôte chaîne `setOutputParamHandler` (C1) et range chaque valeur reçue à
 l'indice de son adresse dans `outputs`. Il émet un message `out` quand deux
@@ -574,7 +572,7 @@ attente plus d'un tic. Cela évite aussi le ralentissement des minuteries dans
 un onglet hôte en arrière-plan. Pour un DSP à nombreux bargraphs, `out` porte
 `i`, la liste des indices modifiés, au lieu du tableau complet.
 
-### 9.2. Synchronisation d'état et suppression d'écho
+## 9.2. Synchronisation d'état et suppression d'écho
 
 L'hôte chaîne `setInputParamHandler`. Le DSP appelant ce handler après toute
 écriture, l'hôte apprend chaque changement, d'où qu'il vienne : son interface
@@ -591,15 +589,15 @@ le slider, ce qui est le comportement voulu. Les doublons éventuels (message de
 port et `AudioParam` vus tous deux par le processeur) sont filtrés par la même
 règle.
 
-### 9.3. Autres retours
+## 9.3. Autres retours
 
 `voices` relaie `getNumActiveVoices()` quand il change (nœuds poly). `pong`
 sert à la fois à la vivacité et à la mesure de latence, affichée par la
 télécommande (aller-retour médian et 95ᵉ centile).
 
-## 10. Temps, latence et gigue \label{sec:temps}
+# 10. Temps, latence et gigue \label{sec:temps}
 
-### 10.1. Budget de latence
+## 10.1. Budget de latence
 
 Ordres de grandeur attendus, à confirmer par les mesures décrites en
 \ref{sec:tests} :
@@ -621,7 +619,7 @@ millisecondes. Rien dans la couche logicielle ne les supprime ; on peut
 seulement choisir entre les subir (mode immédiat) et les lisser au prix d'un
 retard constant (mode horodaté).
 
-### 10.2. Mode immédiat (défaut)
+## 10.2. Mode immédiat (défaut)
 
 Chaque valeur est appliquée dès réception, par `setParamValue(path, value)`
 sans `time`. C'est la latence la plus faible et le bon choix pour un geste
@@ -629,7 +627,7 @@ d'interprète, où un retard constant gêne plus qu'une gigue modérée ; le lis
 reste du ressort du DSP (`si.smoo` sur les paramètres continus, comme pour une
 interface locale).
 
-### 10.3. Mode horodaté (option `playoutDelay`)
+## 10.3. Mode horodaté (option `playoutDelay`)
 
 Pour une gigue gênante (séquences, rythmes produits sur le téléphone), la
 télécommande horodate chaque message dans son horloge et l'hôte applique les
@@ -672,7 +670,7 @@ $δ$ est minimal (le moins perturbé par la file d'attente) et en tire $θ$ ; un
 au-dessus du 95ᵉ centile de la gigue mesurée, typiquement 20 à 40 ms, et la
 télécommande peut le proposer à partir de ses propres mesures.
 
-## 11. Plusieurs télécommandes \label{sec:multi}
+# 11. Plusieurs télécommandes \label{sec:multi}
 
 L'hôte accepte jusqu'à `maxClients` télécommandes (16 par défaut). Les
 politiques possibles :
@@ -738,7 +736,7 @@ retour, pour que le curseur d'une télécommande ne reste jamais sur une valeur
 que rien n'a appliquée. Sur la page hôte générée :
 `?assign=groups&sensors=assigned`, ou `?sensors=mean`.
 
-## 12. Sécurité et robustesse \label{sec:securite}
+# 12. Sécurité et robustesse \label{sec:securite}
 
 - **Appairage** : un jeton aléatoire de 128 bits par session hôte, dans le
   fragment de l'URL d'appairage, vérifié dans `hello`. Sans jeton valide,
@@ -765,7 +763,7 @@ que rien n'a appliquée. Sur la page hôte générée :
 - **Erreurs** : aucune erreur de réseau ou de protocole ne remonte en exception
   dans le code de l'application hôte ; elles sont signalées par évènement.
 
-## 13. API proposée \label{sec:api}
+# 13. API proposée \label{sec:api}
 
 Esquisse, à affiner pendant la phase de prototype.
 
@@ -894,9 +892,9 @@ const host = new FaustRemoteHost(faustNode, { token });
 host.listen(createHttpSignaling(location.origin, room, token, { role: "host" }));
 ```
 
-## 14. Intégration dans le package
+# 14. Intégration dans le package
 
-### 14.1. Fichiers proposés
+## 14.1. Fichiers proposés
 
 ```tree
 src
@@ -923,7 +921,7 @@ test
     remote — pages manuelles hôte et télécommande
 ```
 
-### 14.2. Construction et distribution
+## 14.2. Construction et distribution
 
 - **Bundle séparé.** `src/remote/index.ts` devient une entrée esbuild de plus,
   produisant `dist/remote/index.js` (ESM) et `dist/remote/index.d.ts`. Un
@@ -947,7 +945,7 @@ test
   (`faust-remote-server-ts`) et les fichiers de `dist` sont couverts. À vérifier
   avec `npm pack --dry-run`.
 
-### 14.3. Générateur
+## 14.3. Générateur
 
 `faust2wasm-ts foo.dsp out -pwa -remote` produirait, à côté des fichiers
 actuels :
@@ -962,7 +960,7 @@ actuels :
 Les ensembles de fichiers attendus vont dans `test/cli/expected.mjs`, comme
 pour les autres modes.
 
-### 14.4. Hôte sous Node
+## 14.4. Hôte sous Node
 
 Un hôte sans navigateur supposerait une implémentation de Web Audio pour Node
 (par exemple node-web-audio-api) et une bibliothèque WebRTC native. Les deux
@@ -973,7 +971,7 @@ mode kiosque sur la machine audio. Faisabilité à étudier séparément (Q4). U
 JavaScript sous Node (`node.script`) ou dans le patch (`v8`), est étudié en
 \ref{sec:max}.
 
-### 14.5. Version et C++
+## 14.5. Version et C++
 
 Ajout de fonctionnalité et d'API : **version mineure** (0.22.0 → 0.23.0) selon
 `AGENTS.md`, à convenir avec le mainteneur. Le Faust C++ n'a pas d'équivalent
@@ -981,7 +979,7 @@ WebRTC ; en revanche le protocole reprend l'espace d'adresses de ses interfaces
 OSC[@osc] et HTTP, ce qui rendrait possible une passerelle WebRTC vers OSC pour
 piloter une application native (`faust2xxx -osc`) depuis la même PWA.
 
-## 15. Tests et mesures \label{sec:tests}
+# 15. Tests et mesures \label{sec:tests}
 
 Unitaires, sans navigateur
 :   Le transport en mémoire relie un `FaustRemoteHost` et un `FaustRemoteDsp`
@@ -1015,7 +1013,7 @@ Mesures
     pages Chromium par WebRTC en boucle locale pour suivre les régressions de la
     couche logicielle, mais pas le Wi-Fi.
 
-## 16. Risques et questions ouvertes \label{sec:risques}
+# 16. Risques et questions ouvertes \label{sec:risques}
 
 | Risque | Effet | Parade |
 | :-- | :-- | :-- |
@@ -1079,7 +1077,7 @@ Q7
     compare au DSP tournant sur le téléphone lui-même, la première étape
     recommandée.
 
-## 17. État de la mise en œuvre
+# 17. État de la mise en œuvre
 
 P0, P1, P2 et P3 sont réalisées sur la branche `remote-control`.
 
@@ -1217,7 +1215,7 @@ ne mettent pas à jour ; les valeurs initiales envoyées dans `welcome` pour un
 paramètre piloté par capteur pouvaient donc être en retard. Le nœud retient
 désormais ces écritures et les rend dans `getParamValue`.
 
-## 18. Usage sur Internet \label{sec:internet}
+# 18. Usage sur Internet \label{sec:internet}
 
 Tout ce qui précède suppose que l'hôte, le serveur et les téléphones sont sur
 le **même réseau local** : `faust-remote-server` tourne sur la machine hôte, et
@@ -1228,7 +1226,7 @@ hôte y est l'IDE lui-même, servi par un site public, qui fait tourner le DSP
 avec faustwasm dans le navigateur de l'utilisateur. `FaustRemoteHost` s'y pose
 tel quel sur le nœud ; c'est tout ce qui entoure la connexion qui change.
 
-### 18.1. Ce qui empêche le montage actuel
+## 18.1. Ce qui empêche le montage actuel
 
 Pas de serveur local
 :   L'utilisateur de l'IDE n'a ni Node, ni certificat, ni serveur à lancer. La
@@ -1248,7 +1246,7 @@ Réseaux différents
 :   Le téléphone peut être en 4G ou sur un autre Wi-Fi : la connexion doit
     traverser des NAT, ce que le réseau local n'a jamais demandé.
 
-### 18.2. Topologie
+## 18.2. Topologie
 
 ```mermaid "Usage sur Internet : qui parle à qui" \label{fig:internet}
 flowchart LR
@@ -1284,7 +1282,7 @@ pièce, est aussi le meilleur : seule la signalisation passe par Internet, et la
 connexion de contrôle s'établit directement sur le réseau local, avec la
 latence d'aujourd'hui.
 
-### 18.3. Ce qu'il faut côté serveur
+## 18.3. Ce qu'il faut côté serveur
 
 `faust-remote-server` fait déjà presque tout ce qu'un service public doit
 faire (salles, jetons, signalisation, relais). Il lui manque :
@@ -1326,7 +1324,7 @@ Certificat
 :   Un vrai certificat (Let's Encrypt) remplace mkcert : plus rien à installer
     sur les téléphones, ce qui est en soi un gros gain d'usage.
 
-### 18.4. Ce qu'il faut côté pages
+## 18.4. Ce qu'il faut côté pages
 
 Adresse de signalisation configurable
 :   Les pages supposent aujourd'hui que la signalisation est servie par la même
@@ -1353,7 +1351,7 @@ Intégration dans l'IDE
     cours, ouvre la session et affiche le code QR (`qrCodeSvg`) ; à refaire à
     chaque recompilation du DSP, puisque le nœud change.
 
-### 18.5. Traverser les NAT
+## 18.5. Traverser les NAT
 
 Entre deux réseaux, WebRTC doit découvrir des adresses joignables. **STUN**
 suffit derrière la plupart des box. Derrière un NAT symétrique, fréquent sur
@@ -1371,7 +1369,7 @@ sessions. Le mode horodaté (`playoutDelay`) absorbe la gigue d'un trajet
 Internet, au prix d'un retard fixe de quelques dizaines de millisecondes,
 acceptable pour du contrôle de paramètres, moins pour du jeu de notes.
 
-### 18.6. Sécurité et confidentialité
+## 18.6. Sécurité et confidentialité
 
 - Le serveur de signalisation voit les noms de salle, les jetons (dans les
   en-têtes) et les descriptions SDP, qui contiennent les adresses IP des pairs.
@@ -1387,7 +1385,7 @@ acceptable pour du contrôle de paramètres, moins pour du jeu de notes.
   sur Internet : le lien n'est jamais envoyé à un serveur, il passe de l'écran
   de l'hôte à la caméra du téléphone.
 
-### 18.7. Qui héberge
+## 18.7. Qui héberge
 
 | | A. Service hébergé par GRAME | B. Briques pour l'intégrateur |
 | :-- | :-- | :-- |
@@ -1400,7 +1398,7 @@ Les deux ne s'excluent pas : B est de toute façon nécessaire pour A, et
 l'interface `FaustSignaling` permet à une application qui a déjà son propre
 serveur (WebSocket, Firebase, Matrix…) de s'en servir pour la signalisation.
 
-### 18.8. Travail à faire, dans l'ordre
+## 18.8. Travail à faire, dans l'ordre
 
 1. *(Fait.)* **CORS et origine du relais** dans `faust-remote-server`, avec une liste
    d'origines autorisées en option (`-allow-origin`), et `X-Accel-Buffering`
@@ -1435,7 +1433,7 @@ l'origine autorisée, requête préalable refusée pour une autre (la page hôte
 le dit, en nommant l'option), lien vers un serveur inconnu refusé sans
 qu'aucune requête ne lui soit envoyée.
 
-## 19. Du son sur le téléphone \label{sec:audio}
+# 19. Du son sur le téléphone \label{sec:audio}
 
 Jusqu'ici la télécommande ne reçoit que des valeurs : paramètres et
 bargraphs. Cette section étudie comment un téléphone pourrait aussi donner du
@@ -1443,7 +1441,7 @@ son (question Q7), et compare deux voies : envoyer l'audio de l'hôte au
 téléphone, ou faire tourner le DSP sur le téléphone lui-même. C'est une
 conception, pas encore réalisée.
 
-### 19.1. Pour quoi faire
+## 19.1. Pour quoi faire
 
 - **Écoute de contrôle en répétition** : un musicien ou un technicien loin
   des haut-parleurs, ou dans une autre pièce, au casque.
@@ -1453,7 +1451,7 @@ conception, pas encore réalisée.
   haut-parleur, un orchestre de téléphones, le serveur ne faisant que
   coordonner les contrôles.
 
-### 19.2. Deux voies
+## 19.2. Deux voies
 
 Audio de l'hôte par WebRTC
 :   La sortie du nœud de l'hôte est aussi branchée sur un
@@ -1497,7 +1495,7 @@ WebRTC ne reste la réponse que lorsque le son doit être exactement celui de
 l'hôte : un DSP qui traite l'entrée audio de l'hôte (micro, ligne), utilise
 des sons que seul l'hôte possède, ou est trop lourd pour un téléphone.
 
-### 19.3. DSP sur le téléphone : deux usages
+## 19.3. DSP sur le téléphone : deux usages
 
 Écoute locale
 :   L'hôte reste le son de référence, sur la sono ; le téléphone fait tourner
@@ -1510,7 +1508,7 @@ Téléphones-instruments
     s'influencent). `assign: 'groups'` prend un sens naturel : chaque
     téléphone joue et entend son groupe.
 
-### 19.4. Architecture sur le téléphone
+## 19.4. Architecture sur le téléphone
 
 Deux objets côte à côte : un **nœud Faust local**, créé comme dans la PWA
 autonome (`createFaustNode` de `create-node.js`), et le **`FaustRemoteDsp`**
@@ -1542,7 +1540,7 @@ Le pont a sa place dans `client.js`, pour qu'une application personnelle
 puisse s'en servir ; la télécommande générée proposerait un choix « Play
 locally ».
 
-### 19.5. Un hub sans DSP
+## 19.5. Un hub sans DSP
 
 Pour les téléphones-instruments, le serveur n'a rien à calculer : un **hub**
 garde l'état des paramètres, applique les règles (groupes, `[remote:off]`,
@@ -1553,7 +1551,7 @@ partir de `dsp-meta.json`, suffit. Un tel hub n'a même plus besoin de Web
 Audio, ce qui rapproche aussi de l'hôte sous Node (Q4) : avec le relais
 WebSocket, le serveur pourrait être un simple processus Node.
 
-### 19.6. Limites
+## 19.6. Limites
 
 - **Le son n'est pas celui de l'hôte.** Mêmes réglages, deux calculs
   indépendants : oscillateurs et LFO déphasés, bruits différents, une note
@@ -1576,7 +1574,7 @@ WebSocket, le serveur pourrait être un simple processus Node.
   télécommande générée est dans `remote/` et ces fichiers à la racine.
   Réglé à l'étape 1 : il les résout désormais par rapport à lui-même.
 
-### 19.7. Plan
+## 19.7. Plan
 
 1. *(Fait.)* **Écoute locale** : le pont nœud local ↔ télécommande dans `client.js`,
    et « Play locally » dans la télécommande générée (qui charge alors aussi
@@ -1625,7 +1623,7 @@ calculer, suit son curseur (1668 Hz donne 0,834 pour `freq / 2000`). Non
 vérifié : sur un téléphone, où la charge du DSP et la latence audio sont à
 mesurer.
 
-## 20. Héberger dans Max/MSP \label{sec:max}
+# 20. Héberger dans Max/MSP \label{sec:max}
 
 Le but : la même télécommande (PWA, curseurs, capteurs, son local) qui pilote
 un **patch Max** au lieu d'une page Web Audio. Deux choses sont à décider :
@@ -1637,7 +1635,7 @@ Ce que Max offre a été lu dans la documentation de Cycling '74 (Max 9.2) et
 dans les sources de `faustgen~` (`faust/embedded/faustgen`) ; ce qui n'a pu
 qu'être lu, sans être exécuté dans Max, est marqué *à vérifier*.
 
-### 20.1. Trois endroits où faire tourner le serveur
+## 20.1. Trois endroits où faire tourner le serveur
 
 Objet `v8` (Max 9, réseau depuis 9.2)
 :   Du JavaScript dans le patch lui-même, sur un moteur V8 moderne (ES6 et
@@ -1697,7 +1695,7 @@ Coût, faible, faible, élevé et deux mises en œuvre à garder d'accord
 
 *Figure : un mode serveur dans `faustgen~`.*
 
-### 20.2. Ce que pilote l'hôte : les cibles Max
+## 20.2. Ce que pilote l'hôte : les cibles Max
 
 `FaustRemoteHost` pilote un objet qui ressemble à un nœud
 (`FaustRemoteHostTarget` : `getJSON`, `setParamValue`/`getParamValue`, les
@@ -1753,7 +1751,7 @@ La cible paramètres du patch
 
 *Figure : n'importe quel patch, à travers ses paramètres nommés.*
 
-### 20.3. Ce qu'il faut côté faustwasm
+## 20.3. Ce qu'il faut côté faustwasm
 
 L'hôte navigateur s'appuie sur des globales du navigateur que Node 19+ a
 aussi, mais que `v8` ne liste pas (*à vérifier* dans Max 9.2) :
@@ -1789,7 +1787,7 @@ réutiliser son interface en cache).
    avec le backend wasm de libfaust (20.6), ou faustwasm peut compiler le
    même source sous `node.script`.
 
-### 20.4. Ce que `faustgen~` pourrait ajouter (C++)
+## 20.4. Ce que `faustgen~` pourrait ajouter (C++)
 
 Rien de cela n'est nécessaire pour commencer (un relais `js` et un `speedlim`
 suffisent), mais les trois premiers points retirent chacun une corvée de
@@ -1807,7 +1805,7 @@ grame-cncm/faust, à committer là-bas.
   plus important que les autres, mais celui qui permet à un téléphone de
   jouer le DSP du patch.
 
-### 20.5. Un mode serveur dans `faustgen~`
+## 20.5. Un mode serveur dans `faustgen~`
 
 Faisable, et intéressant à trois titres : **un seul objet** et rien d'autre
 à installer (Max 8 compris) ; un **mode horodaté à l'échantillon près**,
@@ -1848,7 +1846,7 @@ de Faust le renvoie).
 
 *Figure : la passerelle WebRTC vers OSC, sans rien changer dans Max.*
 
-### 20.6. Un source, deux compilations : des téléphones qui jouent le DSP de `faustgen~`
+## 20.6. Un source, deux compilations
 
 À côté de LLVM, libfaust a un backend WebAssembly que le C++ peut appeler
 (`createWasmDSPFactoryFromString`, ou `generateWasmFromString` pour le
@@ -1910,7 +1908,7 @@ L'idée vaut aussi hors de Max : tout hôte qui embarque libfaust peut donner
 à ses téléphones le wasm du DSP qu'il fait tourner, et un hôte JavaScript
 sous `node.script` peut compiler lui-même avec faustwasm.
 
-### 20.7. Limites
+## 20.7. Limites
 
 - **Pas de WebRTC dans `v8`** : le relais sur TCP convient sur un réseau
   local, mais un paquet Wi-Fi perdu retarde ceux qui le suivent (blocage en
@@ -1929,7 +1927,7 @@ sous `node.script` peut compiler lui-même avec faustwasm.
 - **Non essayé** : tout ce qui est dans cette section a été lu, pas exécuté
   dans Max ; le réseau de `v8` est récent (9.2) et documenté comme minimal.
 
-### 20.8. Plan
+## 20.8. Plan
 
 1. **Cœur de l'hôte sans globales du navigateur, cible hub, hôte dans le
    processus du serveur** (20.3, points 1 à 3), dans faustwasm,
@@ -1953,7 +1951,7 @@ sous `node.script` peut compiler lui-même avec faustwasm.
    serveur C++ comme `RemoteUI` Faust générique, ou la passerelle OSC pour
    les applications natives.
 
-## 21. Plan de mise en œuvre
+# 21. Plan de mise en œuvre
 
 | Phase | Contenu | Critère de fin |
 | :-- | :-- | :-- |
