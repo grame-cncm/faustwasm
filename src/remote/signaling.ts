@@ -29,6 +29,13 @@ export interface FaustSignaling {
     readonly id: string;
     send(message: FaustSignalMessage): void;
     onmessage: ((message: FaustSignalMessage) => void) | null;
+    /**
+     * A message could not be delivered, or the channel failed: set by the
+     * remote control while it waits for the host's answer, so that a server
+     * saying there is no WebRTC host (a host that only takes the relay) does
+     * not leave it waiting for its timeout. Optional for implementations.
+     */
+    onerror?: ((error: Error) => void) | null;
     close(): void;
 }
 
@@ -135,10 +142,11 @@ export const createHttpSignaling = (
     // candidates that follow it
     let queue: Promise<unknown> = Promise.resolve();
     const fail = (error: unknown) => {
-        if (!closed)
-            options.onerror?.(
-                error instanceof Error ? error : new Error(String(error))
-            );
+        if (closed) return;
+        const failure =
+            error instanceof Error ? error : new Error(String(error));
+        options.onerror?.(failure);
+        signaling.onerror?.(failure);
     };
 
     const post = async (path: string, body: object) => {
@@ -155,6 +163,7 @@ export const createHttpSignaling = (
     const signaling: FaustHttpSignaling = {
         id,
         onmessage: null,
+        onerror: null,
         ready: Promise.resolve(),
         send(message) {
             if (closed) return;

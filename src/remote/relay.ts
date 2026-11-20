@@ -117,6 +117,120 @@ export const connectRelay = async (
 };
 
 /**
+ * The host's end of a relay connection, once accepted: what goes to the
+ * relay and what comes from it, in the relay's framing (each message is a
+ * remote control's id, a newline, then its channel's letter and the message,
+ * or a lone `!` when that end closed). A WebSocket to the relay is one; the
+ * server's `hostRoom` hands out another, for a host in the server's own
+ * process.
+ */
+export interface FaustRelayPort {
+    send(text: string): void;
+    close(): void;
+    onmessage: ((text: string) => void) | null;
+    onclose: (() => void) | null;
+    /** Bytes queued towards the relay, if the port can tell. */
+    bufferedAmount?(): number;
+}
+
+/**
+ * Hand `accept` a transport for each remote control that speaks through a
+ * relay port, and route their messages until the port closes.
+ *
+ * @returns the relayed transports, by remote control id, and a function
+ *   that ends them all (when the port closed, or to stop)
+ */
+export const acceptRelayed = (
+    port: FaustRelayPort,
+    accept: (transport: FaustRemoteTransport, peer: string) => void
+) => {
+    /** The relayed transports, by remote control id. */
+    const peers = new Map<
+        string,
+        { transport: FaustRemoteTransport; end: (reason: string) => void }
+    >();
+    let open = true;
+
+    const peer = (id: string) => {
+        let closed = false;
+        const transport: FaustRemoteTransport = {
+            maxMessageSize: RELAY_MESSAGE_SIZE,
+            onmessage: null,
+            onclose: null,
+            bufferedAmount: () => port.bufferedAmount?.() ?? 0,
+            send(channel, message) {
+                if (!closed && open)
+                    port.send(`${id}\n${letter(channel)}${message}`);
+            },
+            close(reason = 'closed') {
+                if (!closed && open) port.send(`${id}\n!`);
+                end(reason);
+            }
+        };
+        const end = (reason: string) => {
+            if (closed) return;
+            closed = true;
+            peers.delete(id);
+            queueMicrotask(() => transport.onclose?.(reason));
+        };
+        peers.set(id, { transport, end });
+        return transport;
+    };
+
+    port.onmessage = (text) => {
+        const cut = text.indexOf('\n');
+        if (cut <= 0) return;
+        const id = text.slice(0, cut);
+        const payload = text.slice(cut + 1);
+        const known = peers.get(id);
+        if (payload === '!') return known?.end('remote closed');
+        const channel = channelOf(payload[0]);
+        if (!channel) return;
+        if (known) {
+            known.transport.onmessage?.(channel, payload.slice(1));
+        } else {
+            const transport = peer(id);
+            accept(transport, id);
+            transport.onmessage?.(channel, payload.slice(1));
+        }
+    };
+    const endAll = (reason: string) => {
+        for (const { end } of [...peers.values()]) end(reason);
+    };
+    port.onclose = () => {
+        open = false;
+        endAll('relay closed');
+    };
+    return {
+        peers,
+        /** Close every relayed transport, telling each remote control. */
+        stop(reason = 'stopped') {
+            for (const { transport } of [...peers.values()])
+                transport.close(reason);
+            open = false;
+        }
+    };
+};
+
+/** A WebSocket to the relay, as a port. */
+const socketPort = (ws: WebSocket): FaustRelayPort => {
+    const port: FaustRelayPort = {
+        send: (text) => {
+            if (ws.readyState === ws.OPEN) ws.send(text);
+        },
+        close: () => ws.close(),
+        onmessage: null,
+        onclose: null,
+        bufferedAmount: () => ws.bufferedAmount
+    };
+    ws.addEventListener('message', (event) => {
+        if (typeof event.data === 'string') port.onmessage?.(event.data);
+    });
+    ws.addEventListener('close', () => port.onclose?.());
+    return port;
+};
+
+/**
  * The host side: register the room with the relay and hand a transport to
  * `accept` for each remote control that comes through it. Reconnects when
  * the relay connection drops, until stopped.
@@ -133,40 +247,9 @@ export const listenRelay = (
 ) => {
     let stopped = false;
     let ws: WebSocket | null = null;
+    let relayed: ReturnType<typeof acceptRelayed> | null = null;
     /** The next attempt, cancelled by a stop. */
     let retry: ReturnType<typeof setTimeout> | null = null;
-    /** The relayed transports, by remote control id. */
-    const peers = new Map<
-        string,
-        { transport: FaustRemoteTransport; end: (reason: string) => void }
-    >();
-
-    const peer = (id: string) => {
-        let closed = false;
-        const transport: FaustRemoteTransport = {
-            maxMessageSize: RELAY_MESSAGE_SIZE,
-            onmessage: null,
-            onclose: null,
-            bufferedAmount: () => ws?.bufferedAmount ?? 0,
-            send(channel, message) {
-                if (!closed && ws?.readyState === ws?.OPEN)
-                    ws?.send(`${id}\n${letter(channel)}${message}`);
-            },
-            close(reason = 'closed') {
-                if (!closed && ws?.readyState === ws?.OPEN)
-                    ws?.send(`${id}\n!`);
-                end(reason);
-            }
-        };
-        const end = (reason: string) => {
-            if (closed) return;
-            closed = true;
-            peers.delete(id);
-            queueMicrotask(() => transport.onclose?.(reason));
-        };
-        peers.set(id, { transport, end });
-        return transport;
-    };
 
     const connect = async () => {
         try {
@@ -178,30 +261,16 @@ export const listenRelay = (
             );
             if (stopped) return socket.close();
             ws = socket;
-            socket.addEventListener('message', (event) => {
-                if (typeof event.data !== 'string') return;
-                const cut = event.data.indexOf('\n');
-                if (cut <= 0) return;
-                const id = event.data.slice(0, cut);
-                const payload = event.data.slice(cut + 1);
-                const known = peers.get(id);
-                if (payload === '!') return known?.end('remote closed');
-                const channel = channelOf(payload[0]);
-                if (!channel) return;
-                if (known) {
-                    known.transport.onmessage?.(channel, payload.slice(1));
-                } else {
-                    const transport = peer(id);
-                    accept(transport, id);
-                    transport.onmessage?.(channel, payload.slice(1));
-                }
-            });
-            socket.addEventListener('close', () => {
-                for (const { end } of [...peers.values()]) end('relay closed');
+            const port = socketPort(socket);
+            relayed = acceptRelayed(port, accept);
+            const ended = port.onclose;
+            port.onclose = () => {
+                ended?.();
                 ws = null;
+                relayed = null;
                 if (!stopped)
                     retry = setTimeout(connect, options.retry ?? 1000);
-            });
+            };
         } catch (error) {
             onerror(error);
             if (!stopped) retry = setTimeout(connect, options.retry ?? 1000);
@@ -212,8 +281,7 @@ export const listenRelay = (
     return () => {
         stopped = true;
         if (retry) clearTimeout(retry);
-        for (const { transport } of [...peers.values()])
-            transport.close('stopped');
+        relayed?.stop();
         ws?.close();
     };
 };

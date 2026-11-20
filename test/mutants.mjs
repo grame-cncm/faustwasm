@@ -413,6 +413,69 @@ const MUTANTS = [
         from: 'if (!this.#local.has(path)) node.setParamValue(path, value);',
         to: 'node.setParamValue(path, value);',
         tests: 'test/unit/remote-local.test.mjs'
+    },
+    {
+        what: 'the host needs the browser EventTarget again, which Max v8 lacks',
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: 'export class FaustRemoteHost extends EventTargetBase {',
+        to: 'export class FaustRemoteHost extends EventTarget {',
+        tests: 'test/unit/remote-noglobals.test.mjs'
+    },
+    {
+        what: 'the plain JavaScript SHA-256 gives a wrong hash',
+        file: 'src/remote/runtime.ts',
+        from: '0x428a2f98, 0x71374491',
+        to: '0x428a2f99, 0x71374491',
+        tests: 'test/unit/remote-noglobals.test.mjs'
+    },
+    {
+        what: 'a hub sends a change made in the patch back to the patch',
+        file: 'src/remote/hub.ts',
+        from: '        this.#values.set(path, value);\n        this.#inputHandler?.(path, value);\n    }',
+        to: '        this.#values.set(path, value);\n        this.#options.onwrite?.(path, value);\n        this.#inputHandler?.(path, value);\n    }',
+        tests: 'test/unit/remote-hub.test.mjs'
+    },
+    {
+        what: 'a hub does not report a write, so other remote controls miss it',
+        file: 'src/remote/hub.ts',
+        from: '            this.#options.onwrite?.(path, value);\n            this.#inputHandler?.(path, value);',
+        to: '            this.#options.onwrite?.(path, value);',
+        tests: 'test/unit/remote-hub.test.mjs'
+    },
+    {
+        what: "a hub ignores Android's opposite accelerometer sign",
+        file: 'src/remote/hub.ts',
+        from: 'const sign = invert ? -1 : 1;',
+        to: 'const sign = 1;',
+        tests: 'test/unit/remote-hub.test.mjs'
+    },
+    {
+        what: 'a hub applies timestamped writes at once',
+        file: 'src/remote/hub.ts',
+        from: '        this.#at(time, apply);',
+        to: '        apply();',
+        tests: 'test/unit/remote-hub.test.mjs'
+    },
+    {
+        what: 'a relay port never hands a new remote control to the host',
+        file: 'src/remote/relay.ts',
+        from: '            accept(transport, id);',
+        to: '',
+        tests: 'test/unit/remote-inprocess.test.mjs'
+    },
+    {
+        what: "the server's in-process port drops what the host sends",
+        file: 'src/faustRemoteServer.js',
+        from: 'if (open && room.relayHost === peer) fromRelayHost(room, text);',
+        to: 'if (open && room.relayHost === peer) return;',
+        tests: 'test/unit/remote-inprocess.test.mjs'
+    },
+    {
+        what: 'a remote control waits for its timeout when the room has no WebRTC host',
+        file: 'src/remote/rtc.ts',
+        from: '        signaling.onerror = reject;',
+        to: '',
+        tests: 'test/unit/remote-inprocess.test.mjs'
     }
 ];
 

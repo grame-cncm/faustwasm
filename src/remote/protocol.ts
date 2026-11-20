@@ -13,6 +13,8 @@
  * business.
  */
 
+import { secureRandomBytes, sha256 } from './runtime';
+
 /** What a host does with the sensors of several remote controls. */
 export type FaustRemoteSensorPolicy = 'shared' | 'mean' | 'assigned';
 
@@ -451,19 +453,23 @@ export class FaustRemoteChunkAssembler {
 
 // -------------------------------------------------------------------- utils
 
-/** A random identifier: `bytes` random bytes, in hex. */
-export const randomId = (bytes = 16) =>
-    Array.from(globalThis.crypto.getRandomValues(new Uint8Array(bytes)), (b) =>
-        b.toString(16).padStart(2, '0')
-    ).join('');
+const hex = (bytes: Uint8Array) =>
+    Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 
-/** SHA-256 of a text's UTF-8 bytes, in hex. Needs a secure context. */
+/**
+ * A random identifier: `bytes` random bytes from the secure source, in hex.
+ * Throws where there is no secure source (see `runtime.ts`).
+ */
+export const randomId = (bytes = 16) => hex(secureRandomBytes(bytes));
+
+/**
+ * SHA-256 of a text's UTF-8 bytes, in hex: `crypto.subtle` where it is
+ * there (a secure context), the plain JavaScript one otherwise.
+ */
 export const sha256Hex = async (text: string) => {
-    const digest = await globalThis.crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(text)
-    );
-    return Array.from(new Uint8Array(digest), (b) =>
-        b.toString(16).padStart(2, '0')
-    ).join('');
+    const bytes = new TextEncoder().encode(text);
+    const subtle = globalThis.crypto?.subtle;
+    if (subtle)
+        return hex(new Uint8Array(await subtle.digest('SHA-256', bytes)));
+    return hex(sha256(bytes));
 };

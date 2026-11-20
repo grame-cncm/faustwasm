@@ -258,6 +258,26 @@ dsp.startSensors();   // after asking for the motion sensor permission on iOS
 console.log(dsp.state, dsp.group, dsp.rtt);
 ```
 
+A host can also run without Web Audio, in the server's own process (under Node, or in a Max patch's `node.script`, which section 20 of the spec studies), for a DSP that runs somewhere else. `FaustRemoteHub` stands in for the node, built from the DSP's JSON; what the remote controls write comes out of `onwrite`, and what changes on the DSP's side goes in through `update` and `output`:
+
+```js
+import createFaustRemoteServer from "@grame/faustwasm/src/faustRemoteServer.js";
+import { FaustRemoteHost, FaustRemoteHub } from "@grame/faustwasm/dist/remote/host.js";
+
+const server = createFaustRemoteServer({ root: "out", cert, key });
+server.listen(8443);
+const hub = new FaustRemoteHub(json, {
+    onwrite: (path, value) => sendToTheDsp(path, value),   // a remote control moved a slider
+    onmidi: (data) => sendMidiToTheDsp(data)
+});
+const host = new FaustRemoteHost(hub, { token });
+host.acceptRelay(server.hostRoom(room, token));            // the relay, with no WebSocket in between
+hub.update("/synth/freq", 440);                            // a change made on the DSP's side
+hub.output("/synth/level", 0.5);                           // a bargraph value
+```
+
+Such a host has no WebRTC: remote controls connect through the relay, and give up WebRTC at once when they find no host for it.
+
 See [docs/remote-control.md](docs/remote-control.md) for the design, every option and the protocol.
 
 #### Generate SVG Diagrams of a Faust DSP

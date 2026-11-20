@@ -18,7 +18,13 @@ export {
     type FaustSignaling
 } from './signaling';
 export { answerPeers, createRTCTransport, type FaustRTCOptions } from './rtc';
-export { listenRelay, type FaustRelayOptions } from './relay';
+export {
+    acceptRelayed,
+    listenRelay,
+    type FaustRelayOptions,
+    type FaustRelayPort
+} from './relay';
+export { FaustRemoteHub, type FaustRemoteHubOptions } from './hub';
 export { qrCodeSvg, type FaustQrCodeOptions } from './qr';
 export {
     type FaustRemoteChannel,

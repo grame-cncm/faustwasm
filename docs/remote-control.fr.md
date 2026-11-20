@@ -1973,10 +1973,38 @@ sous `node.script` peut compiler lui-même avec faustwasm.
 
 ## 20.8. Plan
 
-1. **Cœur de l'hôte sans globales du navigateur, cible hub, hôte dans le
+1. *(Fait.)* **Cœur de l'hôte sans globales du navigateur, cible hub, hôte dans le
    processus du serveur** (20.3, points 1 à 3), dans faustwasm,
    avec des tests sous Node : utile sous Node quoi qu'il arrive dans Max
    (Q4).
+
+   Tel que réalisé :
+   - `src/remote/runtime.ts` donne à l'hôte ce qu'il prenait au navigateur,
+     avec un repli pour chaque chose : `EventTarget` (un minimal),
+     `CustomEvent` (un simple `{ type, detail }`), `performance.now()`
+     (`Date.now()`), l'empreinte du JSON (un SHA-256 en JavaScript pur sans
+     `crypto.subtle`). L'identifiant de session de l'hôte peut se replier
+     sur `Math.random`, puisque ce n'est pas un secret ; `randomId`, qui
+     peut servir à un jeton, lève une erreur sans `crypto.getRandomValues`.
+     Vérifié par un test qui retire ces globales avant de charger
+     `dist/remote/host.js`.
+   - `FaustRemoteHub(json, { onwrite, onmidi })` (`src/remote/hub.ts`, dans
+     `host.js` et `index.js`) : une cible d'hôte construite à partir d'un
+     JSON. Une écriture qui passe par elle (une télécommande, les capteurs
+     traduits avec les courbes du DSP, `setParamValue`) est stockée, donnée
+     à `onwrite`, puis signalée à l'hôte, qui la transmet aux autres
+     télécommandes ; `update(chemin, valeur)` signale un changement fait là
+     où tourne le DSP, sans le rendre à `onwrite` ; `output(chemin, valeur)`
+     un bargraph. Les capteurs ne pilotent jamais un contrôle
+     `[remote:off]` ; les écritures horodatées attendent par minuterie.
+   - `server.hostRoom(salle, jeton)` (`createFaustRemoteServer`) donne à un
+     hôte du processus du serveur le relais de la salle sous forme de port,
+     et `host.acceptRelay(port)` prend les télécommandes qui arrivent par
+     lui ; l'hôte relayé par WebSocket et ce port partagent `acceptRelayed`
+     (`src/remote/relay.ts`). Une telle salle n'a pas d'hôte WebRTC : le
+     serveur répond à l'offre d'une télécommande par un HTTP 409, et
+     l'erreur de signalisation atteint maintenant la télécommande, qui passe
+     au relais tout de suite au lieu d'attendre son délai de 8 s.
 2. **`node.script` d'abord** : le serveur existant et l'hôte sans
    changement, l'adaptateur `faustgen~`, un patch d'exemple et une
    abstraction. WebRTC avec un `node-datachannel` facultatif. Le chemin le

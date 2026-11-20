@@ -48,6 +48,13 @@ export {
     type FaustSignalMessage,
     type FaustSignaling
 } from './signaling';
-export { connectRelay, listenRelay, type FaustRelayOptions } from './relay';
+export {
+    acceptRelayed,
+    connectRelay,
+    listenRelay,
+    type FaustRelayOptions,
+    type FaustRelayPort
+} from './relay';
+export { FaustRemoteHub, type FaustRemoteHubOptions } from './hub';
 export { qrCodeSvg, type FaustQrCodeOptions } from './qr';
 export { FaustLocalSound, type FaustLocalNode } from './local';

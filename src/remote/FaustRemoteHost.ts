@@ -7,7 +7,6 @@ import type { FaustUIInputItem } from '../types';
 import {
     PROTOCOL_VERSION,
     parseClientMessage,
-    randomId,
     sha256Hex,
     splitMessage,
     type FaustRemoteClientMessage,
@@ -16,7 +15,12 @@ import {
     type FaustRemoteMode,
     type FaustRemoteRejectCode
 } from './protocol';
-import { listenRelay, type FaustRelayOptions } from './relay';
+import {
+    acceptRelayed,
+    listenRelay,
+    type FaustRelayOptions,
+    type FaustRelayPort
+} from './relay';
 import { answerPeers, type FaustRTCOptions } from './rtc';
 import type { FaustSignaling } from './signaling';
 import type { FaustRemoteChannel, FaustRemoteTransport } from './transport';
@@ -27,6 +31,7 @@ import {
     type SensorTarget
 } from './sensors';
 import { inputRange, isRemoteOff, readUI } from './ui';
+import { EventTargetBase, customEvent, now, uniqueId } from './runtime';
 
 /**
  * What the host needs from a node: every Faust node, mono or polyphonic,
@@ -157,8 +162,6 @@ interface Client {
     windowCount: number;
 }
 
-const now = () => globalThis.performance.now();
-
 /** Do not let a housekeeping timer keep a Node process alive. */
 const unref = <T>(timer: T): T => {
     (timer as { unref?: () => void }).unref?.();
@@ -183,7 +186,7 @@ const unref = <T>(timer: T): T => {
  * Events: `join` and `leave` (`detail`: a `FaustRemoteClientInfo`), `error`
  * (`detail`: the error). Nothing the network does throws into the page.
  */
-export class FaustRemoteHost extends EventTarget {
+export class FaustRemoteHost extends EventTargetBase {
     readonly #node: FaustRemoteHostTarget;
     readonly #options: Required<
         Omit<
@@ -200,7 +203,7 @@ export class FaustRemoteHost extends EventTarget {
     readonly #gyrTargets: SensorTarget[];
     /** Top-level groups, for `assign: 'groups'`. */
     readonly #groups: Group[];
-    readonly #session = randomId(8);
+    readonly #session = uniqueId(8);
     readonly #json: string;
     #hash: Promise<string> | null = null;
 
@@ -364,6 +367,21 @@ export class FaustRemoteHost extends EventTarget {
         );
     }
 
+    /**
+     * Accept remote controls through a relay port already open: the one
+     * `hostRoom` of `createFaustRemoteServer` gives a host running in the
+     * server's own process (under Node, in Max), so that the relay hands it
+     * the remote controls without a WebSocket. Stops on `close()`, or when
+     * the returned function is called; the port itself is the caller's.
+     */
+    acceptRelay(port: FaustRelayPort) {
+        if (this.#closed) return () => {};
+        const relayed = acceptRelayed(port, (transport) =>
+            this.accept(transport)
+        );
+        return this.#track(() => relayed.stop());
+    }
+
     accept(transport: FaustRemoteTransport) {
         if (this.#closed) {
             transport.close('host closed');
@@ -524,7 +542,7 @@ export class FaustRemoteHost extends EventTarget {
             group: client.group?.label,
             sensors: this.#options.sensorPolicy
         });
-        this.dispatchEvent(new CustomEvent('join', { detail: info }));
+        this.dispatchEvent(customEvent('join', info));
     }
 
     #handle(client: Client, message: FaustRemoteClientMessage, t: number) {
@@ -980,10 +998,7 @@ export class FaustRemoteHost extends EventTarget {
             clearInterval(this.#livenessTimer);
             this.#livenessTimer = null;
         }
-        if (wasOpen)
-            this.dispatchEvent(
-                new CustomEvent('leave', { detail: client.info })
-            );
+        if (wasOpen) this.dispatchEvent(customEvent('leave', client.info));
     }
 
     #open() {
@@ -991,7 +1006,7 @@ export class FaustRemoteHost extends EventTarget {
     }
 
     #error(error: unknown) {
-        this.dispatchEvent(new CustomEvent('error', { detail: error }));
+        this.dispatchEvent(customEvent('error', error));
     }
 }
 

@@ -1938,9 +1938,35 @@ phones the wasm of the DSP it runs, and a JavaScript host under
 
 ## 20.8. Plan
 
-1. **Host core without browser globals, hub target, host in the server
+1. *(Done.)* **Host core without browser globals, hub target, host in the server
    process** (20.3, points 1 to 3), in faustwasm, with tests in
    Node: useful under Node whatever happens in Max (Q4).
+
+   As implemented:
+   - `src/remote/runtime.ts` gives the host what it took from the browser,
+     with a fallback for each: `EventTarget` (a minimal one), `CustomEvent`
+     (a plain `{ type, detail }`), `performance.now()` (`Date.now()`), the
+     JSON hash (a plain JavaScript SHA-256 without `crypto.subtle`). The
+     host's session id may fall back on `Math.random`, since it is not a
+     secret; `randomId`, which can feed a token, throws without
+     `crypto.getRandomValues` instead. Checked by a test that removes those
+     globals before loading `dist/remote/host.js`.
+   - `FaustRemoteHub(json, { onwrite, onmidi })` (`src/remote/hub.ts`, in
+     `host.js` and `index.js`): a host target built from a JSON. A write
+     through it (a remote control, sensors mapped with the DSP's curves,
+     `setParamValue`) is stored, given to `onwrite`, then reported to the
+     host, which passes it on to the other remote controls; `update(path,
+     value)` reports a change made where the DSP runs, without giving it
+     back to `onwrite`; `output(path, value)` a bargraph. Sensors never
+     drive a `[remote:off]` control; timestamped writes wait by a timer.
+   - `server.hostRoom(room, token)` (`createFaustRemoteServer`) gives a host
+     in the server's process the room's relay as a port, and
+     `host.acceptRelay(port)` takes the remote controls that arrive through
+     it; the WebSocket relay host and this port share `acceptRelayed`
+     (`src/remote/relay.ts`). Such a room has no WebRTC host, so the
+     server answers a remote control's offer with HTTP 409: the signaling
+     error now reaches the remote control, which goes to the relay at once
+     instead of after its 8 s timeout.
 2. **`node.script` first**: the existing server and the host unchanged, the
    `faustgen~` adapter, an example patch and abstraction. WebRTC with an
    optional `node-datachannel`. The fastest way to a phone driving

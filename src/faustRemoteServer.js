@@ -125,6 +125,24 @@ const readJSON = (req) =>
         req.on('error', reject);
     });
 
+/**
+ * Run after the current task's own work, in order: what a WebSocket's
+ * delivery is to its listeners.
+ *
+ * @param {() => void} run
+ */
+const later = (run) => {
+    Promise.resolve().then(run);
+};
+
+/**
+ * @typedef {object} RelayPort
+ * @property {(text: string) => void} send
+ * @property {() => void} close
+ * @property {((text: string) => void) | null} onmessage
+ * @property {(() => void) | null} onclose
+ */
+
 const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const MAX_FRAME = 1024 * 1024;
 
@@ -262,7 +280,7 @@ const acceptWebSocket = (req, socket) => {
  *   `root` is the directory served; with `cert` and `key` (PEM), HTTPS;
  *   `allowOrigins`, the origins of pages served elsewhere that may use the
  *   signaling and the relay (`https://example.org`, no path).
- * @returns {http.Server | https.Server}
+ * @returns {(http.Server | https.Server) & { hostRoom: (room: string, token: string) => RelayPort }}
  */
 export const createFaustRemoteServer = ({
     root,
@@ -472,6 +490,62 @@ export const createFaustRemoteServer = ({
     };
 
     /**
+     * A message from a room's relaying host: to the remote control its
+     * prefix names, or, for a lone `!`, that remote control's end.
+     *
+     * @param {Room} room
+     * @param {string} text
+     */
+    const fromRelayHost = (room, text) => {
+        const cut = text.indexOf('\n');
+        if (cut <= 0) return;
+        const target = room.relayRemotes.get(text.slice(0, cut));
+        const payload = text.slice(cut + 1);
+        if (!target) return;
+        if (payload === '!') target.close();
+        else target.send(payload);
+    };
+
+    /**
+     * A room's relaying host is gone: so are its relayed remote controls.
+     *
+     * @param {Room} room
+     */
+    const relayHostGone = (room) => {
+        room.relayHost = null;
+        for (const remote of [...room.relayRemotes.values()]) remote.close();
+        room.relayRemotes.clear();
+    };
+
+    /**
+     * Claim a room as `POST host` or a relaying host would: the first token
+     * given for a room is the room's.
+     *
+     * @param {string} roomName
+     * @param {string} token
+     * @returns {Room | null} null if the room is another token's
+     */
+    const claimRoom = (roomName, token) => {
+        let room = rooms.get(roomName);
+        if (room && room.token !== token) return null;
+        if (!room) {
+            room = {
+                token,
+                host: null,
+                peers: new Map(),
+                relayHost: null,
+                relayRemotes: new Map()
+            };
+            rooms.set(roomName, room);
+        }
+        return room;
+    };
+
+    /** The ports `hostRoom` handed out and not yet closed. */
+    /** @type {Set<RelayPort>} */
+    const ports = new Set();
+
+    /**
      * The relay: authenticate the first message, then forward.
      *
      * @param {WebSocketPeer} ws
@@ -498,19 +572,11 @@ export const createFaustRemoteServer = ({
             if (typeof token !== 'string' || !token || typeof id !== 'string')
                 return ws.close();
             if (!/^[\w-]{1,64}$/.test(id)) return ws.close();
+            /** @type {Room | null | undefined} */
             let candidate = rooms.get(roomName);
             if (role === 'host') {
-                if (candidate && candidate.token !== token) return ws.close();
-                if (!candidate) {
-                    candidate = {
-                        token,
-                        host: null,
-                        peers: new Map(),
-                        relayHost: null,
-                        relayRemotes: new Map()
-                    };
-                    rooms.set(roomName, candidate);
-                }
+                candidate = claimRoom(roomName, token);
+                if (!candidate) return ws.close();
                 candidate.relayHost?.close();
                 candidate.relayHost = ws;
             } else if (role === 'remote') {
@@ -533,13 +599,7 @@ export const createFaustRemoteServer = ({
                 room.relayHost?.send(`${id}\n${text}`);
                 return;
             }
-            const cut = text.indexOf('\n');
-            if (cut <= 0) return;
-            const target = room.relayRemotes.get(text.slice(0, cut));
-            const payload = text.slice(cut + 1);
-            if (!target) return;
-            if (payload === '!') target.close();
-            else target.send(payload);
+            fromRelayHost(room, text);
         };
         ws.onclose = () => {
             clearTimeout(timeout);
@@ -549,12 +609,61 @@ export const createFaustRemoteServer = ({
                 room.relayRemotes.delete(id);
                 room.relayHost?.send(`${id}\n!`);
             } else if (room.relayHost === ws) {
-                room.relayHost = null;
-                for (const remote of [...room.relayRemotes.values()])
-                    remote.close();
-                room.relayRemotes.clear();
+                relayHostGone(room);
             }
         };
+    };
+
+    /**
+     * Be a room's relaying host from this process: the remote controls that
+     * come through the relay are handed to the returned port, in the relay's
+     * framing (see `FaustRelayPort` in `src/remote/relay.ts`), with no
+     * WebSocket in between. For a host running alongside the server (under
+     * Node, in Max): `host.acceptRelay(server.hostRoom(room, token))`. The
+     * room is claimed as a relaying host claims it; a relaying host that
+     * takes the room later replaces this one, as it would another.
+     *
+     * @param {string} roomName
+     * @param {string} token
+     * @returns {RelayPort}
+     */
+    const hostRoom = (roomName, token) => {
+        if (typeof token !== 'string' || token === '')
+            throw new Error('a token is required');
+        const room = claimRoom(roomName, token);
+        if (!room) throw new Error(`room ${roomName} is taken`);
+        room.relayHost?.close();
+        let open = true;
+        /** @type {RelayPort} */
+        const port = {
+            onmessage: null,
+            onclose: null,
+            send(text) {
+                if (open && room.relayHost === peer) fromRelayHost(room, text);
+            },
+            close() {
+                if (!open) return;
+                open = false;
+                ports.delete(port);
+                if (room.relayHost === peer) relayHostGone(room);
+                later(() => port.onclose?.());
+            }
+        };
+        /** @type {WebSocketPeer} the room's side of the port */
+        const peer = {
+            onmessage: null,
+            onclose: null,
+            // Asynchronous, as a WebSocket is, and in order
+            send(text) {
+                if (open) later(() => open && port.onmessage?.(text));
+            },
+            close() {
+                port.close();
+            }
+        };
+        room.relayHost = peer;
+        ports.add(port);
+        return port;
     };
 
     const server =
@@ -568,6 +677,7 @@ export const createFaustRemoteServer = ({
     const closeServer = server.close.bind(server);
     server.close = (callback) => {
         for (const socket of upgraded) socket.destroy();
+        for (const port of [...ports]) port.close();
         return closeServer(callback);
     };
     server.on('upgrade', (req, socket) => {
@@ -593,7 +703,7 @@ export const createFaustRemoteServer = ({
         }
         relay(ws, decodeURIComponent(match[1]));
     });
-    return server;
+    return Object.assign(server, { hostRoom });
 };
 
 export default createFaustRemoteServer;

@@ -191,6 +191,8 @@ export const callHost = async (
                 reject(new Error('the host refused the connection'));
             }
         };
+        // No WebRTC host there, or no way to reach it: no use waiting
+        signaling.onerror = reject;
     });
     // Settled after the race is decided, by a late 'bye' say: nobody awaits it
     failed.catch(() => {});
