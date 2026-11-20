@@ -33,6 +33,7 @@ faustwasm — remote control | | {page} / {pages}
 - **Implementation status** — what is done, phase by phase, and the deviations from the preceding sections.
 - **Use over the Internet** — what the online IDE would need: public server, pages, NAT, security, hosting.
 - **Sound on the phone** — host audio over WebRTC or the DSP on the phone: the two uses, the bridge, a hub without DSP, limits and plan.
+- **Hosting in Max/MSP** — the server in a `v8` or `node.script` object, or inside `faustgen~`; driving `faustgen~` or a patch's parameters; phones that play the `faustgen~` DSP, compiled to wasm; plan.
 - **Implementation plan** — the phases and their order.
 :::
 
@@ -961,7 +962,9 @@ example node-web-audio-api) and a native WebRTC library. Both are heavy
 dependencies and must not enter the package; the `FaustRemoteTransport`
 abstraction lets such a host provide its own transport. The reference host
 remains a browser page, possibly in kiosk mode on the audio machine.
-Feasibility to be studied separately (Q4).
+Feasibility to be studied separately (Q4). A host inside Max, which runs
+JavaScript under Node (`node.script`) or in the patch (`v8`), is studied in
+\ref{sec:max}.
 
 ### 14.5. Version and C++
 
@@ -1037,7 +1040,9 @@ Q3
 
 Q4
 :   Should a host under Node (native Web Audio and WebRTC) be studied, or
-    should we stick to the browser host?
+    should we stick to the browser host? A host without Web Audio, driving
+    a Max patch, is studied in \ref{sec:max}; its first step (a host core
+    free of browser globals) is the one a Node host would need.
 
 Q5
 :   Signaling for Internet use (online IDE): a service hosted by GRAME, or
@@ -1067,7 +1072,7 @@ Q7
     \ref{sec:audio}, which compares it with running the DSP on the phone
     itself, the recommended first step.
 
-## 16 bis. Implementation status
+## 17. Implementation status
 
 P0, P1, P2 and P3 are done on the `remote-control` branch.
 
@@ -1204,7 +1209,7 @@ initial values sent in `welcome` for a sensor-driven parameter could
 therefore be stale. The node now records these writes and returns them in
 `getParamValue`.
 
-## 16 ter. Use over the Internet \label{sec:internet}
+## 18. Use over the Internet \label{sec:internet}
 
 Everything above assumes that the host, the server and the phones are on the
 **same local network**: `faust-remote-server` runs on the host machine, and
@@ -1215,7 +1220,7 @@ there, the host page is the IDE itself, served by a public site, which runs
 the DSP with faustwasm in the user's browser. `FaustRemoteHost` sits on the
 node there as it is; what changes is everything surrounding the connection.
 
-### 16 ter.1. What prevents the current setup
+### 18.1. What prevents the current setup
 
 No local server
 :   The IDE user has no Node, no certificate and no server to launch.
@@ -1236,7 +1241,7 @@ Different networks
 :   The phone may be on 4G or on another Wi-Fi: the connection must traverse
     NATs, which the local network never required.
 
-### 16 ter.2. Topology
+### 18.2. Topology
 
 ```mermaid "Use over the Internet: who talks to whom" \label{fig:internet}
 flowchart LR
@@ -1272,7 +1277,7 @@ also the best: only signaling goes over the Internet, and the control
 connection is established directly on the local network, with today's
 latency.
 
-### 16 ter.3. What the server needs
+### 18.3. What the server needs
 
 `faust-remote-server` already does almost everything a public service must
 do (rooms, tokens, signaling, relay). What it lacks:
@@ -1314,7 +1319,7 @@ Certificate
 :   A real certificate (Let's Encrypt) replaces mkcert: nothing left to
     install on the phones, which in itself is a big usability gain.
 
-### 16 ter.4. What the pages need
+### 18.4. What the pages need
 
 Configurable signaling address
 :   The pages currently assume that signaling is served by the same origin as
@@ -1342,7 +1347,7 @@ Integration into the IDE
     node, opens the session and displays the QR code (`qrCodeSvg`); to be
     redone at every recompilation of the DSP, since the node changes.
 
-### 16 ter.5. Traversing NATs
+### 18.5. Traversing NATs
 
 Between two networks, WebRTC has to discover reachable addresses. **STUN** is
 enough behind most home routers. Behind a symmetric NAT, common on mobile
@@ -1359,7 +1364,7 @@ handle many sessions. Timed mode (`playoutDelay`) absorbs the jitter of an
 Internet path, at the cost of a fixed delay of a few tens of milliseconds,
 acceptable for parameter control, less so for playing notes.
 
-### 16 ter.6. Security and privacy
+### 18.6. Security and privacy
 
 - The signaling server sees the room names, the tokens (in the headers) and
   the SDP descriptions, which contain the peers' IP addresses. It does not see
@@ -1375,7 +1380,7 @@ acceptable for parameter control, less so for playing notes.
   the Internet: the link is never sent to a server; it goes from the host's
   screen to the phone's camera.
 
-### 16 ter.7. Who hosts
+### 18.7. Who hosts
 
 | | A. Service hosted by GRAME | B. Building blocks for the integrator |
 | :-- | :-- | :-- |
@@ -1388,7 +1393,7 @@ The two are not mutually exclusive: B is needed for A anyway, and the
 `FaustSignaling` interface lets an application that already has its own
 server (WebSocket, Firebase, Matrix…) use it for signaling.
 
-### 16 ter.8. Work to do, in order
+### 18.8. Work to do, in order
 
 1. *(Done.)* **CORS and relay origin** in `faust-remote-server`, with an
    optional list of allowed origins (`-allow-origin`), and `X-Accel-Buffering`
@@ -1422,14 +1427,14 @@ preflight request refused for another one (the host page says so, naming the
 option), link to an unknown server refused without any request being sent to
 it.
 
-## 16 quater. Sound on the phone \label{sec:audio}
+## 19. Sound on the phone \label{sec:audio}
 
 So far the remote control receives values only: parameters and bargraphs.
 This section studies how a phone could also give sound (question Q7), and
 compares two ways: sending the host's audio to the phone, or running the
 DSP on the phone itself. It is a design, not yet implemented.
 
-### 16 quater.1. What for
+### 19.1. What for
 
 - **Monitoring during rehearsal**: a musician or technician far from the
   loudspeakers, or in another room, listening on headphones.
@@ -1439,7 +1444,7 @@ DSP on the phone itself. It is a design, not yet implemented.
   loudspeaker, a phone orchestra, the server only coordinating the
   controls.
 
-### 16 quater.2. Two ways
+### 19.2. Two ways
 
 Host audio over WebRTC
 :   The output of the host's node is also routed to a
@@ -1482,7 +1487,7 @@ remains the answer only when the sound must be exactly the host's: a DSP
 that processes the host's audio input (microphone, line), uses sounds only
 the host has, or is too heavy for a phone.
 
-### 16 quater.3. DSP on the phone: two uses
+### 19.3. DSP on the phone: two uses
 
 Local monitoring
 :   The host remains the reference sound, on the PA system; the phone runs
@@ -1495,7 +1500,7 @@ Phones as instruments
     influencing one another). `assign: 'groups'` takes a natural meaning:
     each phone plays and hears its group.
 
-### 16 quater.4. Architecture on the phone
+### 19.4. Architecture on the phone
 
 Two objects side by side: a **local Faust node**, created as in the
 standalone PWA (`createFaustNode` of `create-node.js`), and the existing
@@ -1525,7 +1530,7 @@ flowchart LR
 The bridge belongs in `client.js`, so that an application of one's own can
 use it; the generated remote control would offer a "Play locally" choice.
 
-### 16 quater.5. A hub without DSP
+### 19.5. A hub without DSP
 
 For phones as instruments, the server need not compute anything: a **hub**
 keeps the parameter state, applies the rules (groups, `[remote:off]`,
@@ -1535,13 +1540,13 @@ storing values, built from `dsp-meta.json`, is enough. Such a hub no longer
 needs Web Audio, which also brings the host under Node (Q4) closer: with
 the WebSocket relay, the server could be a Node process alone.
 
-### 16 quater.6. Limits
+### 19.6. Limits
 
 - **The sound is not the host's.** Same settings, two independent
   computations: oscillators and LFOs out of phase, different noise, a note
   starting slightly later on one side. A good approximation for
   monitoring, not a replacement when the host's sound depends on what the
-  phone lacks (see 16 quater.2).
+  phone lacks (see 19.2).
 - **Rhythm between phones.** Each phone has its own audio clock. Events a
   conductor wants played together need the timed mode **the other way**:
   scheduled at a common instant converted into each phone's audio clock.
@@ -1552,12 +1557,12 @@ the WebSocket relay, the server could be a Node process alone.
 - **iOS.** Audio needs a gesture to start (the **Connect** tap provides
   it), and the remote control currently disconnects when the screen locks:
   to keep playing screen off, it would have to stay connected then.
-- **File locations.** `create-node.js` fetches `dsp-meta.json` and
-  `dsp-module.wasm` next to the page; the generated remote control lives in
-  `remote/` while those files are at the top: it must be told where they
-  are, which is simple.
+- **File locations.** `create-node.js` fetched `dsp-meta.json` and
+  `dsp-module.wasm` next to the page, while the generated remote control
+  lives in `remote/` and those files at the top. Solved in step 1: it now
+  resolves them against itself.
 
-### 16 quater.7. Plan
+### 19.7. Plan
 
 1. *(Done.)* **Local monitoring**: the local node ↔ remote control bridge in
    `client.js`, and "Play locally" in the generated remote control (which
@@ -1603,7 +1608,293 @@ can compute, follows its slider (1668 Hz gives 0.834 for `freq / 2000`). Not
 checked: on a phone, where the load of the DSP and the audio latency are to
 be measured.
 
-## 17. Implementation plan
+## 20. Hosting in Max/MSP \label{sec:max}
+
+The goal: the same remote control (PWA, sliders, sensors, local sound)
+driving a **Max patch** instead of a Web Audio page. Two things are to be
+decided: **what speaks to the phones** inside Max, and **what it drives**:
+a `faustgen~` DSP, or any patch through its parameters. This section is a
+feasibility study and a plan; nothing is implemented.
+
+What Max offers was read in the Cycling '74 documentation (Max 9.2) and in
+the `faustgen~` sources (`faust/embedded/faustgen`); what could only be read,
+not run in Max, is marked *to be checked*.
+
+### 20.1. Three places to run the server
+
+`v8` object (Max 9, networking since 9.2)
+:   JavaScript in the patch itself, on a modern V8 engine (ES6 and later),
+    always on Max's low-priority (main) thread. Since Max 9.2 it has
+    `require("http")` and `require("https")` (servers with streamed
+    responses and the `upgrade` event, documented as a minimal subset of
+    Node's), `WebSocketServer` (`noServer` and `handleUpgrade`, to share the
+    HTTP(S) port), `net`, `tls`, `dgram`, `fetch`, `EventSource`, timers,
+    `File`/`Folder` for files. **No WebRTC**: no `RTCPeerConnection`. So
+    signaling plus the WebSocket relay (\ref{sec:signal}), which the remote
+    control already falls back to. The classic `js` object (SpiderMonkey
+    1.8.5) has none of this.
+
+`node.script` object (Node for Max, Max 8 and 9)
+:   A real Node.js, in a **separate process**, started and driven by the
+    patch; the `max-api` module exchanges messages with it (`addHandler`,
+    `outlet`, dictionaries), handled on Max's scheduler thread by default.
+    The server (`faustRemoteServer.js`) and the host run there **unchanged**,
+    since they need nothing but Node. WebRTC needs a native library in Node
+    (for instance `node-datachannel`), installed by the user with
+    `script npm install`, never a dependency of the package.
+
+Inside `faustgen~` (C++)
+:   A server mode built into the external: HTTP and WebSocket server, WebRTC
+    with libdatachannel, and the host's logic **rewritten in C++**
+    (policies, groups, sensors, timed mode). Detailed in
+    20.5.
+
+`jweb` (Chromium Embedded Framework in Max) could run the host page itself,
+with `window.max.outlet` towards the patch; whether Max's CEF build allows
+WebRTC is not documented (*to be checked*), and signaling would still need
+one of the two JavaScript servers above.
+
+```csv "Max: where the server runs" \label{tab:max}
+Criterion, v8, node.script, faustgen~ server mode
+Max version, 9.2 and later, 8 and 9, those faustgen~ supports
+Transport, WebSocket relay only, relay; WebRTC with a native module, relay and WebRTC
+Reuse of the TypeScript host, yes with small shims, yes as is, no: a C++ port
+Install, one file in the patch, Node for Max (bundled) and a script, nothing beyond faustgen~
+Thread of parameter writes, Max main thread, scheduler thread (separate process), any (zones are plain floats)
+Timed mode accuracy, Max main thread (ms jitter), Max scheduler, sample-accurate in perform
+Cost, small, small, large and two implementations to keep in step
+```
+
+### 20.2. What the host drives: Max targets
+
+`FaustRemoteHost` drives an object that looks like a node
+(`FaustRemoteHostTarget`: `getJSON`, `setParamValue`/`getParamValue`, the
+two handlers, `midiMessage`, `propagateAcc`/`propagateGyr`). In Max it is an
+adapter, the **hub without DSP** of 19.5 (values stored, built from
+a JSON) plus forwarding to the patch. Two adapters cover the cases.
+
+The `faustgen~` target
+:   - *JSON*: `faustgen~` already sends its JSON to every `js` object in
+      its patcher when a DSP is compiled (`create_jsui`), not to `v8` nor
+      `node.script`; a `js` relay works today, a small change in
+      `faustgen~` would do better (20.4).
+    - *Writes*: `path value` messages into its left inlet, the syntax it
+      already accepts (label, shortname or path).
+    - *Bargraphs*: its control outlet sends `[path, cur, min, max]` for
+      every bargraph **at every audio block** (`dump_outputs` in
+      `perform`): several hundred messages per second and per bargraph,
+      to be thinned before the adapter (`speedlim`, or only changes); the
+      host's `outputRate` then thins again what goes to the phones.
+    - *Changes made in the patch* (a Max slider, a preset): `faustgen~`
+      does not report input changes. Either every control message reaches
+      `faustgen~` **through** the adapter (which sees them, the simplest),
+      or the adapter asks `dump` regularly.
+    - *MIDI*: `midievent` messages; polyphony stays `polyphony N` on the
+      object.
+    - *Sensors*: `faustgen~` does not apply `[acc:]`/`[gyr:]` itself; the
+      adapter applies the DSP's curves with the shared
+      `src/remote/sensors.ts`, as `FaustLocalSound` does, then writes the
+      values.
+
+The patch-parameter target
+:   Any patch whose controls are **named parameters** (Parameter Mode
+    Enable, the `live.*` objects): `ParameterInfoProvider` lists them with
+    their type and range and reports additions and removals,
+    `ParameterListener` reports their changes, and a write goes to the
+    object found through `getinfo(name).maxobj` (*to be checked*:
+    parameter list and listeners are documented for `js` and `v8`, not for
+    `node.script`, which would need a small `v8` helper in the patch). The
+    adapter builds a Faust JSON from them (`hslider` for a float, `nentry`
+    for an integer, `checkbox` for two states, a menu for an enumeration)
+    so that the phone is unchanged. A Faust UI says more than Max
+    parameters (groups, `[acc:]`, `[remote:off]`, bargraphs), so a second
+    way is to **describe the interface in Faust**: a `.dsp` with only
+    widgets, whose `faust -json` gives the layout and metadata, its paths
+    named after the patch's parameters; bargraphs are then values the patch
+    sends to the adapter (`meter name value`).
+
+### 20.3. What the faustwasm side needs
+
+The browser host relies on browser globals that Node 19+ also has but that
+`v8` does not list (*to be checked* in Max 9.2): `EventTarget` and
+`CustomEvent` (the host's events), `performance.now()` (clock and timed
+mode), `crypto.getRandomValues` (identifiers, **and the pairing token**,
+which must come from a secure source) and `crypto.subtle` (the JSON hash
+that lets a remote control reuse its cached UI).
+
+1. **A host free of browser globals**: events through a minimal emitter
+   when `EventTarget` is missing, an injectable clock and random source,
+   the hash replaced by a short pure-JavaScript SHA-256 (or skipped). The
+   token in `v8`: given by the user, or read from the system's random
+   source; never `Math.random`.
+2. **The hub target** (`FaustRemoteHubTarget`, step 2 of 19.7):
+   values built from a JSON, handlers, sensor curves; the base of both Max
+   adapters, and useful under Node and for phones as instruments.
+3. **The host inside the server process**: today the host is a page that
+   reaches the server's relay as a client. In Max the server and the host
+   are one program: the server should hand each relay connection to the
+   host as a `FaustRemoteTransport` directly, with no WebSocket loop
+   through itself.
+4. **A `v8` build of the server**: `http`/`https` and `WebSocketServer`
+   instead of `node:http` and the hand-written RFC 6455 framing, `File`
+   instead of `fs` for the PWA's files, a CommonJS bundle for `require`.
+   HTTPS stays necessary for the phones' sensors: `https.createServer`
+   takes the same mkcert key and certificate.
+5. **The PWA in the Max package**: the generic remote control (`remote/`,
+   `client.js`, faust-ui) does not depend on the DSP, which arrives in
+   `welcome`; it can ship once, served by the patch. Local sound
+   (\ref{sec:audio}) needs the DSP's wasm: `faustgen~` can produce it with
+   libfaust's wasm backend (20.6), or faustwasm can compile the same source
+   under `node.script`.
+
+### 20.4. What `faustgen~` could add (C++)
+
+None of this is required to start (a `js` relay and a `speedlim` suffice),
+but the first three each remove a patching chore, and the last brings
+local sound to a Max patch. They belong to grame-cncm/faust, to be
+committed there.
+
+- Send the JSON to `v8` objects too, not only `js`, or answer a `json`
+  message on the control outlet.
+- Report input changes on the control outlet (an attribute such as
+  `@report 1`), whatever their source: message, OSC, MIDI, preset.
+- Send bargraphs only when they change, or at a chosen rate, instead of at
+  every block.
+- Compile each DSP to wasm too, for the phones (20.6): a larger addition
+  than the others, but the one that lets a phone play the patch's DSP.
+
+### 20.5. A server mode inside `faustgen~`
+
+Feasible, and attractive on three counts: **one object** and nothing else
+to install (Max 8 included); **sample-accurate timed mode**, since
+`faustgen~` owns `compute` and could apply timestamped values inside the
+block, which no JavaScript in Max can; and, written as a generic Faust
+architecture class (a `RemoteUI` next to `OSCUI` and `httpdUI`), the same
+remote control for **every native Faust target** (`faust2caqt`,
+`faust2juce`, `faust2max` externals...). Sensors are already mapped in C++
+by `APIUI`.
+
+The costs are what make it a later step:
+
+- **A second implementation** of the protocol and of the host's rules
+  (policies, groups, `[remote:off]`, sensor policies, clock, timed mode),
+  in C++, to be kept identical to the TypeScript one: every fix ported both
+  ways, with its own tests.
+- **Heavy dependencies** in the external: libdatachannel (with usrsctp,
+  libjuice and OpenSSL or mbedTLS) for WebRTC, an HTTP and WebSocket server
+  (`httpdUI`'s libmicrohttpd has no WebSocket), a JSON parser; built for
+  macOS (two architectures) and Windows.
+- **Threads**: a network thread writing zones (plain floats, already done
+  by OSC), bargraph reads without locking the audio thread, Max calls
+  deferred to the main thread.
+- **The PWA's files** shipped in the Max package and served by the
+  external.
+
+A lighter native route already half exists: `faustgen~` speaks OSC (`osc`
+message, with transmission of values). A **WebRTC-to-OSC gateway** in
+`faust-remote-server` (14.5), a host whose target sends and receives OSC on
+`localhost`, would drive `faustgen~` and any application built with `-osc`,
+with no change in Max (OSC encoding is a few dozen lines over `dgram`; the
+JSON then comes from compiling the `.dsp` or from the user, *to be
+checked*: whether Faust's OSC interface returns it).
+
+### 20.6. One source, two compilations: phones that play the `faustgen~` DSP
+
+Next to LLVM, libfaust has a WebAssembly backend that C++ can call
+(`createWasmDSPFactoryFromString`, or `generateWasmFromString` for the
+module alone): the factory gives the module (`getBinaryCode()`) and its
+JSON (`getJSON()`), which is what faustwasm writes as `dsp-module.wasm` and
+`dsp-meta.json`. Faust's release workflow builds libfaust with
+`backends/all.cmake`, which puts this backend in the static library (*to be
+checked*: that the `libfaustwithllvm` linked into `faustgen~` keeps it).
+
+`faustgen~` could then compile each DSP twice, from the same source, each
+time it is compiled:
+
+- **to LLVM IR, compiled just in time**, to run in Max, as today;
+- **to wasm**, for the phones: written next to the PWA's files, or handed
+  to the server in a dictionary.
+
+What it gives:
+
+- **The phone controls the patch and plays the same DSP**, with its own
+  sound: the remote control of section 19 ("Play locally") for a Max
+  patch. The phone already loads `dsp-meta.json` and `dsp-module.wasm`
+  from its server; the PWA does not change.
+- **The edit-compile cycle reaches the phones**: closing the `faustgen~`
+  editor recompiles for Max and for the phones, so a phone orchestra can
+  rehearse a DSP while it is being written.
+- **One source of truth**: paths, ranges and metadata (`[acc:]`,
+  `[remote:off]`, groups) are the same on both sides, since they come from
+  the same source.
+
+What it needs:
+
+- **The options of the phone's runtime**: the wasm compiled as faustwasm
+  compiles it, with internal memory for a mono DSP and external memory for
+  polyphonic voices (the `internal_memory` argument); with or without
+  `-double`, which the runtime reads in `compile_options` and handles
+  either way. The polyphonic voice mixer (`mixer-module.wasm`) does not
+  depend on the DSP and ships with the PWA.
+- **Telling connected phones that the DSP changed**: today the host reads
+  the JSON once. A recompilation brings a new interface and a new module:
+  the host announces it (a new `welcome`, or a `dsp` message carrying the
+  JSON's hash), and the remote control rebuilds its interface and, if it
+  plays locally, recreates its node from the new files. This protocol
+  addition would also serve a browser host whose DSP is edited (the IDE).
+- **No stale module**: the module's URL carries the JSON's hash, so a phone
+  never plays an old one (the service worker already asks the network
+  first).
+- **Compilation time**: the wasm compilation runs after the LLVM one, off
+  the audio thread, and the phones are told only once it is done; Max's
+  sound does not wait for it.
+
+The same idea holds outside Max: any host that embeds libfaust can give its
+phones the wasm of the DSP it runs, and a JavaScript host under
+`node.script` can compile with faustwasm itself.
+
+### 20.7. Limits
+
+- **No WebRTC in `v8`**: the relay over TCP is fine on a local network, but
+  a lost Wi-Fi packet delays those behind it (head-of-line blocking): rare
+  jitter spikes, not losses. WebRTC needs `node.script` with a native
+  module, or the C++ mode.
+- **Max's main thread**: `v8` handles the network where Max draws and
+  handles the mouse; a heavy patch delays messages (*to be measured*).
+  `node.script` messages arrive on the scheduler thread.
+- **Timed mode** keeps its meaning (values played at regular intervals) but
+  with the precision of the Max thread that applies them, not of the audio
+  sample; only the C++ mode would make it sample-accurate.
+- **Local sound** on the phone needs the DSP's wasm, which a patch has
+  only once `faustgen~` produces it (20.6), and it is the same DSP, not the
+  same samples: Max computes the LLVM code, the phone the wasm, each with
+  its own phases and noise, as in 19.6.
+- **Untested**: everything in this section was read, not run in Max;
+  `v8` networking is recent (9.2) and documented as minimal.
+
+### 20.8. Plan
+
+1. **Host core without browser globals, hub target, host in the server
+   process** (20.3, points 1 to 3), in faustwasm, with tests in
+   Node: useful under Node whatever happens in Max (Q4).
+2. **`node.script` first**: the existing server and the host unchanged, the
+   `faustgen~` adapter, an example patch and abstraction. WebRTC with an
+   optional `node-datachannel`. The fastest way to a phone driving
+   `faustgen~` on Max 8 and 9.
+3. **The patch-parameter adapter**: JSON from `ParameterInfoProvider`, or
+   from an interface-only `.dsp`.
+4. **`v8`**: the same in one file in the patch, Max 9.2 and later, relay
+   only (20.3, point 4). Measure the latency against
+   `node.script`.
+5. **`faustgen~` additions** (20.4), in grame-cncm/faust.
+6. **`faustgen~` compiles for the phones** (20.6): the wasm written at each
+   compilation, the protocol message that tells connected phones the DSP
+   changed, and "Play locally" for a Max patch.
+7. **Later, if steps 2 to 4 fall short** (sample-accurate timing, WebRTC
+   without Node, Max 8 without Node for Max): the C++ server mode as a
+   generic Faust `RemoteUI`, or the OSC gateway for native applications.
+
+## 21. Implementation plan
 
 | Phase | Content | Completion criterion |
 | :-- | :-- | :-- |

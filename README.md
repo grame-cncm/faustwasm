@@ -193,7 +193,7 @@ node scripts/faust2wasm.js mydsp.dsp out -remote -signal https://signal.example.
 node scripts/faust-remote-server.js <dir> -allow-origin https://pages.example.org
 ```
 
-`-allow-origin` can be repeated; requests from any other page origin are refused, the relay included. Behind a reverse proxy, the event stream must not be buffered (the server sends `X-Accel-Buffering: no`, which nginx honours). See section 16 ter of [docs/remote-control.md](docs/remote-control.md) for what using it over the Internet involves.
+`-allow-origin` can be repeated; requests from any other page origin are refused, the relay included. Behind a reverse proxy, the event stream must not be buffered (the server sends `X-Accel-Buffering: no`, which nginx honours). See section 18 of [docs/remote-control.md](docs/remote-control.md) for what using it over the Internet involves.
 
 ##### Testing with a phone
 

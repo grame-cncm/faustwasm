@@ -44,7 +44,7 @@ const isFiniteNumber = (x: unknown): x is number =>
  * The local sound is the DSP computed here with the host's settings, not
  * the host's sound: oscillators are not in phase, noises differ, and a
  * change made elsewhere is heard a network delay later. See section
- * 16 quater of `docs/remote-control.md`.
+ * 19 of `docs/remote-control.md`.
  */
 export class FaustLocalSound implements IFaustRemoteControl {
     readonly #dsp: FaustRemoteDsp;
