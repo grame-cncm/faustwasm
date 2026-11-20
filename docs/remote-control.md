@@ -262,7 +262,8 @@ essential so that a loss on the Wi-Fi does not delay the following values. The
 price is signaling and ICE.
 
 The transport is nevertheless abstract (the `FaustRemoteTransport` interface, \ref{sec:api}): a WebSocket transport through a relay remains a simple fallback for
-networks where ICE fails, without touching the protocol.
+networks where ICE fails, without touching the protocol. Both are
+implemented; 5.5 compares them in practice.
 
 ## 5.2. Data channels
 
@@ -306,6 +307,47 @@ by default), it **replaces** the pending value for that key instead of
 queueing a new one, and sends it on the next `bufferedamountlow` event. The
 useful bandwidth is tiny anyway: a sensor at 60 Hz in JSON messages of about
 80 bytes amounts to about 5 KB/s.
+
+## 5.5. WebRTC or WebSocket relay: what changes in practice
+
+Both transports are implemented (section 17): the
+remote control tries WebRTC first and falls back on the relay by itself, and
+its status says which one it got (`connected (WebRTC)` or
+`connected (relay)`). The difference that matters for playing: **WebSocket
+delivers everything, in order, even if it has to wait; WebRTC can skip a
+lost value instead of waiting for it.** The rest follows from that.
+
+| | WebSocket (the relay) | WebRTC (data channels) |
+| :-- | :-- | :-- |
+| Path | phone → server → host, always through the server | phone ⇄ host directly; the server only introduces them (signaling) |
+| Network | TCP | UDP (SCTP over DTLS) |
+| Delivery | everything arrives, in order | set per channel: `faust-ctl` reliable and ordered, `faust-stream` unordered and never resent |
+| A packet lost on the Wi-Fi | everything behind it waits for its resend: the slider freezes, then the values arrive at once | the lost value is skipped, the next one replaces it |
+| Setup | one HTTPS connection, almost immediate | ICE/STUN negotiation, from a few hundred milliseconds to a few seconds; can fail behind some NATs without a TURN server |
+| Available in | browsers, Node, Max's `v8` object | browsers only; Node needs a native module; absent from `v8` |
+| Server load | all the traffic goes through it | only the introduction |
+| Privacy | TLS ends at the server, which sees the messages | encrypted end to end between phone and host |
+| Audio | no | yes, an Opus track is possible (19.2) |
+
+What it changes:
+
+- **On a good local network, no difference is felt.** Both take a few
+  milliseconds, and the detour through the server costs little when it runs
+  on the host's machine.
+- **On a busy or disturbed Wi-Fi** (a concert hall, an audience with its
+  phones), WebRTC is clearly better for **continuous gestures and
+  sensors**. Over TCP, one loss blocks the whole stream for the time of the
+  resend, a few tens to a few hundred milliseconds: audible jitter. On
+  `faust-stream`, a loss is one value skipped among sixty per second.
+- **Events that must arrive** (a button, a note, the last value of a
+  gesture) are the same either way: they always take the reliable channel.
+- **Over the Internet**, WebRTC keeps the traffic off a server run by GRAME,
+  which then does not see the messages; it is harder to establish (NATs,
+  corporate networks), where the relay goes wherever HTTPS goes.
+- **In Max**, this is what keeps the `v8` option viable (\ref{sec:max}):
+  without WebRTC it still works through the relay, at the cost of that
+  jitter on a lossy network.
+
 
 # 6. Signaling \label{sec:signal}
 

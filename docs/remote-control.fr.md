@@ -261,7 +261,8 @@ perte sur le Wi-Fi ne retarde pas les valeurs suivantes. Le prix est la
 signalisation et ICE.
 
 Le transport est néanmoins abstrait (interface `FaustRemoteTransport`, \ref{sec:api}) : un transport WebSocket par relais reste un repli simple pour
-les réseaux où ICE échoue, sans toucher au protocole.
+les réseaux où ICE échoue, sans toucher au protocole. Les deux sont
+réalisés ; 5.5 les compare en pratique.
 
 ## 5.2. Canaux de données
 
@@ -306,6 +307,49 @@ valeur en attente pour cette clé au lieu d'en empiler une nouvelle, et l'envoie
 au prochain évènement `bufferedamountlow`. Le débit utile est d'ailleurs
 minime : un capteur à 60 Hz en messages JSON d'environ 80 octets représente
 environ 5 Ko/s.
+
+## 5.5. WebRTC ou relais WebSocket : ce qui change en pratique
+
+Les deux transports sont réalisés (section 17) : la
+télécommande essaie WebRTC d'abord et se replie toute seule sur le relais, et
+son statut dit lequel elle a obtenu (`connected (WebRTC)` ou
+`connected (relay)`). La différence qui compte pour jouer : **WebSocket livre
+tout, dans l'ordre, quitte à attendre ; WebRTC peut sauter une valeur perdue
+au lieu de l'attendre.** Le reste en découle.
+
+| | WebSocket (le relais) | WebRTC (canaux de données) |
+| :-- | :-- | :-- |
+| Chemin | téléphone → serveur → hôte, toujours par le serveur | téléphone ⇄ hôte en direct ; le serveur ne fait que les mettre en relation (signalisation) |
+| Réseau | TCP | UDP (SCTP sur DTLS) |
+| Livraison | tout arrive, dans l'ordre | réglable par canal : `faust-ctl` fiable et ordonné, `faust-stream` sans ordre et jamais renvoyé |
+| Un paquet perdu sur le Wi-Fi | tout ce qui suit attend son renvoi : le curseur se fige, puis les valeurs arrivent d'un coup | la valeur perdue est sautée, la suivante la remplace |
+| Établissement | une connexion HTTPS, quasi immédiat | négociation ICE/STUN, de quelques centaines de millisecondes à quelques secondes ; peut échouer derrière certains NAT sans serveur TURN |
+| Disponible dans | navigateurs, Node, objet `v8` de Max | navigateurs seulement ; Node demande un module natif ; absent de `v8` |
+| Charge du serveur | tout le trafic passe par lui | seulement la mise en relation |
+| Confidentialité | le chiffrement TLS s'arrête au serveur, qui voit les messages | chiffré de bout en bout entre téléphone et hôte |
+| Audio | non | oui, une piste Opus est possible (19.2) |
+
+Ce que ça change :
+
+- **Sur un bon réseau local, on ne sent pas de différence.** Les deux font
+  quelques millisecondes, et le détour par le serveur coûte peu quand il
+  tourne sur la machine de l'hôte.
+- **Sur un Wi-Fi chargé ou perturbé** (une salle de concert, un public avec
+  ses téléphones), WebRTC est nettement meilleur pour les **gestes continus
+  et les capteurs**. Avec TCP, une seule perte bloque tout le flux le temps
+  du renvoi, de quelques dizaines à quelques centaines de millisecondes : une
+  gigue audible. Sur `faust-stream`, une perte n'est qu'une valeur sautée
+  parmi soixante par seconde.
+- **Les évènements qui doivent arriver** (un bouton, une note, la dernière
+  valeur d'un geste) se valent dans les deux cas : ils prennent toujours le
+  canal fiable.
+- **Sur Internet**, WebRTC évite de faire passer le trafic par un serveur de
+  GRAME, qui ne voit alors pas les messages ; il est plus difficile à établir
+  (NAT, réseaux d'entreprise), là où le relais passe partout où passe HTTPS.
+- **Dans Max**, c'est ce qui garde l'option `v8` viable (\ref{sec:max}) :
+  sans WebRTC, elle fonctionne quand même par le relais, au prix de cette
+  gigue sur un réseau qui perd des paquets.
+
 
 # 6. Signalisation \label{sec:signal}
 
