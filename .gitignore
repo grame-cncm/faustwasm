@@ -111,3 +111,6 @@ assets/max/params-app/
 
 # Built from src/max/v8.ts by npm run build-esm
 assets/max/faust-remote-v8.js
+
+# A copy of faust-remote-wasm-demo.maxpat with this machine's address and certificate paths
+assets/max/*-local.maxpat

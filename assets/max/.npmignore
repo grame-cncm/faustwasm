@@ -1,0 +1,7 @@
+# What a user makes next to the Max examples, ignored by git (see the root
+# .gitignore), must not reach the npm package either: with the `files` list
+# of package.json, only an .npmignore in this folder keeps it out.
+# faust-remote-v8.js, also ignored by git, is built for the package and stays.
+app/
+params-app/
+*-local.maxpat

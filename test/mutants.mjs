@@ -545,6 +545,13 @@ const MUTANTS = [
         tests: 'test/cli/max-v8.test.mjs'
     },
     {
+        what: "npm would publish the patch copies a user makes next to the Max examples",
+        file: 'assets/max/.npmignore',
+        from: '*-local.maxpat',
+        to: '',
+        tests: 'test/cli/package-files.test.mjs'
+    },
+    {
         what: 'the v8 script drops a JSON that comes before its server is up',
         file: 'src/max/v8.ts',
         from: 'else early = text;',
