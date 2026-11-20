@@ -471,6 +471,20 @@ const MUTANTS = [
         tests: 'test/unit/remote-inprocess.test.mjs'
     },
     {
+        what: 'the local sound plays a node of another DSP than the host runs',
+        file: 'src/remote/local.ts',
+        from: 'if (missing.length > 0)',
+        to: 'if (false)',
+        tests: 'test/unit/remote-local.test.mjs'
+    },
+    {
+        what: 'the local sound refuses a node with controls the host lacks',
+        file: 'src/remote/local.ts',
+        from: 'const missing = dsp.getParams().filter((path) => !here.has(path));',
+        to: 'const missing = local.filter((path) => !dsp.getParams().includes(path));',
+        tests: 'test/unit/remote-local.test.mjs'
+    },
+    {
         what: 'the host listener lets remote controls into the relay',
         file: 'src/faustRemoteServer.js',
         from: "} else if (role === 'remote' && !hostsOnly) {",

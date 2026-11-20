@@ -139,6 +139,25 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
         return local.node;
     };
 
+    /**
+     * The local sound on `node`, or null if the files served here are of
+     * another DSP than the host runs (a folder generated from another .dsp):
+     * the node is dropped, so nothing else is heard, and this remote control
+     * goes on driving the host, saying why it plays nothing.
+     */
+    const playLocally = (node) => {
+        try {
+            return new FaustLocalSound(dsp, node);
+        } catch (error) {
+            if (error?.code !== "dsp-mismatch") throw error;
+            node.disconnect();
+            node.destroy?.();
+            local.node = null;
+            showError(`Play locally: ${error.message}`);
+            return null;
+        }
+    };
+
     const connect = async () => {
         if (connecting || dsp?.state === "open") return;
         connecting = true;
@@ -178,7 +197,7 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
             // With local sound, the UI drives the bridge: the local node and
             // the remote control together
             control?.close();
-            control = local ? new FaustLocalSound(dsp, await localNode(dsp.getJSON())) : null;
+            control = local ? playLocally(await localNode(dsp.getJSON())) : null;
             const target = control ?? dsp;
             $("div-faust-ui").replaceChildren();
             await createFaustUI($("div-faust-ui"), target);

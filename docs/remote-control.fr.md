@@ -2250,9 +2250,17 @@ sous `node.script` peut compiler lui-même avec faustwasm.
      courbe `[acc:]` comprise ;
    - une application `faust2caqt -remote` pilotée par le relais.
 
-   Pas essayé : un vrai téléphone ; Linux et Windows (seulement compilé sous
-   macOS). Le nombre de voix d'un DSP polyphonique n'est pas encore branché
-   dans les architectures.
+   Essayé ensuite avec un vrai téléphone : contrôle et capteurs marchent.
+   « Jouer localement » joue le wasm du dossier servi, puisque l'application
+   n'envoie que son interface : ce dossier doit venir du même `.dsp`
+   (`faust2wasm.js <le .dsp> <dossier> -remote`). Sinon le téléphone jouait
+   un autre DSP sans rien dire ; `FaustLocalSound` refuse maintenant un nœud
+   auquel manquent des contrôles de l'hôte (`FaustRemoteError`,
+   `dsp-mismatch`), et la PWA joue alors sans son local en disant pourquoi.
+
+   Pas essayé : Linux et Windows (seulement compilé sous macOS). Le nombre de
+   voix d'un DSP polyphonique n'est pas encore branché dans les
+   architectures.
 
 # 21. Plan de mise en œuvre
 

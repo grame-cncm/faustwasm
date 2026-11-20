@@ -164,3 +164,53 @@ test('closed, the bridge no longer drives the local node', async () => {
     await settle();
     assert.equal(localNode.getParamValue(FREQ), 440);
 });
+
+/** A fake node that lists its controls, as a real node does. */
+class ListedNode extends FakeNode {
+    getParams() {
+        /** @type {string[]} */
+        const paths = [];
+        const walk = (/** @type {any[]} */ items) => {
+            for (const item of items) {
+                if (item.items) walk(item.items);
+                else if (!item.type.endsWith('bargraph')) paths.push(item.address);
+            }
+        };
+        walk(this.meta.ui);
+        return paths;
+    }
+}
+
+test('a node of another DSP is refused, and left untouched', async () => {
+    const { dsp } = await session();
+    // Files served for another DSP than the host runs
+    const other = new ListedNode(JSON.stringify(describe('other')));
+    other.values.clear();
+    const shown = [];
+    dsp.setInputParamHandler((path, value) => shown.push([path, value]));
+    assert.throws(
+        () => new FaustLocalSound(dsp, other),
+        (/** @type {any} */ error) =>
+            error.name === 'FaustRemoteError' &&
+            error.code === 'dsp-mismatch' &&
+            /\/t\/freq/.test(error.message)
+    );
+    assert.deepEqual(other.writes, []);
+    assert.equal(other.inputHandler, null);
+    assert.equal(other.outputHandler, null);
+    // The remote control still has its own handler
+    dsp.setParamValue(FREQ, 500);
+    await settle();
+    assert.equal(dsp.getParamValue(FREQ), 500);
+});
+
+test('a node of the same DSP, with controls of its own besides, is taken', async () => {
+    const { dsp } = await session();
+    const json = /** @type {any} */ (describe());
+    // A polyphonic node, say, has controls the host does not
+    json.ui[0].items.push({ type: 'button', label: 'panic', address: '/t/panic' });
+    const same = new ListedNode(JSON.stringify(json));
+    const control = new FaustLocalSound(dsp, same);
+    toClose.push(control);
+    assert.equal(same.getParamValue(FREQ), 440);
+});

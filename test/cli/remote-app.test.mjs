@@ -199,6 +199,8 @@ test('the remote control can play the DSP locally, from the files at the top', (
     assert.match(remote, /FaustLocalSound/);
     assert.match(remote, /createFaustNode/);
     assert.match(readOut(dir, 'remote/index.html'), /id="check-local"/);
+    // Files of another DSP: no local sound, but the host is still driven
+    assert.match(remote, /"dsp-mismatch"/);
     // create-node.js finds the DSP next to itself, whichever page loads it
     const createNode = readOut(dir, 'create-node.js');
     assert.match(createNode, /new URL\(path, import\.meta\.url\)/);

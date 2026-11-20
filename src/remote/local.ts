@@ -3,12 +3,17 @@ import type {
     InputParamHandler,
     OutputParamHandler
 } from '../FaustWebAudioDsp';
-import type { FaustRemoteDsp, IFaustRemoteControl } from './FaustRemoteDsp';
+import {
+    FaustRemoteError,
+    type FaustRemoteDsp,
+    type IFaustRemoteControl
+} from './FaustRemoteDsp';
 import { sensorTargets, topLevelGroups, type SensorTarget } from './sensors';
 import { readUI } from './ui';
 
 /**
  * What the bridge needs from the local node: every Faust node has it.
+ * `getParams`, when there, is what tells that the node runs the host's DSP.
  */
 export type FaustLocalNode = Pick<
     IFaustMonoWebAudioNode,
@@ -17,7 +22,8 @@ export type FaustLocalNode = Pick<
     | 'setOutputParamHandler'
     | 'setInputParamHandler'
     | 'midiMessage'
->;
+> &
+    Partial<Pick<IFaustMonoWebAudioNode, 'getParams'>>;
 
 const isFiniteNumber = (x: unknown): x is number =>
     typeof x === 'number' && Number.isFinite(x);
@@ -60,8 +66,22 @@ export class FaustLocalSound implements IFaustRemoteControl {
     /**
      * @param dsp - a connected remote control
      * @param node - a node of the same DSP, playing on this device
+     * @throws FaustRemoteError (`dsp-mismatch`) if the node lacks controls
+     *   the host has: it plays another DSP (files served for another one
+     *   than the host runs), and would sound nothing like the host. Nothing
+     *   is done to the node or the remote control then.
      */
     constructor(dsp: FaustRemoteDsp, node: FaustLocalNode) {
+        const local = node.getParams?.();
+        if (local) {
+            const here = new Set(local);
+            const missing = dsp.getParams().filter((path) => !here.has(path));
+            if (missing.length > 0)
+                throw new FaustRemoteError(
+                    `the DSP that would play here is not the one the host runs: ${missing.length} of the host's controls are missing here (${missing[0]}${missing.length > 1 ? ', ...' : ''})`,
+                    'dsp-mismatch'
+                );
+        }
         this.#dsp = dsp;
         this.#node = node;
         const ui = readUI(dsp.getUI());

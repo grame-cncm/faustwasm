@@ -2191,8 +2191,16 @@ phones the wasm of the DSP it runs, and a JavaScript host under
      DSP, `[acc:]` curve included;
    - a `faust2caqt -remote` application driven through the relay.
 
-   Not tried: a real phone; Linux and Windows (only compiled on macOS). The
-   voice count of a polyphonic DSP is not wired into the architectures yet.
+   Tried afterwards with a real phone: controls and sensors work. "Play
+   locally" plays the wasm of the folder served, since the application sends
+   only its interface: that folder must come from the same `.dsp`
+   (`faust2wasm.js <the .dsp> <folder> -remote`). Otherwise the phone played
+   another DSP without a word; `FaustLocalSound` now refuses a node that
+   lacks some of the host's controls (`FaustRemoteError`, `dsp-mismatch`),
+   and the PWA then plays without local sound, saying why.
+
+   Not tried: Linux and Windows (only compiled on macOS). The voice count of
+   a polyphonic DSP is not wired into the architectures yet.
 
 # 21. Implementation plan
 
