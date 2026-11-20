@@ -1685,6 +1685,18 @@ Précision du mode horodaté, fil principal de Max (gigue de l'ordre de la ms), 
 Coût, faible, faible, élevé et deux mises en œuvre à garder d'accord
 ```
 
+![Téléphone et patch Max par node.script](images/max-1-node-script.fr.svg)
+
+*Figure : le serveur et l'hôte dans `node.script`, qui pilotent `faustgen~`.*
+
+![Téléphone et patch Max par v8](images/max-2-v8.fr.svg)
+
+*Figure : la même chose dans un objet `v8`, avec le relais seulement.*
+
+![Mode serveur dans faustgen~](images/max-3-faustgen-server.fr.svg)
+
+*Figure : un mode serveur dans `faustgen~`.*
+
 ### 20.2. Ce que pilote l'hôte : les cibles Max
 
 `FaustRemoteHost` pilote un objet qui ressemble à un nœud
@@ -1736,6 +1748,10 @@ La cible paramètres du patch
     `faust -json` donne la disposition et les métadonnées, ses chemins
     portant les noms des paramètres du patch ; les bargraphs sont alors des
     valeurs que le patch envoie à l'adaptateur (`meter nom valeur`).
+
+![Un patch piloté par ses paramètres nommés](images/max-4-parameters.fr.svg)
+
+*Figure : n'importe quel patch, à travers ses paramètres nommés.*
 
 ### 20.3. Ce qu'il faut côté faustwasm
 
@@ -1828,6 +1844,10 @@ quelques dizaines de lignes sur `dgram` ; le JSON vient alors de la
 compilation du `.dsp` ou de l'utilisateur, *à vérifier* : si l'interface OSC
 de Faust le renvoie).
 
+![Passerelle WebRTC vers OSC](images/max-5-osc-gateway.fr.svg)
+
+*Figure : la passerelle WebRTC vers OSC, sans rien changer dans Max.*
+
 ### 20.6. Un source, deux compilations : des téléphones qui jouent le DSP de `faustgen~`
 
 À côté de LLVM, libfaust a un backend WebAssembly que le C++ peut appeler
@@ -1846,6 +1866,10 @@ source, à chaque compilation :
   aujourd'hui ;
 - **en wasm**, pour les téléphones : écrit à côté des fichiers de la PWA, ou
   remis au serveur dans un dictionnaire.
+
+![Un source compilé pour Max et pour les téléphones](images/max-6-two-compilations.fr.svg)
+
+*Figure : un source, compilé en IR LLVM pour Max et en wasm pour les téléphones.*
 
 Ce que ça donne :
 

@@ -1665,6 +1665,18 @@ Timed mode accuracy, Max main thread (ms jitter), Max scheduler, sample-accurate
 Cost, small, small, large and two implementations to keep in step
 ```
 
+![Phone and Max patch through node.script](images/max-1-node-script.svg)
+
+*Figure: the server and host in `node.script`, driving `faustgen~`.*
+
+![Phone and Max patch through v8](images/max-2-v8.svg)
+
+*Figure: the same in a `v8` object, with the relay only.*
+
+![Server mode inside faustgen~](images/max-3-faustgen-server.svg)
+
+*Figure: a server mode inside `faustgen~`.*
+
 ### 20.2. What the host drives: Max targets
 
 `FaustRemoteHost` drives an object that looks like a node
@@ -1712,6 +1724,10 @@ The patch-parameter target
     widgets, whose `faust -json` gives the layout and metadata, its paths
     named after the patch's parameters; bargraphs are then values the patch
     sends to the adapter (`meter name value`).
+
+![A patch driven through its named parameters](images/max-4-parameters.svg)
+
+*Figure: any patch, through its named parameters.*
 
 ### 20.3. What the faustwasm side needs
 
@@ -1798,6 +1814,10 @@ with no change in Max (OSC encoding is a few dozen lines over `dgram`; the
 JSON then comes from compiling the `.dsp` or from the user, *to be
 checked*: whether Faust's OSC interface returns it).
 
+![WebRTC-to-OSC gateway](images/max-5-osc-gateway.svg)
+
+*Figure: the WebRTC-to-OSC gateway, with no change in Max.*
+
 ### 20.6. One source, two compilations: phones that play the `faustgen~` DSP
 
 Next to LLVM, libfaust has a WebAssembly backend that C++ can call
@@ -1814,6 +1834,10 @@ time it is compiled:
 - **to LLVM IR, compiled just in time**, to run in Max, as today;
 - **to wasm**, for the phones: written next to the PWA's files, or handed
   to the server in a dictionary.
+
+![One source compiled for Max and for the phones](images/max-6-two-compilations.svg)
+
+*Figure: one source, compiled to LLVM IR for Max and to wasm for the phones.*
 
 What it gives:
 
