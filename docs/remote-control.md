@@ -1991,8 +1991,28 @@ phones the wasm of the DSP it runs, and a JavaScript host under
    faustgen~: a phone's write reached faustgen~, whose `dump` gave it
    back, and its bargraph came back to the server. Not done: WebRTC
    through `node-datachannel`, an abstraction, a test on a real phone.
-3. **The patch-parameter adapter**: JSON from `ParameterInfoProvider`, or
-   from an interface-only `.dsp`.
+3. *(Done.)* **The patch-parameter adapter**: JSON from
+   `ParameterInfoProvider`, or from an interface-only `.dsp`.
+
+   As implemented: `faust-params.js`, a classic `js` object, lists the
+   named parameters (`ParameterInfoProvider.getnames()` gives their long
+   names), follows them (`ParameterListener`) and builds a Faust JSON: a
+   float becomes an `hslider` on its range, an integer an `nentry`, a
+   two-state enum a `checkbox`, a longer one an `nentry` with a menu
+   style; names after `meters` become bargraphs, fed by `meter <name>
+   <value>`. Values travel by name: `pvalues <name> <value> ...` in (every
+   current value with each JSON, then the moves), `pset <name> <value>`
+   out, which `ParameterListener.setvalue` applies, moving the object as
+   the patch would. With `target params`, `faust-remote.js` maps names to
+   addresses by the JSON's labels, and needs no `dump`. `ui <file>` gives
+   it the interface from a Faust JSON instead, such as the one of
+   `faust-remote-params.dsp`, widgets only, which adds a sensor and a
+   bargraph; the patch's values still come first. `faust-remote-params.maxpat`
+   wires it. Tested in Node (both scripts of `js` objects run in `vm` with
+   fakes of Max, `test/cli/max-js.test.mjs`; the `params` target in
+   `max-remote.test.mjs`), and in Max 9.2.1: the JSON built from two
+   `live.dial`, a `live.toggle` and a `live.numbox`, a phone's write moving
+   the dial, and a `metro`-driven parameter reaching the phone.
 4. **`v8`**: the same in one file in the patch, Max 9.2 and later, relay
    only (20.3, point 4). Measure the latency against
    `node.script`.

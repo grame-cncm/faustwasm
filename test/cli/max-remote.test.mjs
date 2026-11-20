@@ -54,14 +54,18 @@ const freePort = () =>
     });
 
 /** The script in a process of its own, with what it said so far. */
-const startScript = async (/** @type {string} */ dir, /** @type {string} */ appDir) => {
+const startScript = async (
+    /** @type {string} */ dir,
+    /** @type {string} */ appDir,
+    /** @type {string[]} */ extra = []
+) => {
     const fake = path.join(dir, 'fake', 'node_modules', 'max-api');
     fs.mkdirSync(fake, { recursive: true });
     fs.writeFileSync(path.join(fake, 'index.js'), FAKE_MAX_API);
     const port = await freePort();
     const child = spawn(
         process.execPath,
-        [SCRIPT, 'root', appDir, 'port', String(port), 'address', '127.0.0.1', 'host', '127.0.0.1'],
+        [SCRIPT, 'root', appDir, 'port', String(port), 'address', '127.0.0.1', 'host', '127.0.0.1', ...extra],
         {
             env: {
                 ...process.env,
@@ -187,6 +191,97 @@ test('without a root, or a root without a remote control, the script says so', a
         await settle(1500);
         const posts = script.said.filter((m) => m[0] === 'post' && m[2] === 'error');
         assert.match(posts[0]?.[1] ?? '', /no remote\/index\.html/);
+    } finally {
+        script.child.kill();
+    }
+});
+
+/** A phone connected to the script by its pairing link. */
+const phoneFor = async (/** @type {string} */ link) => {
+    const url = new URL(link);
+    const params = new URLSearchParams(url.hash.slice(1));
+    return FaustRemoteDsp.connectRelay(url.origin, params.get('room') ?? '', {
+        token: params.get('token') ?? '',
+        id: 'phone',
+        pingInterval: 0,
+        gestureEnd: 0
+    });
+};
+
+test('target params with a Faust interface: labels both ways, the patch values first', { timeout: 60000 }, async () => {
+    const dir = outDir('max-remote-params-ui');
+    const appDir = path.join(dir, 'app');
+    runCliOk('faust2wasm', [path.join(ROOT, 'assets', 'max', 'faust-remote-params.dsp'), appDir, '-remote']);
+    const name = JSON.parse(fs.readFileSync(path.join(appDir, 'dsp-meta.json'), 'utf8')).name;
+    const script = await startScript(dir, appDir, [
+        'target', 'params',
+        'ui', path.join(appDir, 'dsp-meta.json')
+    ]);
+    try {
+        // The interface is the file's; the patch is asked for its values
+        const [, link] = await script.outlet((args) => args[0] === 'link');
+        await script.outlet((args) => args[0] === 'getjson');
+        // The values faust-params.js sends with its JSON, and its JSON,
+        // which the file overrides
+        script.send('json', '{"name":"other","ui":[]}');
+        script.send('pvalues', 'freq', 550, 'play', 1);
+        await settle(200);
+        const dsp = await phoneFor(link);
+        try {
+            assert.equal(dsp.getParamValue(`/${name}/freq`), 550, 'the patch value, not the file init');
+            assert.equal(dsp.getParamValue(`/${name}/play`), 1);
+            // A phone writes: pset, by label
+            dsp.setParamValue(`/${name}/gain`, 0.5);
+            await script.outlet((args) => args[0] === 'pset' && args[1] === 'gain' && args[2] === 0.5);
+            // A move in the patch, and a meter
+            /** @type {[string, number][]} */
+            const meters = [];
+            dsp.setOutputParamHandler((address, value) => meters.push([address, value]));
+            script.send('pvalues', 'freq', 330, 'level', 0.75, 'unknown', 1);
+            await settle(300);
+            assert.equal(dsp.getParamValue(`/${name}/freq`), 330);
+            assert.deepEqual(meters.at(-1), [`/${name}/level`, 0.75]);
+            // No dump: parameters report their own changes
+            assert.ok(!script.said.some((m) => m[0] === 'outlet' && m[1] === 'dump'));
+        } finally {
+            dsp.close();
+        }
+    } finally {
+        script.child.kill();
+    }
+});
+
+test('target params with the JSON faust-params.js builds', { timeout: 60000 }, async () => {
+    const dir = outDir('max-remote-params-auto');
+    const appDir = path.join(dir, 'app');
+    runCliOk('faust2wasm', [DSP, appDir, '-remote']);
+    const script = await startScript(dir, appDir, ['target', 'params']);
+    try {
+        await script.outlet((args) => args[0] === 'getjson');
+        script.send(
+            'json',
+            JSON.stringify({
+                name: 'demo',
+                ui: [
+                    {
+                        type: 'vgroup',
+                        label: 'demo',
+                        items: [
+                            { type: 'hslider', label: 'cutoff', shortname: 'cutoff', address: '/demo/cutoff', index: 0, init: 440, min: 20, max: 2000, step: 1 }
+                        ]
+                    }
+                ]
+            })
+        );
+        const [, link] = await script.outlet((args) => args[0] === 'link');
+        const dsp = await phoneFor(link);
+        try {
+            dsp.setParamValue('/demo/cutoff', 1000);
+            await script.outlet((args) => args[0] === 'pset' && args[1] === 'cutoff' && args[2] === 1000);
+            assert.ok(!script.said.some((m) => m[0] === 'outlet' && m[1] === 'param'), 'no faustgen~ message');
+        } finally {
+            dsp.close();
+        }
     } finally {
         script.child.kill();
     }

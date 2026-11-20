@@ -2032,8 +2032,31 @@ sous `node.script` peut compiler lui-même avec faustwasm.
    l'écriture d'un téléphone a atteint faustgen~, dont le `dump` l'a
    rendue, et son bargraph est revenu au serveur. Pas fait : WebRTC par
    `node-datachannel`, une abstraction, un essai sur un vrai téléphone.
-3. **L'adaptateur paramètres du patch** : un JSON tiré de
+3. *(Fait.)* **L'adaptateur paramètres du patch** : un JSON tiré de
    `ParameterInfoProvider`, ou d'un `.dsp` fait seulement d'interface.
+
+   Tel que réalisé : `faust-params.js`, un objet `js` classique, liste les
+   paramètres nommés (`ParameterInfoProvider.getnames()` donne leurs noms
+   longs), les suit (`ParameterListener`) et construit un JSON Faust : un
+   flottant devient un `hslider` sur sa plage, un entier un `nentry`, une
+   énumération à deux états une `checkbox`, une plus longue un `nentry`
+   avec un style menu ; les noms donnés après `meters` deviennent des
+   bargraphs, alimentés par `meter <nom> <valeur>`. Les valeurs voyagent
+   par nom : `pvalues <nom> <valeur> ...` en entrée (toutes les valeurs
+   courantes avec chaque JSON, puis les mouvements), `pset <nom> <valeur>`
+   en sortie, que `ParameterListener.setvalue` applique en faisant bouger
+   l'objet comme le patch le ferait. Avec `target params`,
+   `faust-remote.js` relie noms et adresses par les labels du JSON, et n'a
+   pas besoin de `dump`. `ui <fichier>` lui donne plutôt l'interface d'un
+   JSON Faust, comme celui de `faust-remote-params.dsp`, fait seulement de
+   widgets, qui ajoute un capteur et un bargraph ; les valeurs du patch
+   passent quand même en premier. `faust-remote-params.maxpat` relie le
+   tout. Testé sous Node (les deux scripts d'objets `js` tournent dans
+   `vm` avec des faux de Max, `test/cli/max-js.test.mjs` ; la cible
+   `params` dans `max-remote.test.mjs`), et dans Max 9.2.1 : le JSON
+   construit à partir de deux `live.dial`, d'un `live.toggle` et d'un
+   `live.numbox`, l'écriture d'un téléphone qui fait bouger le cadran, et
+   un paramètre mené par un `metro` qui atteint le téléphone.
 4. **`v8`** : la même chose en un fichier dans le patch, Max 9.2 et
    suivantes, relais seulement (20.3, point 4). Mesurer la
    latence par rapport à `node.script`.

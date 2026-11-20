@@ -1,6 +1,8 @@
 /**
- * Remote control of a faustgen~ DSP from phones, in a Max patch: the script
- * of a `node.script` object (Node for Max, Max 8 and 9).
+ * Remote control of a Max patch from phones: the script of a `node.script`
+ * object (Node for Max, Max 8 and 9). It drives a faustgen~ (the default
+ * target), or any patch through its named parameters (`target params`,
+ * with faust-params.js).
  *
  * It runs, in Node, faustwasm's remote control server (the phones' PWA,
  * signaling and the WebSocket relay) and a FaustRemoteHost on a
@@ -29,16 +31,25 @@
  *   trace <file>     append every message in and out to this file, one JSON
  *                    line each, to see what goes on between the patch and
  *                    the phones
+ *   target params    drive the patch's named parameters (faust-params.js)
+ *                    rather than a faustgen~
+ *   ui <file>        the phones' interface, from this Faust JSON (relative to
+ *                    this script's folder) rather than from the patch: for
+ *                    `target params`, a Faust interface describing the
+ *                    parameters (groups, sensors), matched by label
  *
  * Messages in:
- *   json <text>                 the DSP's JSON (from faust-json.js)
+ *   json <text>                 the DSP's JSON (faust-json.js, faust-params.js)
  *   values <path> <v> ...       values faustgen~ reports: bargraphs, and its
  *                               controls after a `dump`
+ *   pvalues <name> <v> ...      with `target params`: parameters that moved,
+ *                               and bargraphs (faust-params.js)
  * Messages out:
  *   param <path> <value>        for faustgen~'s left inlet, without `param`
+ *   pset <name> <value>         with `target params`, for faust-params.js
  *   midi <bytes...>             for faustgen~, as `midievent <bytes...>`
  *   dump                        ask faustgen~ for its controls' values
- *   getjson                     ask faust-json.js for the JSON it holds
+ *   getjson                     ask faust-json.js or faust-params.js for the JSON
  *   link <url>                  the pairing link, to open on a phone
  *   clients <n>                 how many phones are connected
  */
@@ -61,6 +72,25 @@ const parseArgs = (argv) => {
 };
 
 const error = (message) => maxAPI.post(message, maxAPI.POST_LEVELS.ERROR);
+
+/** Each control's label and address, both ways, from a Faust UI tree. */
+const labels = (ui) => {
+    const byLabel = new Map();
+    const byAddress = new Map();
+    const walk = (items) => {
+        for (const item of items ?? []) {
+            if (item.items) walk(item.items);
+            else if (item.address && item.label !== undefined) {
+                if (byLabel.has(item.label))
+                    error(`faust-remote: two controls are labelled "${item.label}"; the first one is kept`);
+                else byLabel.set(item.label, item.address);
+                byAddress.set(item.address, item.label);
+            }
+        }
+    };
+    walk(ui);
+    return { byLabel, byAddress };
+};
 
 /** This machine's first local network IPv4 address, for the pairing link. */
 const localAddress = () => {
@@ -147,6 +177,7 @@ const main = async () => {
     const link = `${origin}/remote/index.html#room=${room}&token=${token}`;
     maxAPI.post(`faust-remote: serving ${root} on ${origin}`);
 
+    const params = args.target === 'params';
     const hostOptions = {
         token,
         sensorPolicy: args.sensors,
@@ -161,6 +192,9 @@ const main = async () => {
     const clientsChanged = () => {
         const count = current?.host.clients.length ?? 0;
         outlet('clients', count);
+        // faustgen~ says nothing of its controls unless asked; parameters
+        // report their own changes
+        if (params) return;
         if (count > 0 && !dumpTimer) dumpTimer = setInterval(() => outlet('dump'), DUMP_PERIOD);
         if (count === 0 && dumpTimer) {
             clearInterval(dumpTimer);
@@ -172,11 +206,16 @@ const main = async () => {
     const setDSP = (json) => {
         if (json === current?.json) return;
         let hub;
+        let names;
         try {
             hub = new FaustRemoteHub(json, {
-                onwrite: (address, value) => outlet('param', address, value),
+                onwrite: (address, value) =>
+                    params
+                        ? outlet('pset', names.byAddress.get(address) ?? address, value)
+                        : outlet('param', address, value),
                 onmidi: (data) => outlet('midi', ...data)
             });
+            names = labels(hub.getMeta().ui);
         } catch (e) {
             return error(`faust-remote: not a Faust JSON (${e.message})`);
         }
@@ -197,29 +236,53 @@ const main = async () => {
         host.addEventListener('error', (event) => error(`faust-remote: ${event.detail?.message ?? event.detail}`));
         const relay = server.hostRoom(room, token);
         host.acceptRelay(relay);
-        current = { json, hub, host, port: relay, inputs: new Set(hub.getParams()) };
+        current = { json, hub, host, port: relay, names, inputs: new Set(hub.getParams()) };
         clientsChanged();
         maxAPI.post(`faust-remote: ${hub.getMeta().name ?? 'DSP'} ready, remote control: ${link}`);
         outlet('link', link);
     };
 
-    on('json', (...parts) => setDSP(parts.join(' ')));
+    /** A value reported by the patch: a control that moved, or a bargraph. */
+    const report = (address, value) => {
+        if (!Number.isFinite(value)) return;
+        if (current.inputs.has(address)) {
+            // What a phone wrote comes back the same: only a change made in
+            // the patch goes to the phones
+            if (value !== current.hub.getParamValue(address)) current.hub.update(address, value);
+        } else {
+            current.hub.output(address, value);
+        }
+    };
+
+    // With `ui`, the interface is the file's, whatever the patch sends
+    const uiFile = args.ui ? path.resolve(__dirname, args.ui) : null;
+    on('json', (...parts) => {
+        if (!uiFile) setDSP(parts.join(' '));
+    });
     on('values', (...pairs) => {
         if (!current) return;
+        for (let i = 0; i + 1 < pairs.length; i += 2) report(String(pairs[i]), Number(pairs[i + 1]));
+    });
+    on('pvalues', (...pairs) => {
+        if (!current) return;
         for (let i = 0; i + 1 < pairs.length; i += 2) {
-            const address = String(pairs[i]);
-            const value = Number(pairs[i + 1]);
-            if (current.inputs.has(address)) {
-                // What a phone wrote comes back the same: only a change made
-                // in the patch goes to the phones
-                if (value !== current.hub.getParamValue(address)) current.hub.update(address, value);
-            } else {
-                current.hub.output(address, value);
-            }
+            const address = current.names.byLabel.get(String(pairs[i]));
+            if (address) report(address, Number(pairs[i + 1]));
         }
     });
 
-    // The JSON faust-json.js already caught, until it has given one
+    if (uiFile) {
+        try {
+            setDSP(fs.readFileSync(uiFile, 'utf8'));
+        } catch (e) {
+            return error(`faust-remote: cannot read ${uiFile} (${e.message})`);
+        }
+        // Parameters report only their changes: their current values are
+        // asked for once, through the JSON faust-params.js builds
+        if (params) outlet('getjson');
+        return;
+    }
+    // The JSON the patch already has, until it has given one
     const ask = setInterval(() => (current ? clearInterval(ask) : outlet('getjson')), 1000);
     outlet('getjson');
 };

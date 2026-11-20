@@ -483,6 +483,20 @@ const MUTANTS = [
         from: '                current.hub.output(address, value);',
         to: '                current.hub.update(address, value);',
         tests: 'test/cli/max-remote.test.mjs'
+    },
+    {
+        what: "faust-json.js ignores faustgen~'s control outlet lists, as it first did in Max",
+        file: 'assets/max/faust-json.js',
+        from: '    if (args.length > 1 && String(args[0]).charAt(0) === "/") latest[String(args[0])] = args[1];',
+        to: '',
+        tests: 'test/cli/max-js.test.mjs'
+    },
+    {
+        what: 'faust-params.js shows a two-state parameter as a menu, not a checkbox',
+        file: 'assets/max/faust-params.js',
+        from: '        if (count === 2) {',
+        to: '        if (count === 0) {',
+        tests: 'test/cli/max-js.test.mjs'
     }
 ];
 

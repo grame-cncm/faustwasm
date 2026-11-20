@@ -107,3 +107,4 @@ src/generated/
 
 # The remote control a user generates next to the Max example (README)
 assets/max/app/
+assets/max/params-app/
