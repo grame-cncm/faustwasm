@@ -506,6 +506,27 @@ const MUTANTS = [
         tests: 'test/cli/max-v8.test.mjs'
     },
     {
+        what: "the Max host reads faustgen~'s list by its minimum, not its current value",
+        file: 'src/max/bridge.ts',
+        from: 'report(String(atoms[0]), Number(atoms[1]))',
+        to: 'report(String(atoms[0]), Number(atoms[2]))',
+        tests: 'test/cli/max-v8.test.mjs'
+    },
+    {
+        what: 'the Max host asks a faustgen~ that reports by itself for dumps all the same',
+        file: 'src/max/bridge.ts',
+        from: 'if (params || dumpPeriod <= 0) return;',
+        to: 'if (params) return;',
+        tests: 'test/cli/max-v8.test.mjs'
+    },
+    {
+        what: "the node.script reads max-api's catch-all handler as (selector, ...args), missing faustgen~'s lists",
+        file: 'assets/max/faust-remote.js',
+        from: '(handled, name, ...atoms) => {\n        if (!handled && ',
+        to: '(name, ...atoms) => {\n        if (',
+        tests: 'test/cli/max-remote.test.mjs'
+    },
+    {
         what: 'the v8 script drops a JSON that comes before its server is up',
         file: 'src/max/v8.ts',
         from: 'else early = text;',

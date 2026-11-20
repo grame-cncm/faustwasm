@@ -39,11 +39,18 @@
  *                    this script's folder) rather than from the patch: for
  *                    `target params`, a Faust interface describing the
  *                    parameters (groups, sensors), matched by label
+ *   dump <ms>        how often faustgen~ is asked for its controls while
+ *                    phones are connected, 250 by default; 0 for a faustgen~
+ *                    that reports its changes (`@report <ms>`)
  *
  * Messages in:
- *   json <text>                 the DSP's JSON (faust-json.js, faust-params.js)
+ *   json <text>                 the DSP's JSON (faust-json.js, faust-params.js,
+ *                               or a faustgen~ that answers `json`)
  *   values <path> <v> ...       values faustgen~ reports: bargraphs, and its
  *                               controls after a `dump`
+ *   <path> <cur> <min> <max>    a list from faustgen~'s control outlet, wired
+ *                               straight to this object (a faustgen~ with
+ *                               `@report`: only what changed)
  *   pvalues <name> <v> ...      with `target params`: parameters that moved,
  *                               and bargraphs (faust-params.js)
  * Messages out:
@@ -52,6 +59,7 @@
  *   midi <bytes...>             for faustgen~, as `midievent <bytes...>`
  *   dump                        ask faustgen~ for its controls' values
  *   getjson                     ask faust-json.js or faust-params.js for the JSON
+ *                               (or faustgen~, as a `json` message)
  *   link <url>                  the pairing link, to open on a phone
  *   clients <n>                 how many phones are connected
  */
@@ -176,6 +184,7 @@ const main = async () => {
         link: `${origin}/remote/index.html#room=${room}&token=${token}`,
         params: args.target === 'params',
         ui,
+        dumpPeriod: args.dump !== undefined ? Number(args.dump) : undefined,
         hostOptions: {
             token,
             sensorPolicy: args.sensors,
@@ -186,6 +195,12 @@ const main = async () => {
     on('json', (...parts) => bridge.json(parts.join(' ')));
     on('values', (...pairs) => bridge.values(...pairs));
     on('pvalues', (...pairs) => bridge.pvalues(...pairs));
+    // faustgen~'s lists, `<path> <cur> <min> <max>`: a list that starts with
+    // a symbol reaches a node.script as a message named after it, the path,
+    // which only the catch-all handler sees, as (handled, selector, ...args)
+    on(maxAPI.MESSAGE_TYPES.ALL, (handled, name, ...atoms) => {
+        if (!handled && typeof name === 'string' && name.startsWith('/')) bridge.list(name, ...atoms);
+    });
     bridge.start();
 };
 

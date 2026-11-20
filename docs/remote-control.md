@@ -2057,7 +2057,41 @@ phones the wasm of the DSP it runs, and a JavaScript host under
    write reaching `faustgen~` and a change made in the patch reaching the
    remote control; round trips as fast as through `node.script` (20.7).
    Not done: `trace`, a test on a real phone.
-5. **`faustgen~` additions** (20.4), in grame-cncm/faust.
+5. *(Done, on a branch of grame-cncm/faust.)* **`faustgen~` additions**
+   (20.4), in grame-cncm/faust.
+
+   As implemented, on the `faustgen-remote` branch of grame-cncm/faust
+   (not merged, no new version number): `report <ms>`, or `@report <ms>`
+   in the object box, saved with the patch, sends on the control outlet,
+   at most every *ms*, the input controls whose value changed, whatever
+   changed them (a message, MIDI, OSC, `init`, a preset: the values are
+   compared on a Max clock, not caught at each source), and the bargraphs
+   that changed, instead of every bargraph at every audio block; the lists
+   keep `dump`'s format, `[path, cur, min, max]`. Reporting starts, and
+   each new DSP begins, with the JSON, then every control. `json` answers
+   `json <text>` on the control outlet, which a `v8` or `node.script`
+   object can receive, unlike the JSON sent to `js` objects. That covers
+   the first three points of 20.4; the fourth (the wasm) is step 6.
+   Tested with faustgen~'s own suite (`make test`, a new
+   `test_faustgen_report.py`), and in Max 9.2.1, the faustgen~ built from
+   the branch in place of the installed one for the time of the test.
+
+   On the faustwasm side, both scripts take faustgen~'s lists wired
+   straight to them (as a `list`, or as a message named after the path),
+   and `json` from faustgen~ itself; `dump <ms>` sets how often faustgen~
+   is asked for its controls, and `dump 0` stops asking, for a faustgen~
+   with `@report`. With such a faustgen~, neither `faust-json.js` nor
+   `dump` is needed: its control outlet goes to the script, and the
+   script's `getjson` becomes a `json` message to faustgen~. The example
+   patches keep `faust-json.js`, which works with the faustgen~ released
+   today. A list that starts with a symbol reaches a `node.script` as a
+   message named after it, here the path, which only `max-api`'s
+   catch-all handler sees, called as `(handled, selector, ...args)`; the
+   tests' fake `max-api` now dispatches that way. Tried in Max 9.2.1 with
+   `faustgen~ @report 30` wired straight to each script, with `dump 0`:
+   the JSON and every control at the start, a remote control's write
+   reported back 19 ms later as a change, a change made in the patch
+   reaching the remote control, and not one `dump`.
 6. **`faustgen~` compiles for the phones** (20.6): the wasm written at each
    compilation, the protocol message that tells connected phones the DSP
    changed, and "Play locally" for a Max patch.

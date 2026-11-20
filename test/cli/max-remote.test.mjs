@@ -33,10 +33,14 @@ process.stdin.on('data', (chunk) => {
     while ((cut = buffer.indexOf('\\n')) !== -1) {
         const [name, ...args] = JSON.parse(buffer.slice(0, cut));
         buffer = buffer.slice(cut + 1);
+        // As max-api dispatches: by selector, then to the catch-all
+        // handler with whether a handler took it
         handlers.get(name)?.(...args);
+        handlers.get('all')?.(handlers.has(name), name, ...args);
     }
 });
 module.exports = {
+    MESSAGE_TYPES: { ALL: 'all', BANG: 'bang', DICT: 'dict', LIST: 'list', NUMBER: 'number' },
     POST_LEVELS: { ERROR: 'error', INFO: 'info', WARN: 'warn' },
     addHandler: (name, handler) => handlers.set(name, handler),
     outlet: async (...args) => say('outlet', ...args),
@@ -163,6 +167,14 @@ test('the Max host script takes a phone and drives faustgen~ both ways', { timeo
             await settle(300);
             assert.deepEqual(meters.at(-1), [LEVEL, 0.5]);
             assert.equal(dsp.getParamValue(FREQ), 330);
+
+            // faustgen~'s control outlet wired straight to the script: its
+            // lists [path, cur, min, max] come named after the path
+            script.send(FREQ, 220, 20, 2000);
+            await settle(300);
+            assert.equal(dsp.getParamValue(FREQ), 220);
+            script.send('values', FREQ, 330);
+            await settle(200);
 
             // The value the phone wrote, reported back by a dump, goes
             // nowhere: no message for faustgen~ beyond the one write

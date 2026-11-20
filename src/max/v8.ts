@@ -27,7 +27,7 @@
  *   falls back on what is there.
  *
  * Arguments, as name and value pairs (see faust-remote.js): root, port,
- * cert, key, address, room, token, sensors, assign, delay, target, ui;
+ * cert, key, address, room, token, sensors, assign, delay, target, ui, dump;
  * paths relative to the patch's folder. `host` (the interface listened on)
  * as well. Not here: `faustwasm` (nothing to load) and `trace`.
  *
@@ -323,6 +323,7 @@ const start = async () => {
         link,
         params: args.target === 'params',
         ui,
+        dumpPeriod: args.dump !== undefined ? Number(args.dump) : undefined,
         hostOptions: {
             token: secret,
             sensorPolicy: args.sensors as any,
@@ -344,6 +345,14 @@ g.json = (...parts: unknown[]) => {
 };
 g.values = (...pairs: unknown[]) => bridge?.values(...pairs);
 g.pvalues = (...pairs: unknown[]) => bridge?.pvalues(...pairs);
+// faustgen~'s lists, `<path> <cur> <min> <max>`, when its control outlet is
+// wired straight to this object: as a list, or as a message named after the
+// path (Max calls `anything` then, with the name in `messagename`)
+g.list = (...atoms: unknown[]) => bridge?.list(...atoms);
+g.anything = (...atoms: unknown[]) => {
+    const name = String(g.messagename ?? '');
+    if (name.startsWith('/')) bridge?.list(name, ...atoms);
+};
 g.loadbang = () => run();
 // The object is deleted, or its patch closed: free the port for the next
 // one

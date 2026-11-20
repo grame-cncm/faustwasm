@@ -231,6 +231,8 @@ const startV8 = async (
         outlet,
         /** Send a message as the patch would. */
         send: (/** @type {string} */ name, /** @type {any[]} */ ...message) => g[name](...message),
+        /** The name of the message `anything` gets, as Max sets it. */
+        setMessageName: (/** @type {string} */ name) => (g.messagename = name),
         /** Delete the object. */
         remove() {
             g.notifydeleted();
@@ -406,6 +408,44 @@ test('the v8 script with target params and a Faust interface', { timeout: 30000 
             assert.equal(dsp.getParamValue(`/${name}/freq`), 550);
             dsp.setParamValue(`/${name}/gain`, 0.5);
             await v8.outlet((m) => m[0] === 'pset' && m[1] === 'gain' && m[2] === 0.5);
+            assert.ok(!v8.out.some((m) => m[0] === 'dump'));
+        } finally {
+            dsp.close();
+        }
+    } finally {
+        v8.remove();
+    }
+});
+
+test('the v8 script wired straight to a faustgen~ with @report', { timeout: 30000 }, async () => {
+    const dir = outDir('max-v8-direct');
+    runCliOk('faust2wasm', [DSP, path.join(dir, 'app'), '-remote']);
+    const json = fs.readFileSync(path.join(dir, 'app', 'dsp-meta.json'), 'utf8');
+    const name = JSON.parse(json).name;
+    const FREQ = `/${name}/freq`;
+    const LEVEL = `/${name}/level`;
+    const v8 = await startV8(dir, ['root', 'app', 'dump', '0']);
+    try {
+        await v8.outlet((m) => m[0] === 'getjson');
+        // faustgen~'s answer to `json`, on its control outlet
+        v8.send('json', json);
+        const [, link] = await v8.outlet((m) => m[0] === 'link');
+        const dsp = await phoneFor(link);
+        try {
+            await v8.outlet((m) => m[0] === 'clients' && m[1] === 1);
+            /** @type {[string, number][]} */
+            const meters = [];
+            dsp.setOutputParamHandler((address, value) => meters.push([address, value]));
+            // Its lists, [path, cur, min, max]: as a list, or named after the path
+            v8.send('list', FREQ, 330, 20, 2000);
+            await settle(200);
+            assert.equal(dsp.getParamValue(FREQ), 330);
+            v8.setMessageName(LEVEL);
+            v8.send('anything', 0.5, 0, 1);
+            await settle(300);
+            assert.deepEqual(meters.at(-1), [LEVEL, 0.5]);
+            // dump 0: faustgen~ reports by itself, nothing to ask
+            await settle(300);
             assert.ok(!v8.out.some((m) => m[0] === 'dump'));
         } finally {
             dsp.close();

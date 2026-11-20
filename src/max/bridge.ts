@@ -69,6 +69,12 @@ export interface MaxBridgeOptions {
     ui?: string;
     /** Passed to the host as is: token, sensor policy, groups, timed mode. */
     hostOptions?: FaustRemoteHostOptions;
+    /**
+     * How often to ask faustgen~ for `dump` while phones are connected (ms),
+     * `DUMP_PERIOD` by default; 0 never asks, for a faustgen~ that reports
+     * its changes itself (`@report`).
+     */
+    dumpPeriod?: number;
 }
 
 /**
@@ -116,6 +122,7 @@ interface Current {
  */
 export const createMaxBridge = (options: MaxBridgeOptions) => {
     const { outlet, post, error, link, params = false } = options;
+    const dumpPeriod = options.dumpPeriod ?? DUMP_PERIOD;
     let current: Current | null = null;
     /** Asks faustgen~ for `dump` while phones are connected. */
     let dumpTimer: ReturnType<typeof setInterval> | null = null;
@@ -127,11 +134,11 @@ export const createMaxBridge = (options: MaxBridgeOptions) => {
     const clientsChanged = () => {
         const count = current?.host.clients.length ?? 0;
         outlet('clients', count);
-        // faustgen~ says nothing of its controls unless asked; parameters
-        // report their own changes
-        if (params) return;
+        // faustgen~ says nothing of its controls unless asked (or unless it
+        // has `@report`); parameters report their own changes
+        if (params || dumpPeriod <= 0) return;
         if (count > 0 && !dumpTimer)
-            dumpTimer = setInterval(() => outlet('dump'), DUMP_PERIOD);
+            dumpTimer = setInterval(() => outlet('dump'), dumpPeriod);
         if (count === 0 && dumpTimer) {
             clearInterval(dumpTimer);
             dumpTimer = null;
@@ -268,6 +275,14 @@ export const createMaxBridge = (options: MaxBridgeOptions) => {
         values(...pairs: unknown[]) {
             for (let i = 0; i + 1 < pairs.length; i += 2)
                 report(String(pairs[i]), Number(pairs[i + 1]));
+        },
+        /**
+         * A list from faustgen~'s control outlet, `<path> <cur> <min> <max>`
+         * (after a `dump`, from `@report`, or a bargraph at every block),
+         * when it is wired to the script without faust-json.js.
+         */
+        list(...atoms: unknown[]) {
+            if (atoms.length >= 2) report(String(atoms[0]), Number(atoms[1]));
         },
         /**
          * `pvalues <name> <v> ...`: named parameters that moved, and

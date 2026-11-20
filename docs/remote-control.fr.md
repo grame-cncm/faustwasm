@@ -2105,7 +2105,45 @@ sous `node.script` peut compiler lui-même avec faustwasm.
    qui atteint `faustgen~` et un changement fait dans le patch qui atteint
    la télécommande ; des allers-retours aussi rapides que par `node.script`
    (20.7). Pas fait : `trace`, un essai sur un vrai téléphone.
-5. **Les ajouts à `faustgen~`** (20.4), dans grame-cncm/faust.
+5. *(Fait, sur une branche de grame-cncm/faust.)* **Les ajouts à
+   `faustgen~`** (20.4), dans grame-cncm/faust.
+
+   Tel que réalisé, sur la branche `faustgen-remote` de grame-cncm/faust
+   (pas fusionnée, pas de nouveau numéro de version) : `report <ms>`, ou
+   `@report <ms>` dans la boîte de l'objet, enregistré avec le patch,
+   envoie sur la sortie de contrôle, au plus toutes les *ms*, les contrôles
+   d'entrée dont la valeur a changé, quoi qui les ait changés (un message,
+   le MIDI, l'OSC, `init`, un preset : les valeurs sont comparées sur une
+   horloge Max, pas saisies à chaque source), et les bargraphs qui ont
+   changé, au lieu de tous les bargraphs à chaque bloc audio ; les listes
+   gardent le format de `dump`, `[chemin, valeur, min, max]`. Le rapport
+   commence, et chaque nouveau DSP aussi, par le JSON, puis tous les
+   contrôles. `json` répond `json <texte>` sur la sortie de contrôle, ce
+   qu'un objet `v8` ou `node.script` peut recevoir, contrairement au JSON
+   envoyé aux objets `js`. Cela couvre les trois premiers points de 20.4 ;
+   le quatrième (le wasm) est l'étape 6. Testé par la suite de faustgen~
+   elle-même (`make test`, un nouveau `test_faustgen_report.py`), et dans
+   Max 9.2.1, le faustgen~ construit depuis la branche mis à la place de
+   celui installé le temps de l'essai.
+
+   Côté faustwasm, les deux scripts acceptent les listes de faustgen~
+   branchées directement sur eux (comme `list`, ou comme un message nommé
+   d'après le chemin), et `json` venu de faustgen~ lui-même ; `dump <ms>`
+   règle la fréquence à laquelle on demande ses contrôles à faustgen~, et
+   `dump 0` ne les demande plus, pour un faustgen~ qui a `@report`. Avec un
+   tel faustgen~, ni `faust-json.js` ni `dump` ne sont nécessaires : sa
+   sortie de contrôle va au script, et le `getjson` du script devient un
+   message `json` à faustgen~. Les patchs d'exemple gardent
+   `faust-json.js`, qui marche avec le faustgen~ publié aujourd'hui. Une
+   liste qui commence par un symbole arrive à un `node.script` comme un
+   message nommé d'après lui, ici le chemin, que seul le gestionnaire
+   fourre-tout de `max-api` voit, appelé avec `(traité, sélecteur,
+   ...args)` ; le faux `max-api` des tests distribue maintenant ainsi.
+   Essayé dans Max 9.2.1 avec `faustgen~ @report 30` branché directement
+   sur chaque script, avec `dump 0` : le JSON et tous les contrôles au
+   départ, l'écriture d'une télécommande revenue 19 ms plus tard comme un
+   changement, un changement fait dans le patch qui atteint la
+   télécommande, et pas un seul `dump`.
 6. **`faustgen~` compile pour les téléphones** (20.6) : le wasm écrit à
    chaque compilation, le message du protocole qui prévient les téléphones
    connectés que le DSP a changé, et « Play locally » pour un patch Max.
