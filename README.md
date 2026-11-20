@@ -211,6 +211,8 @@ Native Faust applications use it through `RemoteUI`, an architecture class of th
 ./mydsp -remote ws://127.0.0.1:8444 -remote-origin https://192.168.1.20:8443
 ```
 
+Several phones share the application as they share a Web Audio host, with the same options on its command line: `-remote-policy exclusive` (only the first phone drives), `-remote-assign groups` (one top-level group per phone), `-remote-sensors mean|assigned`. The timestamped mode (`playoutDelay`) is not available there.
+
 ##### Testing with a phone
 
 Phones need HTTPS for their motion sensors and for installing a PWA, so the server needs a certificate the phone trusts. With [mkcert](https://github.com/FiloSottile/mkcert) (`brew install mkcert` or `sudo port install mkcert`), and the address of the host machine on the local network (`ipconfig getifaddr en0` on macOS) in place of `192.168.1.20`:

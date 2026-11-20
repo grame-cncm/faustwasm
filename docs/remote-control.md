@@ -2202,6 +2202,21 @@ phones the wasm of the DSP it runs, and a JavaScript host under
    Not tried: Linux and Windows (only compiled on macOS). The voice count of
    a polyphonic DSP is not wired into the architectures yet.
 
+   *Phase 3, done*: the options for sharing among phones, ported as they are
+   into `RemoteHost.h`, and given to the application on its command line:
+   - `-remote-policy exclusive`: only the first phone to have joined drives;
+   - `-remote-assign groups`: one top-level group per phone;
+   - `-remote-sensors mean|assigned`: sensors averaged, or assigned and
+     converted by the host with the DSP's curves (the converters of
+     `ValueConverter.h`, those of `APIUI`).
+
+   Three more scenarios in `remote-native.test.mjs`, with a second DSP with
+   two groups, give the same messages from both hosts.
+
+   *Phase 2, dropped*: the timestamped mode (`playoutDelay`) is not ported. A
+   native application thus ignores timestamps and applies each value on
+   arrival.
+
 # 21. Implementation plan
 
 | Phase | Content | Completion criterion |

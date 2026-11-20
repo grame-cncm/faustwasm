@@ -34,7 +34,7 @@ const SOURCE = process.env.FAUST_SOURCE_DIR ?? '';
 const CXX = process.env.CXX ?? 'c++';
 const FAUST = path.join(SOURCE, 'build', 'bin', 'faust');
 const ARCH = path.join(SOURCE, 'tests', 'remoteui-tests', 'remote_host.cpp');
-const DSP = path.join(ROOT, 'test', 'remote-native', 'remote_test.dsp');
+const FIXTURES = path.join(ROOT, 'test', 'remote-native');
 
 const missing = !SOURCE
     ? 'FAUST_SOURCE_DIR is not set'
@@ -54,10 +54,33 @@ const settle = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
 /** @type {any} */ let hosts;
 let base = '';
 let hostBase = '';
-let program = '';
-let json = '';
 /** @type {any} */ let remote;
 let rooms = 0;
+
+/**
+ * A DSP of `test/remote-native/` both ways: the JSON libfaust gives (which a
+ * Web Audio host would use) and the native program; `level` is what its
+ * bargraph computes from its controls, for the hub.
+ * @typedef {{ json: string, program: string, level: (value: (name: string) => number) => number }} Fixture
+ */
+/** @type {Fixture} */ let plain;
+/** @type {Fixture} */ let groups;
+
+/** @returns {Fixture} */
+const build = (name, out, level) => {
+    const dsp = path.join(FIXTURES, `${name}.dsp`);
+    const wasm = path.join(out, name);
+    runCliOk('faust2wasm', [dsp, wasm]);
+    const json = JSON.stringify(readMeta(wasm, 'dsp-meta.json'));
+    const source = path.join(out, `${name}.cpp`);
+    const arch = path.join(SOURCE, 'architecture');
+    const faust = spawnSync(FAUST, ['-a', ARCH, '-I', arch, dsp, '-o', source], { encoding: 'utf8' });
+    assert.equal(faust.status, 0, faust.stderr);
+    const program = path.join(out, name);
+    const cxx = spawnSync(CXX, ['-std=c++17', '-O1', '-w', '-I', arch, source, '-o', `${program}.bin`, '-lpthread'], { encoding: 'utf8' });
+    assert.equal(cxx.status, 0, cxx.stderr);
+    return { json, program: `${program}.bin`, level };
+};
 
 before(async () => {
     if (skip) return;
@@ -66,18 +89,8 @@ before(async () => {
     const out = outDir('remote-native');
     fs.mkdirSync(out, { recursive: true });
 
-    // The JSON libfaust gives, which a Web Audio host would use
-    runCliOk('faust2wasm', [DSP, out]);
-    json = JSON.stringify(readMeta(out, 'dsp-meta.json'));
-
-    // The native host
-    const source = path.join(out, 'remote_test.cpp');
-    const arch = path.join(SOURCE, 'architecture');
-    const faust = spawnSync(FAUST, ['-a', ARCH, '-I', arch, DSP, '-o', source], { encoding: 'utf8' });
-    assert.equal(faust.status, 0, faust.stderr);
-    program = path.join(out, 'remote_test');
-    const cxx = spawnSync(CXX, ['-std=c++17', '-O1', '-w', '-I', arch, source, '-o', program, '-lpthread'], { encoding: 'utf8' });
-    assert.equal(cxx.status, 0, cxx.stderr);
+    plain = build('remote_test', out, (value) => value('freq') / 2000 + value('gate') + value('tilt') + value('locked'));
+    groups = build('remote_groups', out, (value) => value('p1/x') + value('p2/x') + value('free'));
 
     server = createFaustRemoteServer({ root: ROOT });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(null)));
@@ -95,22 +108,18 @@ after(() => {
 
 /**
  * A `FaustRemoteHost` on a hub, the DSP's bargraph reported every 10 ms as
- * a node would: level = freq / 2000 + gate + tilt + locked.
+ * a node would, computed by the fixture's `level`.
+ *
+ * @param {Fixture} fixture
+ * @param {object} options - the host's options besides the token
  */
-const startTypeScriptHost = async (room) => {
+const startTypeScriptHost = async (room, fixture, options) => {
     /** @type {any} */
-    const hub = new remote.FaustRemoteHub(json);
-    const address = (name) => hub.getParams().find((p) => p.endsWith(`/${name}`));
+    const hub = new remote.FaustRemoteHub(fixture.json);
+    const value = (name) => hub.getParamValue(hub.getParams().find((p) => p.endsWith(`/${name}`)));
     const level = hub.getMeta().ui[0].items.find((item) => item.label === 'level').address;
-    const report = () =>
-        hub.output(
-            level,
-            hub.getParamValue(address('freq')) / 2000 +
-                hub.getParamValue(address('gate')) +
-                hub.getParamValue(address('tilt')) +
-                hub.getParamValue(address('locked'))
-        );
-    const host = new remote.FaustRemoteHost(hub, { token: TOKEN });
+    const report = () => hub.output(level, fixture.level(value));
+    const host = new remote.FaustRemoteHost(hub, { token: TOKEN, ...options });
     report();
     const timer = setInterval(report, 10);
     host.acceptRelay(server.hostRoom(room, TOKEN));
@@ -122,9 +131,14 @@ const startTypeScriptHost = async (room) => {
     };
 };
 
-/** The native host, connected to the relay before this resolves. */
-const startNativeHost = async (room) => {
-    const child = spawn(program, ['-remote', hostBase, '-remote-room', room, '-remote-token', TOKEN], {
+/**
+ * The native host, connected to the relay before this resolves.
+ *
+ * @param {Fixture} fixture
+ * @param {string[]} args - its command line besides the connection
+ */
+const startNativeHost = async (room, fixture, args) => {
+    const child = spawn(fixture.program, ['-remote', hostBase, '-remote-room', room, '-remote-token', TOKEN, ...args], {
         stdio: ['pipe', 'pipe', 'pipe']
     });
     let log = '';
@@ -239,10 +253,15 @@ const run = async (startHost, scenario) => {
     return transcript;
 };
 
-/** The same scenario against both hosts: the transcripts must agree. */
-const conform = async (scenario) => {
-    const expected = await run(startTypeScriptHost, scenario);
-    const actual = await run(startNativeHost, scenario);
+/**
+ * The same scenario against both hosts: the transcripts must agree. `setup`
+ * gives the DSP, and the same options both ways: the TypeScript host's, and
+ * the native one's command line.
+ */
+const conform = async (scenario, setup = {}) => {
+    const fixture = setup.fixture ?? plain;
+    const expected = await run((room) => startTypeScriptHost(room, fixture, setup.options ?? {}), scenario);
+    const actual = await run((room) => startNativeHost(room, fixture, setup.args ?? []), scenario);
     assert.deepEqual(actual, expected);
     return expected;
 };
@@ -342,12 +361,96 @@ test('a remote control that comes back replaces its previous session', { skip, t
     assert.ok(second.some((m) => m.includes('"welcome"')));
 });
 
+test('exclusive: only the first remote control to have joined drives', { skip, timeout: 30000 }, async () => {
+    const transcript = await conform(
+        async (room, step) => {
+            const a = await connect(room);
+            a.hello('a');
+            await step('first', a);
+            const b = await connect(room);
+            b.hello('b');
+            await step('second', a, b);
+            const freq = inputAddresses().findIndex((p) => p.endsWith('/freq'));
+            b.send({ type: 'param', i: freq, value: 1000 });
+            b.send({ type: 'acc', x: 10, y: 0, z: 0, invert: false }, 'stream');
+            await step('the second writes, and tilts', a, b);
+            a.send({ type: 'param', i: freq, value: 800 });
+            await step('the first writes', a, b);
+            a.close();
+            await step('the first gone', b);
+            b.send({ type: 'param', i: freq, value: 600 });
+            await step('the second writes now', b);
+        },
+        { options: { policy: 'exclusive' }, args: ['-remote-policy', 'exclusive'] }
+    );
+    const refused = transcript.find(([name]) => name === 'the second writes, and tilts');
+    assert.ok(refused[2].some((m) => m.includes('"sync"') && m.includes('"value":440')), 'refused, the real value sent back');
+});
+
+test('groups: one per remote control, and their sensors on their own group', { skip, timeout: 30000 }, async () => {
+    const transcript = await conform(
+        async (room, step) => {
+            const a = await connect(room);
+            a.hello('a');
+            await step('first', a);
+            const b = await connect(room);
+            b.hello('b');
+            await step('second', a, b);
+            const c = await connect(room);
+            c.hello('c');
+            await step('third: no group left', a, b, c);
+            const inputs = inputAddresses(groups);
+            const index = (name) => inputs.findIndex((p) => p.endsWith(`/${name}`));
+            a.send({ type: 'param', i: index('p2/x'), value: 0.9 });
+            a.send({ type: 'param', i: index('free'), value: 0.9 });
+            c.send({ type: 'param', i: index('p1/x'), value: 0.1 });
+            await step('writes outside their group', a, b, c);
+            a.send({ type: 'acc', x: 10, y: 0, z: 0, invert: false }, 'stream');
+            b.send({ type: 'acc', x: 5, y: 0, z: 0, invert: true }, 'stream');
+            await step('each tilts its own control', a, b, c);
+            a.close();
+            const d = await connect(room);
+            d.hello('d');
+            await step('a group freed', d);
+        },
+        {
+            fixture: groups,
+            options: { assign: 'groups', sensorPolicy: 'assigned' },
+            args: ['-remote-assign', 'groups', '-remote-sensors', 'assigned']
+        }
+    );
+    const third = transcript.find(([name]) => name === 'third: no group left');
+    assert.ok(third[3].some((m) => m.includes('"welcome"') && !m.includes('"group"')));
+    const tilted = transcript.find(([name]) => name === 'each tilts its own control');
+    assert.ok(tilted[1].some((m) => m.includes('"sync"') && m.includes('"value":1')), 'mapped by the curve');
+});
+
+test('mean: the remote controls tilt together', { skip, timeout: 30000 }, async () => {
+    const transcript = await conform(
+        async (room, step) => {
+            const a = await connect(room);
+            const b = await connect(room);
+            a.hello('a');
+            b.hello('b');
+            await step('joined', a, b);
+            a.send({ type: 'acc', x: 2, y: 0, z: 0, invert: false }, 'stream');
+            await step('one reading', a, b);
+            b.send({ type: 'acc', x: -4, y: 0, z: 0, invert: true }, 'stream');
+            await step('the mean of two, a sign corrected', a, b);
+        },
+        { options: { sensorPolicy: 'mean' }, args: ['-remote-sensors', 'mean'] }
+    );
+    const two = transcript.find(([name]) => name === 'the mean of two, a sign corrected');
+    // tilt [acc: 0 0 -10 0 10] on [0, 1], init 0.5: a mean of 3 gives 0.65
+    assert.ok(two[1].some((m) => m.includes('"sync"') && m.includes('"value":0.65')));
+});
+
 /**
  * The input addresses, in the order of the welcome's `inputs`: those of the
  * libfaust JSON, which the handshake test has checked both hosts agree on.
  */
-function inputAddresses() {
-    return controls(JSON.parse(json).ui)
+function inputAddresses(fixture = plain) {
+    return controls(JSON.parse(fixture.json).ui)
         .filter((c) => !c.type.endsWith('bargraph'))
         .map((c) => c.address);
 }

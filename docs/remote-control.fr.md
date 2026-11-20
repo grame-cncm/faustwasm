@@ -2262,6 +2262,22 @@ sous `node.script` peut compiler lui-même avec faustwasm.
    voix d'un DSP polyphonique n'est pas encore branché dans les
    architectures.
 
+   *Phase 3, faite* : les options de partage entre téléphones, portées à
+   l'identique dans `RemoteHost.h`, et données à l'application en ligne de
+   commande :
+   - `-remote-policy exclusive` : seul le premier téléphone arrivé pilote ;
+   - `-remote-assign groups` : un groupe de premier niveau par téléphone ;
+   - `-remote-sensors mean|assigned` : capteurs moyennés, ou attribués et
+     convertis par l'hôte avec les courbes du DSP (les convertisseurs de
+     `ValueConverter.h`, ceux d'`APIUI`).
+
+   Trois scénarios de plus dans `remote-native.test.mjs`, avec un second DSP
+   à deux groupes, donnent les mêmes messages des deux hôtes.
+
+   *Phase 2, abandonnée* : le mode horodaté (`playoutDelay`) n'est pas porté.
+   Une application native ignore donc les horodatages et applique chaque
+   valeur à son arrivée.
+
 # 21. Plan de mise en œuvre
 
 | Phase | Contenu | Critère de fin |
