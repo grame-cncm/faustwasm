@@ -46,6 +46,7 @@ npm run measure    # sample-accuracy measurement in headless Chromium
 - `npm run measure` needs Playwright, which is deliberately **not** a dependency: `npm i --no-save playwright && npx playwright install chromium`. Keep it that way.
 - `test/web` holds manual browser pages; they are not part of `npm test`. (`test/node` used to hold smoke scripts no npm script ran; they are now `test/unit/param-api.test.mjs`.)
 - `instantiateFaustModuleFromFile` writes a uniquely-named wrapper module next to `libfaust-wasm.js` and deletes it after import. The unique name is what makes concurrent compilations safe; do not go back to a fixed one.
+- The `faust2*Files` functions in `src/` are exported wrapped in `holdEventLoop` (`src/holdEventLoop.js`), which holds a timer until their promise settles. Without a live handle, awaiting `WebAssembly.compile` leaves Node's main thread in `NodePlatform::DrainTasks`, where it can deadlock with a concurrent V8 compile job that needs a GC ([nodejs/node#54918](https://github.com/nodejs/node/issues/54918)): the script then sleeps forever at 0% CPU, having written nothing. It hung `faust2wasm.js -poly` intermittently on Node 22.12. A new Node-side helper that awaits compilation gets the same wrapper; `test/cli/event-loop.test.mjs` checks each one holds and releases it.
 
 ## Conventions and invariants
 

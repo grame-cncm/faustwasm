@@ -615,6 +615,20 @@ const MUTANTS = [
         from: '        if (count === 2) {',
         to: '        if (count === 0) {',
         tests: 'test/cli/max-js.test.mjs'
+    },
+    {
+        what: 'faust2wasmFiles lets the event loop run dry while it awaits V8 (nodejs/node#54918 hang)',
+        file: 'src/faust2wasmFiles.js',
+        from: 'export default holdEventLoop(faust2wasmFiles);',
+        to: 'export default faust2wasmFiles;',
+        tests: 'test/cli/event-loop.test.mjs'
+    },
+    {
+        what: 'the event-loop hold is never released, so the CLI never exits',
+        file: 'src/holdEventLoop.js',
+        from: 'clearInterval(handle);',
+        to: '',
+        tests: 'test/cli/event-loop.test.mjs'
     }
 ];
 
@@ -659,10 +673,17 @@ const run = (mutant) => {
     try {
         fs.writeFileSync(file, original.split(mutant.from).join(mutant.to));
         rebuild();
-        const result = spawnSync('node', ['--test', mutant.tests], {
-            cwd: ROOT,
-            encoding: 'utf8'
-        });
+        // --test-force-exit: a mutant that leaves a handle open (a timer
+        // never cleared) fails its assertions, but would otherwise keep the
+        // test process, and this run, alive forever.
+        const result = spawnSync(
+            'node',
+            ['--test', '--test-force-exit', mutant.tests],
+            {
+                cwd: ROOT,
+                encoding: 'utf8'
+            }
+        );
         const failures = (result.stdout.match(/^not ok /gm) || []).length;
         return result.status === 0
             ? { caught: false, detail: 'the tests stayed green' }

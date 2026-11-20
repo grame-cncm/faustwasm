@@ -11,6 +11,7 @@ import {
     WavEncoder
 } from '../dist/esm/index.js';
 import { fileURLToPath } from 'url';
+import { holdEventLoop } from './holdEventLoop.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -75,4 +76,4 @@ const faust2wavFiles = async (
     fs.writeFileSync(outputWav, new Uint8Array(outputBuffer));
 };
 
-export default faust2wavFiles;
+export default holdEventLoop(faust2wavFiles);

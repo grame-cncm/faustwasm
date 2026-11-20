@@ -8,6 +8,7 @@ import {
     FaustSvgDiagrams
 } from '../dist/esm/index.js';
 import { fileURLToPath } from 'url';
+import { holdEventLoop } from './holdEventLoop.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,4 +39,4 @@ const faust2svgFiles = async (inputFile, outputDir, argv = []) => {
     return svgs;
 };
 
-export default faust2svgFiles;
+export default holdEventLoop(faust2svgFiles);

@@ -9,6 +9,7 @@ import {
     FaustPolyDspGenerator
 } from '../dist/esm/index.js';
 import { fileURLToPath } from 'url';
+import { holdEventLoop } from './holdEventLoop.js';
 
 // Include handling overview (WASM compiler only sees its in-memory FS):
 // 1) Grab the Faust FS via compiler.fs() and compute inputDir from inputFile.
@@ -238,4 +239,4 @@ const faust2wasmFiles = async (
     return { dspMeta, effectMeta };
 };
 
-export default faust2wasmFiles;
+export default holdEventLoop(faust2wasmFiles);

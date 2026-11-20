@@ -8,6 +8,7 @@ import {
     FaustCmajor
 } from '../dist/esm/index.js';
 import { fileURLToPath } from 'url';
+import { holdEventLoop } from './holdEventLoop.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -36,4 +37,4 @@ const faust2CmajorFiles = async (inputFile, outputDir, argv = []) => {
     return cmajor_file;
 };
 
-export default faust2CmajorFiles;
+export default holdEventLoop(faust2CmajorFiles);
