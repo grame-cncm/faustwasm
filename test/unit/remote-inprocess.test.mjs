@@ -100,6 +100,16 @@ test('closing the port ends the remote controls, which release what they held', 
     ]);
 });
 
+test('a host closing with a reason says it through the relay before the relay closes', async () => {
+    const { room, host } = inProcessHost();
+    const dsp = await connect(room);
+    // As the Max bridge does when the patch's DSP changes
+    host.close('dsp-changed');
+    await settle(100);
+    assert.equal(dsp.state, 'closed');
+    assert.equal(dsp.closeReason, 'dsp-changed');
+});
+
 test('a remote control that leaves is gone from the host', async () => {
     const { room, host } = inProcessHost();
     const dsp = await connect(room);

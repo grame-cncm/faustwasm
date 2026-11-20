@@ -639,6 +639,25 @@ test('the host chains the handlers the page had, and gives them back', async () 
     assert.equal(dsp.state, 'closed');
 });
 
+test('a remote control learns why the host closed: dsp-changed, or host closed', async () => {
+    {
+        const { host } = makeHost();
+        const { dsp } = await connect(host);
+        assert.equal(dsp.closeReason, null, 'nothing to say while open');
+        host.close('dsp-changed');
+        await settle();
+        assert.equal(dsp.state, 'closed');
+        assert.equal(dsp.closeReason, 'dsp-changed');
+    }
+    {
+        const { host } = makeHost();
+        const { dsp } = await connect(host);
+        host.close();
+        await settle();
+        assert.equal(dsp.closeReason, 'host closed');
+    }
+});
+
 test('closing the host releases what every remote control held', async () => {
     const { host, node } = makeHost();
     const { dsp } = await connect(host);

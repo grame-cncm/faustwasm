@@ -455,6 +455,53 @@ test('the v8 script wired straight to a faustgen~ with @report', { timeout: 3000
     }
 });
 
+test('the v8 script points faustgen~ at the folder served, and tells phones the DSP changed', { timeout: 30000 }, async () => {
+    const dir = outDir('max-v8-wasm');
+    runCliOk('faust2wasm', [DSP, path.join(dir, 'app'), '-remote']);
+    const json = fs.readFileSync(path.join(dir, 'app', 'dsp-meta.json'), 'utf8');
+    const v8 = await startV8(dir, ['root', 'app']);
+    try {
+        // At the start, before asking for the JSON: where to write the wasm
+        const [, folder] = await v8.outlet((m) => m[0] === 'wasm');
+        assert.equal(folder, path.join(dir, 'app'));
+        assert.ok(v8.out.findIndex((m) => m[0] === 'wasm') < v8.out.findIndex((m) => m[0] === 'getjson'));
+        v8.send('json', json);
+        const [, link] = await v8.outlet((m) => m[0] === 'link');
+        const dsp = await phoneFor(link);
+        // The same JSON again (a dump, a getjson answered twice): the phone stays
+        v8.send('json', json);
+        await settle(200);
+        assert.equal(dsp.state, 'open');
+        // Another DSP: the phone is told, and finds it on connecting again
+        const edited = JSON.parse(json);
+        edited.meta = [...(edited.meta ?? []), { edited: '1' }];
+        v8.send('json', JSON.stringify(edited));
+        await settle(300);
+        assert.equal(dsp.state, 'closed');
+        assert.equal(dsp.closeReason, 'dsp-changed');
+        const again = await phoneFor(link);
+        try {
+            assert.ok(again.getMeta().meta.some((/** @type {any} */ m) => m.edited === '1'));
+        } finally {
+            again.close();
+        }
+    } finally {
+        v8.remove();
+    }
+});
+
+test('with target params, no folder for faustgen~', { timeout: 30000 }, async () => {
+    const dir = outDir('max-v8-wasm-params');
+    runCliOk('faust2wasm', [DSP, path.join(dir, 'app'), '-remote']);
+    const v8 = await startV8(dir, ['root', 'app', 'target', 'params']);
+    try {
+        await v8.outlet((m) => m[0] === 'getjson');
+        assert.ok(!v8.out.some((m) => m[0] === 'wasm'));
+    } finally {
+        v8.remove();
+    }
+});
+
 test('the v8 script says what is missing', async () => {
     const dir = outDir('max-v8-errors');
     const none = await startV8(dir, []);

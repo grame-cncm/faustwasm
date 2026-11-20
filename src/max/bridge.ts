@@ -70,6 +70,13 @@ export interface MaxBridgeOptions {
     /** Passed to the host as is: token, sensor policy, groups, timed mode. */
     hostOptions?: FaustRemoteHostOptions;
     /**
+     * The folder served, where a faustgen~ that takes `wasm <folder>` writes
+     * each DSP compiled for the phones (`dsp-module.wasm`, `dsp-meta.json`):
+     * sent as `wasm <folder>` at the start, with the faustgen~ target. A
+     * patch that does not route `wasm` to faustgen~ simply drops it.
+     */
+    wasmFolder?: string;
+    /**
      * How often to ask faustgen~ for `dump` while phones are connected (ms),
      * `DUMP_PERIOD` by default; 0 never asks, for a faustgen~ that reports
      * its changes itself (`@report`).
@@ -145,10 +152,13 @@ export const createMaxBridge = (options: MaxBridgeOptions) => {
         }
     };
 
-    /** End the current DSP's host: its phones are disconnected. */
-    const stop = () => {
+    /**
+     * End the current DSP's host: its phones are disconnected, told why
+     * (`dsp-changed` makes them come back at once, to the new DSP).
+     */
+    const stop = (reason = 'host closed') => {
         if (!current) return;
-        current.host.close();
+        current.host.close(reason);
         current.port.close();
         current.hub.close();
         current = null;
@@ -187,7 +197,7 @@ export const createMaxBridge = (options: MaxBridgeOptions) => {
             error(`faust-remote: not a Faust JSON (${(e as Error).message})`);
             return;
         }
-        stop();
+        stop('dsp-changed');
         const host = new FaustRemoteHost(hub, options.hostOptions);
         host.addEventListener('join', (event: any) => {
             const { id, group } = event.detail;
@@ -248,6 +258,10 @@ export const createMaxBridge = (options: MaxBridgeOptions) => {
          * this object was ready to hear it.
          */
         start() {
+            // Before the JSON: faustgen~ writes the current DSP's wasm, then
+            // each new one's before announcing its JSON
+            if (!params && options.wasmFolder !== undefined)
+                outlet('wasm', options.wasmFolder);
             if (options.ui !== undefined) {
                 setDSP(options.ui);
                 // Parameters report only their changes: their current

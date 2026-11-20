@@ -324,6 +324,7 @@ const start = async () => {
         params: args.target === 'params',
         ui,
         dumpPeriod: args.dump !== undefined ? Number(args.dump) : undefined,
+        wasmFolder: root,
         hostOptions: {
             token: secret,
             sensorPolicy: args.sensors as any,

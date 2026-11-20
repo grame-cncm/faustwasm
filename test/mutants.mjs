@@ -527,6 +527,24 @@ const MUTANTS = [
         tests: 'test/cli/max-remote.test.mjs'
     },
     {
+        what: "the host stops its relay listener before its goodbyes, which then never leave",
+        file: 'src/remote/FaustRemoteHost.ts',
+        from: `        for (const client of [...this.#clients.values()])
+            this.#drop(client, reason, true);
+        for (const stop of this.#listeners.splice(0)) stop();`,
+        to: `        for (const stop of this.#listeners.splice(0)) stop();
+        for (const client of [...this.#clients.values()])
+            this.#drop(client, reason, true);`,
+        tests: 'test/unit/remote-inprocess.test.mjs'
+    },
+    {
+        what: 'the Max host closes the old DSP as an ordinary goodbye, and phones wait to come back',
+        file: 'src/max/bridge.ts',
+        from: "stop('dsp-changed');",
+        to: 'stop();',
+        tests: 'test/cli/max-v8.test.mjs'
+    },
+    {
         what: 'the v8 script drops a JSON that comes before its server is up',
         file: 'src/max/v8.ts',
         from: 'else early = text;',

@@ -58,6 +58,10 @@
  *   pset <name> <value>         with `target params`, for faust-params.js
  *   midi <bytes...>             for faustgen~, as `midievent <bytes...>`
  *   dump                        ask faustgen~ for its controls' values
+ *   wasm <folder>               at the start: where a faustgen~ that takes it
+ *                               writes each DSP compiled for the phones (the
+ *                               folder served), for "Play locally" and so
+ *                               that phones follow the DSP as it is edited
  *   getjson                     ask faust-json.js or faust-params.js for the JSON
  *                               (or faustgen~, as a `json` message)
  *   link <url>                  the pairing link, to open on a phone
@@ -185,6 +189,7 @@ const main = async () => {
         params: args.target === 'params',
         ui,
         dumpPeriod: args.dump !== undefined ? Number(args.dump) : undefined,
+        wasmFolder: root,
         hostOptions: {
             token,
             sensorPolicy: args.sensors,

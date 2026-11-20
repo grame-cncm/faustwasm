@@ -103,7 +103,10 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     let rtts = [];
     /** "WebRTC" or "relay": how the current connection goes. */
     let transport = "";
-    /** The local sound: its context, its node once made, and the bridge to the remote control. */
+    /**
+     * The local sound: its context, its node once made, and the host's JSON
+     * the node was made for.
+     */
     let local = null;
     /** @type {import("../faustwasm-remote/client.js").FaustLocalSound | null} */
     let control = null;
@@ -115,13 +118,23 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
     const describe = () =>
         `connected (${transport})${dsp?.group ? `, group ${dsp.group}` : ""}${control ? ", playing locally" : ""}`;
 
-    /** The local node, made once and kept across reconnections. */
-    const localNode = async () => {
+    /**
+     * The local node, kept across reconnections while the host runs the same
+     * DSP, made again from the files the host serves when it runs another
+     * (a DSP edited in Max, which the host writes there before saying so).
+     */
+    const localNode = async (json) => {
+        if (local.node && local.json !== json) {
+            local.node.disconnect();
+            local.node.destroy?.();
+            local.node = null;
+        }
         if (!local.node) {
             const { faustNode } = await createFaustNode(local.context, DSP_NAME, FAUST_DSP_VOICES);
             if (!faustNode) throw new Error("the DSP could not be created on this device");
             faustNode.connect(local.context.destination);
             local.node = faustNode;
+            local.json = json;
         }
         return local.node;
     };
@@ -156,13 +169,16 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
                 control?.close();
                 control = null;
                 setStatus("disconnected");
-                // Lost while wanted and visible: try again
-                if (wanted && document.visibilityState === "visible") setTimeout(connect, 2000);
+                // Lost while wanted and visible: try again; at once when the
+                // host only changed its DSP, which the new connection brings
+                const changed = dsp?.closeReason === "dsp-changed";
+                if (changed) setStatus("the DSP changed, reconnecting");
+                if (wanted && document.visibilityState === "visible") setTimeout(connect, changed ? 300 : 2000);
             });
             // With local sound, the UI drives the bridge: the local node and
             // the remote control together
             control?.close();
-            control = local ? new FaustLocalSound(dsp, await localNode()) : null;
+            control = local ? new FaustLocalSound(dsp, await localNode(dsp.getJSON())) : null;
             const target = control ?? dsp;
             $("div-faust-ui").replaceChildren();
             await createFaustUI($("div-faust-ui"), target);
@@ -189,7 +205,7 @@ const showError = (error) => ($("error").textContent = error ? String(error?.mes
         } catch { /* storage unavailable */ }
         if (playLocally && !local) {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            local = { context: new AudioCtx({ latencyHint: "interactive" }), node: null };
+            local = { context: new AudioCtx({ latencyHint: "interactive" }), node: null, json: null };
             local.context.resume();
         }
         await requestPermissions();

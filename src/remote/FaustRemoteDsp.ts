@@ -129,6 +129,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
     readonly #assembler = new FaustRemoteChunkAssembler();
 
     #state: FaustRemoteDspState = 'connecting';
+    #closeReason: string | null = null;
     #mode: FaustRemoteMode = 'bi';
     #json = '';
     #meta: FaustDspMeta | null = null;
@@ -279,6 +280,15 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
     /** `connecting` until the welcome, `open`, then `closed` for good. */
     get state() {
         return this.#state;
+    }
+
+    /**
+     * Why the connection closed, once `closed`: the reason of the host's
+     * `bye` (`'dsp-changed'` when it now runs another DSP, which a new
+     * connection gets), or the transport's. Null before.
+     */
+    get closeReason() {
+        return this.#closeReason;
     }
 
     /** The mode the host granted. */
@@ -751,6 +761,7 @@ export class FaustRemoteDsp extends EventTarget implements IFaustRemoteControl {
 
     #closed(reason: string) {
         if (this.#state === 'closed') return;
+        this.#closeReason = reason;
         this.#welcome?.reject(new FaustRemoteError(reason, 'closed'));
         this.#welcome = null;
         if (this.#pingTimer) clearInterval(this.#pingTimer);

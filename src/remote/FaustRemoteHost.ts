@@ -423,13 +423,21 @@ export class FaustRemoteHost extends EventTargetBase {
     /**
      * Say goodbye to every remote control, release what they held, and give
      * the node back the handlers it had. The node keeps running.
+     *
+     * @param reason - what the remote controls are told in `bye`.
+     *   `'dsp-changed'` tells them that the host now runs another DSP, under
+     *   a new host they may connect to at once: their interface, and the DSP
+     *   they play locally, come from the new one's `welcome`.
      */
-    close() {
+    close(reason = 'host closed') {
         if (this.#closed) return;
         this.#closed = true;
-        for (const stop of this.#listeners.splice(0)) stop();
+        // Goodbyes first: stopping a relay listener closes the transports it
+        // relays, and a goodbye sent after that would never leave (new
+        // connections are already refused, `#closed` being set)
         for (const client of [...this.#clients.values()])
-            this.#drop(client, 'host closed', true);
+            this.#drop(client, reason, true);
+        for (const stop of this.#listeners.splice(0)) stop();
         if (this.#livenessTimer) clearInterval(this.#livenessTimer);
         if (this.#syncTimer) clearTimeout(this.#syncTimer);
         this.#livenessTimer = null;

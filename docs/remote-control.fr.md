@@ -804,6 +804,13 @@ que rien n'a appliquée. Sur la page hôte générée :
 - **Fermeture de l'hôte** : `close()` envoie `bye` à toutes les télécommandes,
   rend au nœud les handlers d'origine (C1) et ferme les connexions ; le nœud
   continue de fonctionner comme avant.
+  `close(raison)` donne la raison que porte le `bye`, que la télécommande
+  expose dans `closeReason` ; `'dsp-changed'` dit que l'hôte fait
+  maintenant tourner un autre DSP, sous un nouvel hôte auquel une
+  télécommande peut se connecter tout de suite, son interface et son DSP
+  local venant du nouveau `welcome` (20.8, étape 6). Les au revoir partent
+  avant l'arrêt des écoutes : arrêter celle du relais ferme les connexions
+  qu'il relaie.
 - **Erreurs** : aucune erreur de réseau ou de protocole ne remonte en exception
   dans le code de l'application hôte ; elles sont signalées par évènement.
 
@@ -2144,9 +2151,57 @@ sous `node.script` peut compiler lui-même avec faustwasm.
    départ, l'écriture d'une télécommande revenue 19 ms plus tard comme un
    changement, un changement fait dans le patch qui atteint la
    télécommande, et pas un seul `dump`.
-6. **`faustgen~` compile pour les téléphones** (20.6) : le wasm écrit à
-   chaque compilation, le message du protocole qui prévient les téléphones
-   connectés que le DSP a changé, et « Play locally » pour un patch Max.
+6. *(Fait, sur une branche de grame-cncm/faust.)* **`faustgen~` compile
+   pour les téléphones** (20.6) : le wasm écrit à chaque compilation, le
+   message du protocole qui prévient les téléphones connectés que le DSP a
+   changé, et « Play locally » pour un patch Max.
+
+   Tel que réalisé :
+   - **libfaust** (grame-cncm/faust `master-dev`, `7406aa897`) : dans une
+     libfaust construite sans wasmtime (le cas par défaut), `wasm-dsp.h` ne
+     donnait ni le module (`writeWasmDSPFactoryToBitcode` n'était pas
+     compilée) ni son JSON (`getJSON` vide, `getName` levait une
+     exception). La factory lit maintenant le JSON dans le premier segment
+     de données du module, où le backend wasm l'écrit à l'offset 0, et les
+     fonctions de bitcode sont communes aux deux constructions. `getJSON`
+     ne passe plus par un `dynamic_cast` du décodeur, qui plantait dans une
+     libfaust avec LLVM (une vtable venue d'une unité compilée sans RTTI).
+   - **faustgen~** (branche `faustgen-remote`) : `wasm <dossier>` lui fait
+     compiler aussi chaque DSP en wasm, avec cette API publique, comme
+     faustwasm le fait tourner (mémoire interne pour un DSP mono, externe
+     pour les voix polyphoniques, `-ftz 2`, les chemins de bibliothèques et
+     `compileoptions`), et écrire là `dsp-module.wasm` et `dsp-meta.json`,
+     chacun par un fichier temporaire renommé par-dessus, avant d'annoncer
+     le nouveau JSON (aux objets `js` et avec `report`), hors du verrou
+     audio. Le nombre de voix est noté à la création du DSP : un
+     `dynamic_cast` d'un DSP LLVM plantait dans Max, pour la même raison
+     que dans libfaust.
+   - **Protocole** : pas de nouveau message. L'hôte ferme avec une raison,
+     `close('dsp-changed')`, portée par `bye`, et la télécommande l'expose
+     dans `closeReason` ; une télécommande plus ancienne se reconnecte
+     comme avant, au bout de 2 s. Trouvé en chemin : l'hôte arrêtait
+     l'écoute du relais avant ses au revoir, qui ne partaient alors jamais.
+   - **Le pont Max** envoie `wasm <dossier servi>` au départ (cible
+     faustgen~), et ferme l'ancien hôte avec `dsp-changed` quand le JSON du
+     patch change. **La PWA** se reconnecte au bout de 300 ms sur
+     `dsp-changed`, et refait son nœud local depuis les fichiers servis
+     quand le JSON de l'hôte diffère de celui pour lequel le nœud a été
+     fait.
+   - Testé : la suite de faustgen~ (`test_faustgen_wasm.py`), celle de
+     faustwasm (un hôte qui ferme à travers le relais, le `wasm` et le
+     `dsp-changed` du pont), un client de `wasm-dsp.h` seul, dont le module
+     rend dans faustwasm échantillon pour échantillon comme celui de
+     faustwasm. Dans Max 9.2.1, avec le faustgen~ de la branche branché sur
+     le script `v8` : faustgen~ a écrit le dossier servi au départ ; un
+     `read` d'un DSP modifié a fermé les télécommandes avec `dsp-changed`,
+     qui sont revenues 10 ms plus tard au nouveau contrôle, et ont trouvé
+     servis le nouveau `dsp-meta.json` et un `dsp-module.wasm` valide ; la
+     vraie PWA, jouant localement dans un navigateur, a reconstruit son
+     interface (deux curseurs au lieu d'un) et retéléchargé le nouveau
+     module et son JSON pour son nœud local. Pas essayé : un DSP
+     polyphonique, dont le JSON dans faustgen~ (l'interface de
+     `mydsp_poly`) peut ne pas correspondre à la voix du téléphone ; un
+     vrai téléphone.
 7. **Plus tard, si les étapes 2 à 4 ne suffisent pas** (précision à
    l'échantillon, WebRTC sans Node, Max 8 sans Node for Max) : le mode
    serveur C++ comme `RemoteUI` Faust générique, ou la passerelle OSC pour
