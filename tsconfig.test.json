@@ -18,5 +18,5 @@
         "noImplicitAny": false,
         "skipLibCheck": true
     },
-    "include": ["test/unit/**/*.mjs", "test/cli/**/*.mjs"]
+    "include": ["test/unit/**/*.mjs", "test/cli/**/*.mjs", "test/bench/**/*.mjs"]
 }

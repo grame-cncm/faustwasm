@@ -24,6 +24,7 @@
         "test-all": "npm run test && npm run test-cli",
         "test-mutants": "npm run build-esm && node test/mutants.mjs",
         "measure": "npm run build-esm && node test/timing/measure.mjs",
+        "bench": "npm run build-esm && node test/bench/wasm-vs-cpp.mjs",
         "postbuild": "node postbuild.js",
         "prepack": "node test/cleanup.mjs"
     },

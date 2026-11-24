@@ -1,0 +1,14 @@
+import("stdfaust.lib");
+cutoff = hslider("cutoff", 1000, 20, 20000, 0.01);
+q = hslider("q", 0.707, 0.1, 10, 0.001);
+w0 = 2*ma.PI*cutoff/ma.SR;
+alpha = sin(w0)/(2*q);
+cw = cos(w0);
+a0 = 1 + alpha;
+b0 = (1 - cw)*0.5/a0;
+b1 = (1 - cw)/a0;
+b2 = b0;
+a1 = -2*cw/a0;
+a2 = (1 - alpha)/a0;
+bq = (+ ~ (\(w).(-a1*w - a2*w'))) : (\(w).(b0*w + b1*w' + b2*w''));
+process = seq(i, 8, bq);
