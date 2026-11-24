@@ -8,6 +8,8 @@ Synthesizer and effect mono nodes, as well as [polyphonic](https://faustdoc.gram
   
 [Sensors](https://faustdoc.grame.fr/manual/syntax/#sensors-control-metadatas) (accelerometer and gyroscope) metadata are supported, as well as the [Progressive Web Application](https://en.wikipedia.org/wiki/Progressive_web_app) model.  
 
+How fast the generated WebAssembly runs, against the C++ of the native Faust compiler: see the [benchmark page](https://grame-cncm.github.io/faustwasm/bench/) and [Performance](#performance).
+
 ## Usage
 
 Please use a stable version of [Node.js](https://nodejs.org) 16+ to work with this project.
@@ -617,6 +619,18 @@ python3 -m http.server 8000
 ```
 
 The remote control pages, `test/web/remote/host.html` and `remote.html`, need the signaling of `scripts/faust-remote-server.js` instead of a plain file server: see [Testing on one machine](#testing-on-one-machine).
+
+### Performance
+
+The [benchmark page](https://grame-cncm.github.io/faustwasm/bench/) compares the wasm this package generates with the C++ of the native Faust compiler, program by program, and shows what the Web Audio wrapper adds. In short: a program runs close to C++ unless it calls a math function (`sin`, `exp`, `pow`, `tanh`...) at every sample, because WebAssembly has no instruction for those and each call goes to JavaScript (`Math.sin`...). Taking such functions from [`fastmath.lib`](https://faustlibraries.grame.fr/libs/fastmath/) (`fa.fsin`, `fa.ftanh`, `fa.fexp`...), which is written in Faust and compiles to plain wasm instructions, makes those programs 4 to 6 times faster in wasm.
+
+To measure on your own machine, with a native Faust compiler (`FAUST_SOURCE_DIR` naming a faust checkout with a built compiler, or `faust` on the `PATH`) and a C++ compiler:
+
+```bash
+npm run bench
+```
+
+`npm run bench -- --json results.json` keeps the results, and `node test/bench/report.mjs results.json` turns them into `docs/bench/index.html`, the page above. See the header of `test/bench/wasm-vs-cpp.mjs` for the options.
 
 ### Projects examples
 
