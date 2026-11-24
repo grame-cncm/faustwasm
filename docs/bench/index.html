@@ -229,15 +229,15 @@ footer { margin-top: 48px; font-size: 13px; color: var(--muted); border-top: 1px
     <p>A <code>fastmath.lib</code> function is slower than the C library in some cases: in native C++ the logarithms cost more (<code>compressor_fa</code> is slower than <code>compressor</code> there). The library is meant for the web, and for loops the C++ compiler can vectorize once no call is left in them.</p>
   </div>
 
-  <section class="card" aria-labelledby="h-node">
-    <h2 id="h-node">What the Web Audio wrapper adds</h2>
+  <section class="card" aria-labelledby="h-worklet">
+    <h2 id="h-worklet">What the Web Audio wrapper adds</h2>
     <p class="sub">Time through <code>FaustMonoWebAudioDsp.compute</code>, the per-block entry point of an AudioWorklet node (input copies, timed events, bargraphs, the non-finite check), divided by the time of the wasm <code>compute</code> alone. Below ×1 is measurement noise: the wrapper does strictly more work.</p>
-    <div class="chart" id="chart-node"></div>
+    <div class="chart" id="chart-worklet"></div>
   </section>
 
   <section aria-labelledby="h-table">
     <h2 id="h-table">All numbers</h2>
-    <p class="sub" style="color: var(--ink-2); font-size: 14px; margin: 0 0 12px;">Nanoseconds per frame, best run. Click a column to sort. “max |Δ|” is the largest difference between the wasm and C++ outputs over their first 4096 frames, relative to the peak: it shows both sides computed the same thing (<code>greyhole</code>’s modulated feedback delays amplify a 1e-6 rounding difference over time).</p>
+    <p class="sub" style="color: var(--ink-2); font-size: 14px; margin: 0 0 12px;">Nanoseconds per frame, best run (48 kHz leaves 20,833 ns per frame). <strong>C++</strong>: the native program. <strong>wasm</strong>: the generated wasm alone, its <code>compute</code> called directly. <strong>worklet</strong>: the same wasm through <code>FaustMonoWebAudioDsp.compute</code>, what the AudioWorklet processor runs at every block. Click a column to sort. “max |Δ|” is the largest difference between the wasm and C++ outputs over their first 4096 frames, relative to the peak: it shows both sides computed the same thing (<code>greyhole</code>’s modulated feedback delays amplify a 1e-6 rounding difference over time).</p>
     <div class="table-wrap"><table id="table"></table></div>
   </section>
 
@@ -282,9 +282,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 166.01822916666666,
    "wasmNsPerFrame": 836.7691041666667,
-   "nodeNsPerFrame": 845.9704791666667,
+   "workletNsPerFrame": 845.9704791666667,
    "wasmOverCpp": 5.040224247462786,
-   "nodeOverWasm": 1.0109963130261168,
+   "workletOverWasm": 1.0109963130261168,
    "maxRelDiff": 3.26122785718007e-7,
    "imports": [
     "_sinf"
@@ -299,9 +299,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 94.688375,
    "wasmNsPerFrame": 146.82985416666668,
-   "nodeNsPerFrame": 142.86197916666666,
+   "workletNsPerFrame": 142.86197916666666,
    "wasmOverCpp": 1.5506639982644828,
-   "nodeOverWasm": 0.9729763744402001,
+   "workletOverWasm": 0.9729763744402001,
    "maxRelDiff": 2.8535734444172404e-7,
    "imports": [],
    "loopMath": []
@@ -312,9 +312,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 10.6875,
    "wasmNsPerFrame": 15.6328125,
-   "nodeNsPerFrame": 16.170125,
+   "workletNsPerFrame": 16.170125,
    "wasmOverCpp": 1.462719298245614,
-   "nodeOverWasm": 1.0343708145927035,
+   "workletOverWasm": 1.0343708145927035,
    "maxRelDiff": 0.0000051808809421928935,
    "imports": [
     "_cosf",
@@ -328,9 +328,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 2,
    "cppNsPerFrame": 12.8689375,
    "wasmNsPerFrame": 19.766479166666667,
-   "nodeNsPerFrame": 19.080729166666668,
+   "workletNsPerFrame": 19.080729166666668,
    "wasmOverCpp": 1.535983772294074,
-   "nodeOverWasm": 0.9653074280847943,
+   "workletOverWasm": 0.9653074280847943,
    "maxRelDiff": 0.0000017200186980775498,
    "imports": [
     "_expf",
@@ -346,9 +346,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 2,
    "cppNsPerFrame": 6.059895833333333,
    "wasmNsPerFrame": 43.745666666666665,
-   "nodeNsPerFrame": 43.536458333333336,
+   "workletNsPerFrame": 43.536458333333336,
    "wasmOverCpp": 7.218880962612806,
-   "nodeOverWasm": 0.995217621554897,
+   "workletOverWasm": 0.995217621554897,
    "maxRelDiff": 1.7969073068959553e-7,
    "imports": [
     "_expf",
@@ -366,9 +366,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 2,
    "cppNsPerFrame": 11.8125,
    "wasmNsPerFrame": 11.0546875,
-   "nodeNsPerFrame": 12.354166666666666,
+   "workletNsPerFrame": 12.354166666666666,
    "wasmOverCpp": 0.9358465608465608,
-   "nodeOverWasm": 1.1175500588928151,
+   "workletOverWasm": 1.1175500588928151,
    "maxRelDiff": 1.1979382045973034e-7,
    "imports": [
     "_expf",
@@ -382,9 +382,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 14.969625,
    "wasmNsPerFrame": 91.25608333333334,
-   "nodeNsPerFrame": 92.1875,
+   "workletNsPerFrame": 92.1875,
    "wasmOverCpp": 6.096083457891118,
-   "nodeOverWasm": 1.0102066254943733,
+   "workletOverWasm": 1.0102066254943733,
    "maxRelDiff": 9.583676439254888e-7,
    "imports": [
     "_sinf",
@@ -401,9 +401,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 13.467,
    "wasmNsPerFrame": 16.421875,
-   "nodeNsPerFrame": 17.09375,
+   "workletNsPerFrame": 17.09375,
    "wasmOverCpp": 1.2194159798024802,
-   "nodeOverWasm": 1.0409134157944815,
+   "workletOverWasm": 1.0409134157944815,
    "maxRelDiff": 0.0000014530161957513312,
    "imports": [],
    "loopMath": []
@@ -414,9 +414,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 2,
    "cppNsPerFrame": 66.98958333333333,
    "wasmNsPerFrame": 134.954875,
-   "nodeNsPerFrame": 154.234375,
+   "workletNsPerFrame": 154.234375,
    "wasmOverCpp": 2.014565075415954,
-   "nodeOverWasm": 1.1428588630088392,
+   "workletOverWasm": 1.1428588630088392,
    "maxRelDiff": 0.038306066686178544,
    "imports": [
     "_cosf",
@@ -433,9 +433,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 8,
    "cppNsPerFrame": 26.719604166666667,
    "wasmNsPerFrame": 151.66841666666667,
-   "nodeNsPerFrame": 154.40970833333333,
+   "workletNsPerFrame": 154.40970833333333,
    "wasmOverCpp": 5.676297287961945,
-   "nodeOverWasm": 1.0180742420005042,
+   "workletOverWasm": 1.0180742420005042,
    "maxRelDiff": 1.481450645360641e-7,
    "imports": [
     "_cosf",
@@ -453,9 +453,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 2,
    "cppNsPerFrame": 12.496520833333333,
    "wasmNsPerFrame": 13.082458333333333,
-   "nodeNsPerFrame": 13.302083333333334,
+   "workletNsPerFrame": 13.302083333333334,
    "wasmOverCpp": 1.0468880505073912,
-   "nodeOverWasm": 1.0167877469512292,
+   "workletOverWasm": 1.0167877469512292,
    "maxRelDiff": 2.699791306132036e-7,
    "imports": [
     "_powf"
@@ -468,9 +468,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 19.873270833333333,
    "wasmNsPerFrame": 19.8125,
-   "nodeNsPerFrame": 18.775166666666667,
+   "workletNsPerFrame": 18.775166666666667,
    "wasmOverCpp": 0.9969420819631059,
-   "nodeOverWasm": 0.9476424815983175,
+   "workletOverWasm": 0.9476424815983175,
    "maxRelDiff": 0.0000011345017876654078,
    "imports": [
     "_powf"
@@ -483,9 +483,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 2,
    "cppNsPerFrame": 42.1649375,
    "wasmNsPerFrame": 168.4288125,
-   "nodeNsPerFrame": 167.55208333333334,
+   "workletNsPerFrame": 167.55208333333334,
    "wasmOverCpp": 3.9945229967434432,
-   "nodeOverWasm": 0.994794660404872,
+   "workletOverWasm": 0.994794660404872,
    "maxRelDiff": 1.8496370827080018e-7,
    "imports": [
     "_cosf",
@@ -505,9 +505,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 13.9149375,
    "wasmNsPerFrame": 16.842020833333333,
-   "nodeNsPerFrame": 17.848083333333335,
+   "workletNsPerFrame": 17.848083333333335,
    "wasmOverCpp": 1.2103554783004473,
-   "nodeOverWasm": 1.059735260391605,
+   "workletOverWasm": 1.059735260391605,
    "maxRelDiff": 5.990689270735422e-8,
    "imports": [
     "_fmodf",
@@ -523,9 +523,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 1.7308958333333333,
    "wasmNsPerFrame": 12.519979166666667,
-   "nodeNsPerFrame": 14.457479166666667,
+   "workletNsPerFrame": 14.457479166666667,
    "wasmOverCpp": 7.233236642875197,
-   "nodeOverWasm": 1.154752653675209,
+   "workletOverWasm": 1.154752653675209,
    "maxRelDiff": 3.913470046495938e-8,
    "imports": [
     "_tanhf"
@@ -540,9 +540,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 1,
    "cppNsPerFrame": 0.27691666666666664,
    "wasmNsPerFrame": 2.4956666666666667,
-   "nodeNsPerFrame": 4.243041666666667,
+   "workletNsPerFrame": 4.243041666666667,
    "wasmOverCpp": 9.01233824857057,
-   "nodeOverWasm": 1.7001636169360224,
+   "workletOverWasm": 1.7001636169360224,
    "maxRelDiff": 7.826892309710442e-8,
    "imports": [],
    "loopMath": []
@@ -553,9 +553,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
    "outputs": 2,
    "cppNsPerFrame": 26.451375,
    "wasmNsPerFrame": 31.533,
-   "nodeNsPerFrame": 32.90710416666667,
+   "workletNsPerFrame": 32.90710416666667,
    "wasmOverCpp": 1.1921119412506913,
-   "nodeOverWasm": 1.0435767027135594,
+   "workletOverWasm": 1.0435767027135594,
    "maxRelDiff": 2.28680419430152e-7,
    "imports": [
     "_cosf",
@@ -658,8 +658,8 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
       `on ${twins.length} programs; then ${slower(vsCpp).join(' ')} than the original C++`));
   }
   if (plain.length) {
-    tiles.append(tile('Web Audio wrapper', times(geomean(plain.map((r) => r.nodeOverWasm))), 'of the wasm',
-      'geometric mean, per-block glue of the node'));
+    tiles.append(tile('Web Audio wrapper', times(geomean(plain.map((r) => r.workletOverWasm))), 'of the wasm',
+      'geometric mean, per-block glue of the AudioWorklet'));
   }
 
   // ---------------------------------------------------------------- tooltip
@@ -836,23 +836,23 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
   else document.getElementById('h-fa').closest('section').hidden = true;
 
   // ---------------------------------------------------------------- chart: wrapper
-  const nodeRows = [...plain].sort((a, b) => b.nodeOverWasm - a.nodeOverWasm).map((r) => ({
+  const workletRows = [...plain].sort((a, b) => b.workletOverWasm - a.workletOverWasm).map((r) => ({
     label: r.name,
-    value: r.nodeOverWasm,
+    value: r.workletOverWasm,
     color: 'var(--pure)',
-    valueLabel: times(r.nodeOverWasm),
-    aria: `${r.name}: wrapper ${times(r.nodeOverWasm)} the wasm time`,
+    valueLabel: times(r.workletOverWasm),
+    aria: `${r.name}: wrapper ${times(r.workletOverWasm)} the wasm time`,
     tip: () => [
       el('div', { class: 't-head' }, r.name),
-      el('div', { class: 't-big' }, times(r.nodeOverWasm)),
+      el('div', { class: 't-big' }, times(r.workletOverWasm)),
       tipRow('wasm alone', `${ns(r.wasmNsPerFrame)} ns`),
-      tipRow('through the node', `${ns(r.nodeNsPerFrame)} ns`),
+      tipRow('through the worklet', `${ns(r.workletNsPerFrame)} ns`),
       tipRow('channels in/out', `${r.inputs}/${r.outputs}`)
     ]
   }));
-  if (nodeRows.length) {
-    const values = nodeRows.map((r) => r.value);
-    barChart(document.getElementById('chart-node'), nodeRows, {
+  if (workletRows.length) {
+    const values = workletRows.map((r) => r.value);
+    barChart(document.getElementById('chart-worklet'), workletRows, {
       log: false,
       domain: [Math.min(0.9, Math.floor(Math.min(...values) * 20) / 20), Math.max(1.2, Math.ceil(Math.max(...values) * 20) / 20)],
       baselineLabel: 'wasm alone'
@@ -869,9 +869,9 @@ node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code
     { key: 'io', label: 'In/out', value: (r) => r.inputs * 100 + r.outputs, cell: (r) => el('td', {}, `${r.inputs}/${r.outputs}`) },
     { key: 'cppNsPerFrame', label: 'C++ ns', fmt: ns },
     { key: 'wasmNsPerFrame', label: 'wasm ns', fmt: ns },
-    { key: 'nodeNsPerFrame', label: 'node ns', fmt: ns },
+    { key: 'workletNsPerFrame', label: 'worklet ns', fmt: ns },
     { key: 'wasmOverCpp', label: 'wasm/C++', fmt: times },
-    { key: 'nodeOverWasm', label: 'node/wasm', fmt: times },
+    { key: 'workletOverWasm', label: 'worklet/wasm', fmt: times },
     { key: 'maxRelDiff', label: 'max |Δ|', fmt: (v) => v.toExponential(1) },
     { key: 'loopMath', label: 'Math per sample', text: true, value: (r) => (r.loopMath || []).join(' '), cell: (r) => el('td', { class: 'text math' }, (r.loopMath || []).join(', ') || '–') }
   ];

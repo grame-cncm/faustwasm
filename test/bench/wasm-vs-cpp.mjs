@@ -15,14 +15,15 @@
  * that a burst of load on the machine does not land on one of them -- and
  * three numbers come out:
  *
- *   C++    the native program, the reference;
- *   wasm   the generated wasm alone: `compute` called straight on the wasm
- *          instance, buffers already in its memory. Against C++, this is the
- *          wasm backend and the engine (V8 here, as in Chrome);
- *   node   the same wasm through `FaustMonoWebAudioDsp.compute`, which is
- *          what an AudioWorklet node runs at every block: copying the inputs
- *          in, the timed-event loop, bargraphs, the non-finite check. Against
- *          wasm, this is this package's own overhead.
+ *   C++      the native program, the reference;
+ *   wasm     the generated wasm alone: `compute` called straight on the wasm
+ *            instance, buffers already in its memory. Against C++, this is
+ *            the wasm backend and the engine (V8 here, as in Chrome);
+ *   worklet  the same wasm through `FaustMonoWebAudioDsp.compute`, which the
+ *            AudioWorklet processor of a node runs at every block: copying
+ *            the inputs in, the timed-event loop, bargraphs, the non-finite
+ *            check, copying the outputs out. Against wasm, this is this
+ *            package's own overhead.
  *
  * Before timing, both sides render the same first frames and the outputs are
  * compared: "max |d|" is the largest difference, relative to the peak of the
@@ -432,13 +433,13 @@ const main = async () => {
         'in/out',
         'C++',
         'wasm',
-        'node',
+        'worklet',
         'wasm/C++',
-        'node/wasm',
+        'worklet/wasm',
         'C++ xRT',
         'max |d|'
     ];
-    const widths = [16, 7, 9, 9, 9, 9, 10, 9, 9];
+    const widths = [16, 7, 9, 9, 9, 9, 12, 9, 9];
     const line = (cells) =>
         cells
             .map((cell, i) =>
@@ -483,31 +484,31 @@ const main = async () => {
 
         const raw = await rawWasm(factory);
         const diff = difference(cpp.ref, raw.render(REF_FRAMES));
-        const node = await wrapped(factory);
+        const worklet = await wrapped(factory);
         // The sides take turns, so that a burst of load on the machine
         // lands on all three rather than on whichever was running.
         const cppRuns = [...cpp.runs];
         const wasmRuns = time(raw.block);
-        const nodeRuns = time(node.block);
+        const workletRuns = time(worklet.block);
         for (let round = 1; round < ROUNDS; round++) {
             cppRuns.push(...cpp.again());
             wasmRuns.push(...time(raw.block));
-            nodeRuns.push(...time(node.block));
+            workletRuns.push(...time(worklet.block));
         }
 
         const best = (runs) => Math.min(...runs) / FRAMES;
         const c = best(cppRuns);
         const w = best(wasmRuns);
-        const n = best(nodeRuns);
+        const n = best(workletRuns);
         const result = {
             name,
             inputs: raw.ins,
             outputs: raw.outs,
             cppNsPerFrame: c,
             wasmNsPerFrame: w,
-            nodeNsPerFrame: n,
+            workletNsPerFrame: n,
             wasmOverCpp: w / c,
-            nodeOverWasm: n / w,
+            workletOverWasm: n / w,
             maxRelDiff: diff,
             // The math functions the wasm calls out to JavaScript for
             // (`_sinf`...): the first suspect when wasm is far behind.
@@ -515,7 +516,7 @@ const main = async () => {
                 .filter((i) => i.kind === 'function')
                 .map((i) => i.name),
             loopMath: cpp.loopMath,
-            runs: { cpp: cppRuns, wasm: wasmRuns, node: nodeRuns }
+            runs: { cpp: cppRuns, wasm: wasmRuns, worklet: workletRuns }
         };
         results.push(result);
         console.log(
@@ -543,7 +544,7 @@ const main = async () => {
             );
         console.log('');
         console.log(
-            `geometric mean over ${results.length} programs: wasm/C++ x${geomean('wasmOverCpp').toFixed(2)}, node/wasm x${geomean('nodeOverWasm').toFixed(2)}`
+            `geometric mean over ${results.length} programs: wasm/C++ x${geomean('wasmOverCpp').toFixed(2)}, worklet/wasm x${geomean('workletOverWasm').toFixed(2)}`
         );
     }
     if (results.some((r) => r.maxRelDiff > MISMATCH)) {
