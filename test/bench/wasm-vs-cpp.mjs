@@ -10,8 +10,10 @@
  * Each program is compiled twice: by libfaust-wasm (this package) to wasm,
  * and by a native Faust compiler to C++ with `test/bench/bench-arch.cpp`,
  * which clang (or `CXX`) builds with `-O3`. Both are then timed by the same
- * protocol -- same sample rate, same block size, same input noise, warm-up
- * run, then the best of N timed runs -- and three numbers come out:
+ * protocol -- same sample rate, same block size, same input noise, a warm-up
+ * run, then the best of 3 rounds of 5 timed runs, the sides taking turns so
+ * that a burst of load on the machine does not land on one of them -- and
+ * three numbers come out:
  *
  *   C++    the native program, the reference;
  *   wasm   the generated wasm alone: `compute` called straight on the wasm
@@ -43,7 +45,9 @@
  * into a check for a machine one knows.
  *
  * Options:
- *   --runs N         timed runs per program and side, best kept (default 7)
+ *   --runs N         timed runs per side and round (default 5)
+ *   --rounds N       rounds per program, the sides taking turns; the best run
+ *                    of all rounds is kept (default 3)
  *   --seconds S      audio rendered per run (default 1)
  *   --block B        frames per compute call (default 128, the AudioWorklet
  *                    quantum; audio-dsl-bench uses 256)
@@ -65,6 +69,7 @@ import {
 import { holdEventLoop } from '../../src/holdEventLoop.js';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -94,7 +99,8 @@ const option = (name, fallback) => {
     argv.splice(at, 2);
     return value;
 };
-const RUNS = Number(option('--runs', '7'));
+const RUNS = Number(option('--runs', '5'));
+const ROUNDS = Number(option('--rounds', '3'));
 const SECONDS = Number(option('--seconds', '1'));
 const BLOCK = Number(option('--block', '128'));
 const SAMPLE_RATE = Number(option('--sample-rate', '48000'));
@@ -154,8 +160,9 @@ if (!fs.existsSync(path.join(INCLUDE, 'faust', 'dsp', 'dsp.h'))) {
 const isDouble = /(^|\s)-(double|db)(\s|$)/.test(FAUST_ARGS);
 
 /**
- * The C++ side of one program: generated, compiled, run.
- * @returns {{ inputs: number, outputs: number, runs: number[], ref: (Float32Array | Float64Array)[] } | { error: string }}
+ * The C++ side of one program: generated, compiled, run once; `again` runs
+ * it once more for the next round and returns that round's timings.
+ * @returns {{ inputs: number, outputs: number, runs: number[], ref: (Float32Array | Float64Array)[], loopMath: string[], again: () => number[] } | { error: string }}
  */
 const native = (dsp, dir) => {
     const cpp = path.join(dir, 'native.cpp');
@@ -196,16 +203,18 @@ const native = (dsp, dir) => {
     );
     if (cxx.status !== 0)
         return { error: `${CXX}: ${cxx.stderr.trim().split('\n')[0]}` };
-    const out = run(
-        bin,
-        [SAMPLE_RATE, BLOCK, FRAMES, RUNS, REF_FRAMES, refFile].map(String),
-        'native program'
-    );
+    const exec = () =>
+        run(
+            bin,
+            [SAMPLE_RATE, BLOCK, FRAMES, RUNS, REF_FRAMES, refFile].map(String),
+            'native program'
+        );
+    const parse = (out) =>
+        JSON.parse(out.stdout.trim().split('\n').pop() ?? '{}');
+    const out = exec();
     if (out.status !== 0)
         return { error: `native program: ${out.stderr.trim()}` };
-    const { inputs, outputs, runs_ns } = JSON.parse(
-        out.stdout.trim().split('\n').pop() ?? '{}'
-    );
+    const { inputs, outputs, runs_ns } = parse(out);
     const bytes = fs.readFileSync(refFile);
     const all = isDouble
         ? new Float64Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 8)
@@ -217,7 +226,52 @@ const native = (dsp, dir) => {
     const ref = Array.from({ length: outputs }, (_, c) =>
         all.subarray(c * REF_FRAMES, (c + 1) * REF_FRAMES)
     );
-    return { inputs, outputs, runs: runs_ns, ref };
+    return {
+        inputs,
+        outputs,
+        runs: runs_ns,
+        ref,
+        loopMath: loopMath(fs.readFileSync(cpp, 'utf8')),
+        again: () => parse(exec()).runs_ns
+    };
+};
+
+/**
+ * The C math functions the wasm backend imports from JavaScript. The ones
+ * wasm has as instructions (`floor`, `sqrt`, `fabs`, `min`, `max`...) are not
+ * here: calling them costs no more in wasm than in C++.
+ */
+const IMPORTED_MATH = new Set(
+    (
+        'sin cos tan asin acos atan atan2 sinh cosh tanh asinh acosh atanh ' +
+        'exp exp2 exp10 expm1 log log2 log10 log1p pow fmod remainder round'
+    ).split(' ')
+);
+
+/**
+ * The math functions the generated C++ calls in its sample loop, the code
+ * from the first `for (int i0` of `compute` on: in wasm, each is a call into
+ * JavaScript at every sample. A program that calls them only on its controls
+ * (`fSlow`, before the loop) imports them too, at no cost per sample. Faust
+ * writes a primitive `std::sin(` and a foreign function (`ma.tanh`) `tanhf(`.
+ */
+const loopMath = (source) => {
+    const compute = source.indexOf('virtual void compute(');
+    const loop = source.indexOf('for (int i0 = 0;', compute);
+    if (compute === -1 || loop === -1) return [];
+    const names = [
+        ...source
+            .slice(loop)
+            .matchAll(/(?<![\w.])(?:std::)?([a-z][a-z0-9]*)\(/g)
+    ]
+        .map((m) => m[1])
+        .map((name) =>
+            !IMPORTED_MATH.has(name) && IMPORTED_MATH.has(name.slice(0, -1))
+                ? name.slice(0, -1)
+                : name
+        )
+        .filter((name) => IMPORTED_MATH.has(name));
+    return [...new Set(names)].sort();
 };
 
 // ---------------------------------------------------------------------------
@@ -365,7 +419,7 @@ const main = async () => {
     console.log(`native         ${nativeVersion} (${FAUST})`);
     console.log(`C++            ${CXX} ${CXXFLAGS}`);
     console.log(
-        `protocol       ${SAMPLE_RATE} Hz, ${BLOCK}-frame blocks, ${FRAMES} frames per run, best of ${RUNS}, Faust ${FAUST_ARGS}`
+        `protocol       ${SAMPLE_RATE} Hz, ${BLOCK}-frame blocks, ${FRAMES} frames per run, best of ${ROUNDS}x${RUNS}, Faust ${FAUST_ARGS}`
     );
     console.log('');
     console.log(
@@ -429,11 +483,20 @@ const main = async () => {
 
         const raw = await rawWasm(factory);
         const diff = difference(cpp.ref, raw.render(REF_FRAMES));
+        const node = await wrapped(factory);
+        // The sides take turns, so that a burst of load on the machine
+        // lands on all three rather than on whichever was running.
+        const cppRuns = [...cpp.runs];
         const wasmRuns = time(raw.block);
-        const nodeRuns = time((await wrapped(factory)).block);
+        const nodeRuns = time(node.block);
+        for (let round = 1; round < ROUNDS; round++) {
+            cppRuns.push(...cpp.again());
+            wasmRuns.push(...time(raw.block));
+            nodeRuns.push(...time(node.block));
+        }
 
         const best = (runs) => Math.min(...runs) / FRAMES;
-        const c = best(cpp.runs);
+        const c = best(cppRuns);
         const w = best(wasmRuns);
         const n = best(nodeRuns);
         const result = {
@@ -446,7 +509,13 @@ const main = async () => {
             wasmOverCpp: w / c,
             nodeOverWasm: n / w,
             maxRelDiff: diff,
-            runs: { cpp: cpp.runs, wasm: wasmRuns, node: nodeRuns }
+            // The math functions the wasm calls out to JavaScript for
+            // (`_sinf`...): the first suspect when wasm is far behind.
+            imports: WebAssembly.Module.imports(factory.module)
+                .filter((i) => i.kind === 'function')
+                .map((i) => i.name),
+            loopMath: cpp.loopMath,
+            runs: { cpp: cppRuns, wasm: wasmRuns, node: nodeRuns }
         };
         results.push(result);
         console.log(
@@ -489,10 +558,14 @@ const main = async () => {
             native: nativeVersion,
             cxx: `${CXX} ${CXXFLAGS}`,
             node: process.version,
+            cpu: os.cpus()[0]?.model ?? '',
+            platform: `${os.platform()} ${os.arch()}`,
+            date: new Date().toISOString().slice(0, 10),
             sampleRate: SAMPLE_RATE,
             block: BLOCK,
             frames: FRAMES,
             runs: RUNS,
+            rounds: ROUNDS,
             faustArgs: FAUST_ARGS
         };
         fs.writeFileSync(

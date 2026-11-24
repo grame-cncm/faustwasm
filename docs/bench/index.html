@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>faustwasm benchmark</title>
+<meta name="description" content="How fast Faust programs compiled to WebAssembly by faustwasm run, against the C++ the native Faust compiler generates, and what fastmath.lib changes.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6f6e69;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --wash: rgba(11, 11, 11, 0.04);
+  --pure: #2a78d6;
+  --js: #eb6834;
+  --link: #1c5cab;
+  --code-bg: rgba(11, 11, 11, 0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #9a9993;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --wash: rgba(255, 255, 255, 0.05);
+    --pure: #3987e5;
+    --js: #d95926;
+    --link: #86b6ef;
+    --code-bg: rgba(255, 255, 255, 0.07);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #9a9993;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --wash: rgba(255, 255, 255, 0.05);
+  --pure: #3987e5;
+  --js: #d95926;
+  --link: #86b6ef;
+  --code-bg: rgba(255, 255, 255, 0.07);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+a { color: var(--link); }
+code {
+  font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+pre {
+  margin: 0.75rem 0 0;
+  padding: 12px 14px;
+  background: var(--code-bg);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+pre code { background: none; padding: 0; font-size: 13px; line-height: 1.6; }
+
+.page { max-width: 980px; margin: 0 auto; padding: 48px 24px 64px; }
+@media (max-width: 600px) { .page { padding: 28px 16px 48px; } }
+
+header .eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+h1 { font-size: clamp(28px, 4.5vw, 40px); line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.01em; }
+.lead { font-size: 18px; color: var(--ink-2); max-width: 46em; margin: 0 0 16px; }
+.env { font-size: 13px; color: var(--muted); margin: 0; }
+.env span + span::before { content: "·"; margin: 0 0.5em; }
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 32px 0 12px;
+}
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.tile .label { font-size: 13px; color: var(--ink-2); margin: 0 0 6px; }
+.tile .value { font-size: 30px; font-weight: 600; line-height: 1.1; margin: 0; font-variant-numeric: tabular-nums; }
+.tile .value small { font-size: 15px; font-weight: 500; color: var(--ink-2); margin-left: 4px; }
+.tile .sub { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
+section { margin-top: 40px; }
+h2 { font-size: 22px; line-height: 1.25; margin: 0 0 6px; }
+.card h2 { font-size: 18px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 20px 16px;
+}
+@media (max-width: 600px) { .card { padding: 16px 12px 12px; } }
+.card .sub { font-size: 14px; color: var(--ink-2); margin: 0 0 12px; max-width: 48em; }
+.prose p { max-width: 46em; color: var(--ink-2); }
+.prose p strong { color: var(--ink); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); margin: 0 0 8px; padding: 0; list-style: none; }
+.legend li { display: flex; align-items: center; gap: 7px; }
+.key { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.key.dot { border-radius: 50%; }
+
+.chart { width: 100%; }
+.chart svg { display: block; overflow: visible; }
+.chart text { font-size: 12px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+.chart .tick { fill: var(--muted); }
+.chart .name { fill: var(--ink); }
+.chart .row:focus { outline: none; }
+.chart .row:focus .hit, .chart .row:hover .hit { fill: var(--wash); }
+
+.callout {
+  border-left: 3px solid var(--js);
+  padding: 4px 0 4px 16px;
+  margin: 20px 0 0;
+}
+.callout p { margin: 0.4em 0; }
+
+.table-wrap { overflow-x: auto; margin: 0 -4px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child, th.text, td.text { text-align: left; }
+thead th { color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--axis); }
+thead button {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+}
+thead button::after { content: ""; display: inline-block; width: 1em; color: var(--muted); }
+thead th[aria-sort="ascending"] button::after { content: " ▲"; }
+thead th[aria-sort="descending"] button::after { content: " ▼"; }
+tbody tr:hover { background: var(--wash); }
+td .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+td.math { color: var(--ink-2); }
+
+#tooltip {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.45;
+  min-width: 170px;
+  opacity: 0;
+  transition: opacity 0.08s;
+}
+#tooltip.on { opacity: 1; }
+#tooltip .t-head { font-weight: 600; margin-bottom: 4px; }
+#tooltip .t-big { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#tooltip .t-row { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+#tooltip .t-row b { color: var(--ink); font-weight: 600; }
+#tooltip .t-line { display: inline-block; width: 10px; height: 2px; vertical-align: 3px; margin-right: 6px; border-radius: 1px; }
+
+footer { margin-top: 48px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--grid); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">faustwasm · benchmark</p>
+    <h1>Faust in WebAssembly, against native C++</h1>
+    <p class="lead">The same Faust programs, compiled to wasm by <a href="https://github.com/grame-cncm/faustwasm">faustwasm</a> and to C++ by the native Faust compiler, timed under one protocol. Programs without a math function in their sample loop run close to C++. The ones far behind call such a function at every sample, and wasm sends each call to JavaScript. Rewriting them with <code>fastmath.lib</code> closes most of that gap.</p>
+    <p class="env" id="env"></p>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card" aria-labelledby="h-ratio">
+    <h2 id="h-ratio">How much slower the wasm runs</h2>
+    <p class="sub">Time per frame of the generated wasm divided by that of the C++, log scale. Right of ×1 the wasm is slower, left of it faster.</p>
+    <ul class="legend">
+      <li><span class="key" style="background: var(--js)"></span>calls a math function at every sample (in JavaScript, from wasm)</li>
+      <li><span class="key" style="background: var(--pure)"></span>no math call in the sample loop</li>
+    </ul>
+    <div class="chart" id="chart-ratio"></div>
+  </section>
+
+  <div class="prose callout">
+    <p><strong>Why.</strong> WebAssembly has instructions for <code>sqrt</code>, <code>floor</code>, <code>abs</code>, <code>min</code> and <code>max</code>, but not for <code>sin</code>, <code>exp</code>, <code>pow</code> or <code>tanh</code>. The Faust wasm backend imports those from the host, and faustwasm gives it <code>Math.sin</code>, <code>Math.exp</code>… Each call leaves wasm and computes in double precision. When a program needs them only to compute coefficients from its controls, the cost is paid once per block and disappears (<code>zita_rev</code>, <code>clarinet</code>). When it needs them at every sample (a waveshaper, an oscillator computing its sine, a compressor converting to dB), it pays a call into JavaScript per sample.</p>
+  </div>
+
+  <section class="card" aria-labelledby="h-fa">
+    <h2 id="h-fa">What <code>fastmath.lib</code> changes</h2>
+    <p class="sub">The same programs with their per-sample functions taken from <code>fastmath.lib</code>: <code>fa.ftanh</code>, <code>fa.fsin</code>, <code>fa.fsin2pi</code>, <code>fa.flinear2db</code>, <code>fa.fdb2linear</code>. These are written in Faust, with no foreign function, so they compile to plain wasm instructions. Each wasm time is divided by that of the original program in native C++, which uses the C library.</p>
+    <ul class="legend">
+      <li><span class="key dot" style="background: var(--js)"></span>wasm, C math functions (JavaScript)</li>
+      <li><span class="key dot" style="background: var(--pure)"></span>wasm, <code>fastmath.lib</code></li>
+    </ul>
+    <div class="chart" id="chart-fa"></div>
+  </section>
+
+  <div class="prose">
+    <p>The <code>fast</code> tier used here stays within a few ulps of the C library: the outputs of the rewritten programs differ from the originals by −100 dB or less. Faust has no option that makes this substitution: the program calls <code>fa.</code> functions in place of the C ones. <code>-fm</code> is another mechanism, for C, C++ and LLVM, where it replaces calls to the C library with those of <code>faust/dsp/fastmath.cpp</code>. In wasm it only renames the imports, and faustwasm supplies no such functions.</p>
+    <p>A <code>fastmath.lib</code> function is slower than the C library in some cases: in native C++ the logarithms cost more (<code>compressor_fa</code> is slower than <code>compressor</code> there). The library is meant for the web, and for loops the C++ compiler can vectorize once no call is left in them.</p>
+  </div>
+
+  <section class="card" aria-labelledby="h-node">
+    <h2 id="h-node">What the Web Audio wrapper adds</h2>
+    <p class="sub">Time through <code>FaustMonoWebAudioDsp.compute</code>, the per-block entry point of an AudioWorklet node (input copies, timed events, bargraphs, the non-finite check), divided by the time of the wasm <code>compute</code> alone. Below ×1 is measurement noise: the wrapper does strictly more work.</p>
+    <div class="chart" id="chart-node"></div>
+  </section>
+
+  <section aria-labelledby="h-table">
+    <h2 id="h-table">All numbers</h2>
+    <p class="sub" style="color: var(--ink-2); font-size: 14px; margin: 0 0 12px;">Nanoseconds per frame, best run. Click a column to sort. “max |Δ|” is the largest difference between the wasm and C++ outputs over their first 4096 frames, relative to the peak: it shows both sides computed the same thing (<code>greyhole</code>’s modulated feedback delays amplify a 1e-6 rounding difference over time).</p>
+    <div class="table-wrap"><table id="table"></table></div>
+  </section>
+
+  <section class="prose" aria-labelledby="h-method">
+    <h2 id="h-method">Method</h2>
+    <p>Each program is compiled twice with <code>-ftz 2</code>, the option faustwasm’s <code>createNode</code> uses: to wasm by the libfaust-wasm that faustwasm ships, and to C++ by the native Faust compiler with a minimal architecture file, built with <code>clang -O3</code> (no fast-math, like wasm). Both render at 48 kHz in blocks of 128 frames (the AudioWorklet quantum), on the same input noise, with every control at its default. After a warm-up run, each side runs 5 timed runs of one second of audio per round, for 3 rounds where the sides take turns, so that a burst of load on the machine does not fall on one side only. The best run is kept. The wasm runs in Node, on V8, the engine of Chrome.</p>
+    <p>Numbers depend on the machine; ratios travel better than nanoseconds. To measure your own:</p>
+    <pre><code>git clone https://github.com/grame-cncm/faustwasm &amp;&amp; cd faustwasm &amp;&amp; npm install
+FAUST_SOURCE_DIR=/path/to/faust npm run bench -- --json results.json
+node test/bench/report.mjs results.json   # rewrites docs/bench/index.html</code></pre>
+    <p>The programs are in <a href="https://github.com/grame-cncm/faustwasm/tree/master/test/bench/dsp"><code>test/bench/dsp</code></a>, the bench in <a href="https://github.com/grame-cncm/faustwasm/blob/master/test/bench/wasm-vs-cpp.mjs"><code>test/bench/wasm-vs-cpp.mjs</code></a>.</p>
+  </section>
+
+  <footer>
+    <span id="foot"></span> · <a href="https://faust.grame.fr">Faust</a> · <a href="https://github.com/grame-cncm/faustwasm">faustwasm on GitHub</a>
+  </footer>
+</main>
+
+<div id="tooltip" role="tooltip" aria-hidden="true"></div>
+
+<script id="bench-data" type="application/json">
+{
+ "environment": {
+  "libfaustWasm": "2.95.0",
+  "native": "FAUST Version 2.95.3",
+  "cxx": "c++ -O3",
+  "node": "v22.12.0",
+  "cpu": "Apple M5",
+  "platform": "darwin arm64",
+  "date": "2026-11-24",
+  "sampleRate": 48000,
+  "block": 128,
+  "frames": 48000,
+  "runs": 5,
+  "rounds": 3,
+  "faustArgs": "-ftz 2"
+ },
+ "results": [
+  {
+   "name": "additive64",
+   "inputs": 0,
+   "outputs": 1,
+   "cppNsPerFrame": 166.01822916666666,
+   "wasmNsPerFrame": 836.7691041666667,
+   "nodeNsPerFrame": 845.9704791666667,
+   "wasmOverCpp": 5.040224247462786,
+   "nodeOverWasm": 1.0109963130261168,
+   "maxRelDiff": 3.26122785718007e-7,
+   "imports": [
+    "_sinf"
+   ],
+   "loopMath": [
+    "sin"
+   ]
+  },
+  {
+   "name": "additive64_fa",
+   "inputs": 0,
+   "outputs": 1,
+   "cppNsPerFrame": 94.688375,
+   "wasmNsPerFrame": 146.82985416666668,
+   "nodeNsPerFrame": 142.86197916666666,
+   "wasmOverCpp": 1.5506639982644828,
+   "nodeOverWasm": 0.9729763744402001,
+   "maxRelDiff": 2.8535734444172404e-7,
+   "imports": [],
+   "loopMath": []
+  },
+  {
+   "name": "biquad8",
+   "inputs": 1,
+   "outputs": 1,
+   "cppNsPerFrame": 10.6875,
+   "wasmNsPerFrame": 15.6328125,
+   "nodeNsPerFrame": 16.170125,
+   "wasmOverCpp": 1.462719298245614,
+   "nodeOverWasm": 1.0343708145927035,
+   "maxRelDiff": 0.0000051808809421928935,
+   "imports": [
+    "_cosf",
+    "_sinf"
+   ],
+   "loopMath": []
+  },
+  {
+   "name": "clarinet",
+   "inputs": 0,
+   "outputs": 2,
+   "cppNsPerFrame": 12.8689375,
+   "wasmNsPerFrame": 19.766479166666667,
+   "nodeNsPerFrame": 19.080729166666668,
+   "wasmOverCpp": 1.535983772294074,
+   "nodeOverWasm": 0.9653074280847943,
+   "maxRelDiff": 0.0000017200186980775498,
+   "imports": [
+    "_expf",
+    "_powf",
+    "_sinf",
+    "_tanf"
+   ],
+   "loopMath": []
+  },
+  {
+   "name": "compressor",
+   "inputs": 2,
+   "outputs": 2,
+   "cppNsPerFrame": 6.059895833333333,
+   "wasmNsPerFrame": 43.745666666666665,
+   "nodeNsPerFrame": 43.536458333333336,
+   "wasmOverCpp": 7.218880962612806,
+   "nodeOverWasm": 0.995217621554897,
+   "maxRelDiff": 1.7969073068959553e-7,
+   "imports": [
+    "_expf",
+    "_log10f",
+    "_powf"
+   ],
+   "loopMath": [
+    "log10",
+    "pow"
+   ]
+  },
+  {
+   "name": "compressor_fa",
+   "inputs": 2,
+   "outputs": 2,
+   "cppNsPerFrame": 11.8125,
+   "wasmNsPerFrame": 11.0546875,
+   "nodeNsPerFrame": 12.354166666666666,
+   "wasmOverCpp": 0.9358465608465608,
+   "nodeOverWasm": 1.1175500588928151,
+   "maxRelDiff": 1.1979382045973034e-7,
+   "imports": [
+    "_expf",
+    "_powf"
+   ],
+   "loopMath": []
+  },
+  {
+   "name": "fm_pad",
+   "inputs": 0,
+   "outputs": 1,
+   "cppNsPerFrame": 14.969625,
+   "wasmNsPerFrame": 91.25608333333334,
+   "nodeNsPerFrame": 92.1875,
+   "wasmOverCpp": 6.096083457891118,
+   "nodeOverWasm": 1.0102066254943733,
+   "maxRelDiff": 9.583676439254888e-7,
+   "imports": [
+    "_sinf",
+    "_tanhf"
+   ],
+   "loopMath": [
+    "sin",
+    "tanh"
+   ]
+  },
+  {
+   "name": "fm_pad_fa",
+   "inputs": 0,
+   "outputs": 1,
+   "cppNsPerFrame": 13.467,
+   "wasmNsPerFrame": 16.421875,
+   "nodeNsPerFrame": 17.09375,
+   "wasmOverCpp": 1.2194159798024802,
+   "nodeOverWasm": 1.0409134157944815,
+   "maxRelDiff": 0.0000014530161957513312,
+   "imports": [],
+   "loopMath": []
+  },
+  {
+   "name": "greyhole",
+   "inputs": 2,
+   "outputs": 2,
+   "cppNsPerFrame": 66.98958333333333,
+   "wasmNsPerFrame": 134.954875,
+   "nodeNsPerFrame": 154.234375,
+   "wasmOverCpp": 2.014565075415954,
+   "nodeOverWasm": 1.1428588630088392,
+   "maxRelDiff": 0.038306066686178544,
+   "imports": [
+    "_cosf",
+    "_sinf"
+   ],
+   "loopMath": [
+    "cos",
+    "sin"
+   ]
+  },
+  {
+   "name": "hoa_octo",
+   "inputs": 4,
+   "outputs": 8,
+   "cppNsPerFrame": 26.719604166666667,
+   "wasmNsPerFrame": 151.66841666666667,
+   "nodeNsPerFrame": 154.40970833333333,
+   "wasmOverCpp": 5.676297287961945,
+   "nodeOverWasm": 1.0180742420005042,
+   "maxRelDiff": 1.481450645360641e-7,
+   "imports": [
+    "_cosf",
+    "_expf",
+    "_sinf"
+   ],
+   "loopMath": [
+    "cos",
+    "sin"
+   ]
+  },
+  {
+   "name": "karplus",
+   "inputs": 0,
+   "outputs": 2,
+   "cppNsPerFrame": 12.496520833333333,
+   "wasmNsPerFrame": 13.082458333333333,
+   "nodeNsPerFrame": 13.302083333333334,
+   "wasmOverCpp": 1.0468880505073912,
+   "nodeOverWasm": 1.0167877469512292,
+   "maxRelDiff": 2.699791306132036e-7,
+   "imports": [
+    "_powf"
+   ],
+   "loopMath": []
+  },
+  {
+   "name": "moog_vcf",
+   "inputs": 1,
+   "outputs": 1,
+   "cppNsPerFrame": 19.873270833333333,
+   "wasmNsPerFrame": 19.8125,
+   "nodeNsPerFrame": 18.775166666666667,
+   "wasmOverCpp": 0.9969420819631059,
+   "nodeOverWasm": 0.9476424815983175,
+   "maxRelDiff": 0.0000011345017876654078,
+   "imports": [
+    "_powf"
+   ],
+   "loopMath": []
+  },
+  {
+   "name": "phaser",
+   "inputs": 2,
+   "outputs": 2,
+   "cppNsPerFrame": 42.1649375,
+   "wasmNsPerFrame": 168.4288125,
+   "nodeNsPerFrame": 167.55208333333334,
+   "wasmOverCpp": 3.9945229967434432,
+   "nodeOverWasm": 0.994794660404872,
+   "maxRelDiff": 1.8496370827080018e-7,
+   "imports": [
+    "_cosf",
+    "_expf",
+    "_powf",
+    "_sinf",
+    "_sinhf"
+   ],
+   "loopMath": [
+    "cos",
+    "sin"
+   ]
+  },
+  {
+   "name": "pitch_shifter",
+   "inputs": 1,
+   "outputs": 1,
+   "cppNsPerFrame": 13.9149375,
+   "wasmNsPerFrame": 16.842020833333333,
+   "nodeNsPerFrame": 17.848083333333335,
+   "wasmOverCpp": 1.2103554783004473,
+   "nodeOverWasm": 1.059735260391605,
+   "maxRelDiff": 5.990689270735422e-8,
+   "imports": [
+    "_fmodf",
+    "_powf"
+   ],
+   "loopMath": [
+    "fmod"
+   ]
+  },
+  {
+   "name": "tanh_drive",
+   "inputs": 1,
+   "outputs": 1,
+   "cppNsPerFrame": 1.7308958333333333,
+   "wasmNsPerFrame": 12.519979166666667,
+   "nodeNsPerFrame": 14.457479166666667,
+   "wasmOverCpp": 7.233236642875197,
+   "nodeOverWasm": 1.154752653675209,
+   "maxRelDiff": 3.913470046495938e-8,
+   "imports": [
+    "_tanhf"
+   ],
+   "loopMath": [
+    "tanh"
+   ]
+  },
+  {
+   "name": "tanh_drive_fa",
+   "inputs": 1,
+   "outputs": 1,
+   "cppNsPerFrame": 0.27691666666666664,
+   "wasmNsPerFrame": 2.4956666666666667,
+   "nodeNsPerFrame": 4.243041666666667,
+   "wasmOverCpp": 9.01233824857057,
+   "nodeOverWasm": 1.7001636169360224,
+   "maxRelDiff": 7.826892309710442e-8,
+   "imports": [],
+   "loopMath": []
+  },
+  {
+   "name": "zita_rev",
+   "inputs": 2,
+   "outputs": 2,
+   "cppNsPerFrame": 26.451375,
+   "wasmNsPerFrame": 31.533,
+   "nodeNsPerFrame": 32.90710416666667,
+   "wasmOverCpp": 1.1921119412506913,
+   "nodeOverWasm": 1.0435767027135594,
+   "maxRelDiff": 2.28680419430152e-7,
+   "imports": [
+    "_cosf",
+    "_expf",
+    "_tanf"
+   ],
+   "loopMath": []
+  }
+ ],
+ "failed": []
+}
+</script>
+<script>
+(() => {
+  const DATA = JSON.parse(document.getElementById('bench-data').textContent);
+  const env = DATA.environment || {};
+  const all = DATA.results || [];
+
+  const CATEGORY = {
+    additive64: 'Oscillators', fm_pad: 'Oscillators',
+    tanh_drive: 'Nonlinear', compressor: 'Dynamics',
+    biquad8: 'Filters', moog_vcf: 'Filters',
+    phaser: 'Modulation', pitch_shifter: 'Pitch',
+    hoa_octo: 'Spatial', zita_rev: 'Reverb', greyhole: 'Reverb',
+    clarinet: 'Physical model', karplus: 'Physical model'
+  };
+  const baseName = (name) => name.replace(/_fa$/, '');
+  const category = (name) => CATEGORY[baseName(name)] || '';
+  const isTwin = (r) => /_fa$/.test(r.name);
+  const perSample = (r) => (r.loopMath || []).length > 0;
+
+  const plain = all.filter((r) => !isTwin(r));
+  const twins = all.filter(isTwin)
+    .map((fa) => ({ fa, base: all.find((r) => r.name === baseName(fa.name)) }))
+    .filter((t) => t.base);
+
+  // ---------------------------------------------------------------- format
+  const geomean = (xs) => Math.exp(xs.reduce((s, x) => s + Math.log(x), 0) / xs.length);
+  const times = (r) => '×' + (r >= 10 ? r.toFixed(1) : r.toFixed(2));
+  const slower = (r) => r >= 1 ? [times(r), 'slower'] : [times(1 / r), 'faster'];
+  const ns = (x) => x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(2);
+  const el = (tag, attrs = {}, ...kids) => {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    for (const kid of kids) node.append(kid);
+    return node;
+  };
+  const SVG = 'http://www.w3.org/2000/svg';
+  const svg = (tag, attrs = {}) => {
+    const node = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    return node;
+  };
+  const text = (x, y, str, attrs = {}) => {
+    const t = svg('text', { x, y, ...attrs });
+    t.textContent = str;
+    return t;
+  };
+  const measure = (() => {
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = '12px system-ui, -apple-system, "Segoe UI", sans-serif';
+    return (s) => ctx.measureText(s).width;
+  })();
+
+  // ---------------------------------------------------------------- header
+  const envBits = [
+    env.date && `Measured ${env.date}`,
+    env.cpu && `${env.cpu}${env.platform ? ` (${env.platform})` : ''}`,
+    env.libfaustWasm && `libfaust-wasm ${env.libfaustWasm}`,
+    env.native && `native ${env.native.replace('FAUST Version', 'Faust')}, ${env.cxx || ''}`,
+    env.node && `Node ${env.node}`,
+    env.sampleRate && `${env.sampleRate / 1000} kHz, ${env.block}-frame blocks`
+  ].filter(Boolean);
+  document.getElementById('env').append(...envBits.map((b) => el('span', {}, b)));
+  document.getElementById('foot').textContent =
+    `${all.length} programs, generated by test/bench/report.mjs` + (env.date ? ` on ${env.date}` : '');
+
+  // ---------------------------------------------------------------- tiles
+  const tile = (label, value, unit, sub) => el('div', { class: 'tile' },
+    el('p', { class: 'label' }, label),
+    el('p', { class: 'value' }, value, el('small', {}, unit)),
+    el('p', { class: 'sub' }, sub));
+  const tiles = document.getElementById('tiles');
+  if (plain.length) {
+    const g = geomean(plain.map((r) => r.wasmOverCpp));
+    const within = plain.filter((r) => r.wasmOverCpp <= 1.5).length;
+    tiles.append(tile('wasm against C++', ...slower(g),
+      `geometric mean over ${plain.length} programs; ${within} of them within ×1.5`));
+    const hot = plain.filter(perSample);
+    const cold = plain.filter((r) => !perSample(r));
+    if (hot.length && cold.length) {
+      tiles.append(tile('With math at every sample', ...slower(geomean(hot.map((r) => r.wasmOverCpp))),
+        `${hot.length} programs; ${slower(geomean(cold.map((r) => r.wasmOverCpp))).join(' ')} for the ${cold.length} others`));
+    }
+  }
+  if (twins.length) {
+    const gain = geomean(twins.map((t) => t.base.wasmNsPerFrame / t.fa.wasmNsPerFrame));
+    const vsCpp = geomean(twins.map((t) => t.fa.wasmNsPerFrame / t.base.cppNsPerFrame));
+    tiles.append(tile('fastmath.lib in wasm', times(gain), 'faster',
+      `on ${twins.length} programs; then ${slower(vsCpp).join(' ')} than the original C++`));
+  }
+  if (plain.length) {
+    tiles.append(tile('Web Audio wrapper', times(geomean(plain.map((r) => r.nodeOverWasm))), 'of the wasm',
+      'geometric mean, per-block glue of the node'));
+  }
+
+  // ---------------------------------------------------------------- tooltip
+  const tip = document.getElementById('tooltip');
+  const showTip = (content, x, y) => {
+    tip.replaceChildren(...content);
+    tip.classList.add('on');
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    const left = Math.min(window.innerWidth - w - 8, Math.max(8, x + 14));
+    const top = y + h + 20 > window.innerHeight ? y - h - 12 : y + 16;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(8, top)}px`;
+  };
+  const hideTip = () => tip.classList.remove('on');
+  const tipRow = (label, value, color) => el('div', { class: 't-row' },
+    el('span', {}, ...(color ? [el('span', { class: 't-line', style: `background:${color}` })] : []), label),
+    el('b', {}, value));
+  const bindTip = (g, content) => {
+    g.addEventListener('pointermove', (e) => showTip(content(), e.clientX, e.clientY));
+    g.addEventListener('pointerleave', hideTip);
+    g.addEventListener('focus', () => {
+      const r = g.getBoundingClientRect();
+      showTip(content(), r.left + r.width * 0.6, r.top + r.height / 2);
+    });
+    g.addEventListener('blur', hideTip);
+  };
+
+  // ---------------------------------------------------------------- scales
+  const logScale = (lo, hi, x0, x1) => (v) => x0 + (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (x1 - x0);
+  const linScale = (lo, hi, x0, x1) => (v) => x0 + (v - lo) / (hi - lo) * (x1 - x0);
+  const logTicks = (lo, hi) => {
+    const ticks = [];
+    for (let v = Math.pow(2, Math.ceil(Math.log2(lo))); v <= hi * 1.0001; v *= 2) ticks.push(v);
+    return ticks;
+  };
+  const tickLabel = (v) => '×' + (v < 1 ? String(v).replace(/^0/, '0') : String(v));
+
+  // A bar from the baseline x0 to x1, its data end rounded.
+  const barPath = (x0, x1, y, h) => {
+    const w = Math.abs(x1 - x0);
+    const r = Math.min(4, w, h / 2);
+    if (w < 0.5) return `M${x0},${y}h0.5v${h}h-0.5Z`;
+    if (x1 >= x0) {
+      return `M${x0},${y}H${x1 - r}A${r},${r} 0 0 1 ${x1},${y + r}V${y + h - r}A${r},${r} 0 0 1 ${x1 - r},${y + h}H${x0}Z`;
+    }
+    return `M${x0},${y}H${x1 + r}A${r},${r} 0 0 0 ${x1},${y + r}V${y + h - r}A${r},${r} 0 0 0 ${x1 + r},${y + h}H${x0}Z`;
+  };
+
+  /**
+   * Horizontal bars around a baseline value (1), sorted by value.
+   * rows: [{ label, value, color, valueLabel, tip: () => nodes, aria }]
+   */
+  const barChart = (container, rows, { log = true, domain, baselineLabel }) => {
+    const draw = () => {
+      const width = Math.max(300, container.clientWidth);
+      const labelW = Math.ceil(Math.max(...rows.map((r) => measure(r.label)))) + 14;
+      const rowH = 26, barH = 14, top = 26, valueW = 52;
+      const height = top + rows.length * rowH + 6;
+      const x0 = labelW + 4, x1 = width - valueW;
+      const [lo, hi] = domain;
+      const x = log ? logScale(lo, hi, x0, x1) : linScale(lo, hi, x0, x1);
+      const root = svg('svg', { width, height, viewBox: `0 0 ${width} ${height}`, role: 'group' });
+
+      const ticks = log ? logTicks(lo, hi) : linTicks(lo, hi);
+      for (const t of ticks) {
+        const tx = x(t);
+        root.append(svg('line', { x1: tx, x2: tx, y1: top - 6, y2: height - 4, stroke: t === 1 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }));
+        root.append(text(tx, top - 12, tickLabel(t), { 'text-anchor': 'middle', class: 'tick' }));
+      }
+      if (baselineLabel) {
+        root.append(text(x(1) + 4, height - 8, baselineLabel, { class: 'tick', 'font-size': 11 }));
+      }
+
+      rows.forEach((r, i) => {
+        const y = top + i * rowH;
+        const g = svg('g', { class: 'row', tabindex: 0, role: 'img', 'aria-label': r.aria });
+        g.append(svg('rect', { class: 'hit', x: 0, y, width, height: rowH, fill: 'transparent', rx: 4 }));
+        g.append(text(labelW - 10, y + rowH / 2 + 4, r.label, { 'text-anchor': 'end', class: 'name' }));
+        const bx = x(1), vx = x(Math.min(hi, Math.max(lo, r.value)));
+        g.append(svg('path', { d: barPath(bx, vx, y + (rowH - barH) / 2, barH), fill: r.color }));
+        // Left of the baseline the value goes before the bar's end, unless it
+        // would run into the program names: then after the baseline.
+        const left = vx < bx;
+        const fits = vx - 6 - measure(r.valueLabel) > labelW;
+        const lx = !left ? vx + 6 : fits ? vx - 6 : bx + 6;
+        g.append(text(lx, y + rowH / 2 + 4, r.valueLabel, { 'text-anchor': left && fits ? 'end' : 'start' }));
+        bindTip(g, r.tip);
+        root.append(g);
+      });
+      container.replaceChildren(root);
+    };
+    draw();
+    new ResizeObserver(draw).observe(container);
+  };
+  const linTicks = (lo, hi) => {
+    const step = hi - lo > 1 ? 0.25 : 0.1;
+    const ticks = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(Math.round(v * 100) / 100);
+    return ticks;
+  };
+
+  // ---------------------------------------------------------------- chart: wasm / C++
+  const ratioRows = [...plain].sort((a, b) => b.wasmOverCpp - a.wasmOverCpp).map((r) => ({
+    label: r.name,
+    value: r.wasmOverCpp,
+    color: perSample(r) ? 'var(--js)' : 'var(--pure)',
+    valueLabel: times(r.wasmOverCpp),
+    aria: `${r.name}: wasm ${slower(r.wasmOverCpp).join(' ')} than C++`,
+    tip: () => [
+      el('div', { class: 't-head' }, r.name + (category(r.name) ? ` · ${category(r.name)}` : '')),
+      el('div', { class: 't-big' }, slower(r.wasmOverCpp).join(' ')),
+      tipRow('C++', `${ns(r.cppNsPerFrame)} ns`),
+      tipRow('wasm', `${ns(r.wasmNsPerFrame)} ns`),
+      tipRow('math per sample', perSample(r) ? r.loopMath.join(', ') : 'none')
+    ]
+  }));
+  if (ratioRows.length) {
+    const values = ratioRows.map((r) => r.value);
+    barChart(document.getElementById('chart-ratio'), ratioRows, {
+      domain: [Math.min(0.5, Math.min(...values) * 0.9), Math.max(2, Math.max(...values) * 1.25)],
+      baselineLabel: 'C++'
+    });
+  }
+
+  // ---------------------------------------------------------------- chart: fastmath
+  const faChart = (container) => {
+    const rows = [...twins].sort((a, b) => b.base.wasmOverCpp - a.base.wasmOverCpp);
+    const draw = () => {
+      const width = Math.max(300, container.clientWidth);
+      const labelW = Math.ceil(Math.max(...rows.map((t) => measure(t.base.name)))) + 14;
+      const rowH = 34, top = 26, valueW = 96;
+      const height = top + rows.length * rowH + 22;
+      const x0 = labelW + 4, x1 = width - valueW;
+      const vals = rows.flatMap((t) => [t.base.wasmNsPerFrame / t.base.cppNsPerFrame, t.fa.wasmNsPerFrame / t.base.cppNsPerFrame]);
+      const lo = Math.min(0.5, Math.min(...vals) * 0.85), hi = Math.max(2, Math.max(...vals) * 1.2);
+      const x = logScale(lo, hi, x0, x1);
+      const root = svg('svg', { width, height, viewBox: `0 0 ${width} ${height}`, role: 'group' });
+      for (const t of logTicks(lo, hi)) {
+        const tx = x(t);
+        root.append(svg('line', { x1: tx, x2: tx, y1: top - 6, y2: height - 18, stroke: t === 1 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }));
+        root.append(text(tx, top - 12, tickLabel(t), { 'text-anchor': 'middle', class: 'tick' }));
+      }
+      root.append(text(x(1) + 4, height - 4, 'original program in native C++', { class: 'tick', 'font-size': 11 }));
+      rows.forEach((t, i) => {
+        const y = top + i * rowH + rowH / 2;
+        const before = t.base.wasmNsPerFrame / t.base.cppNsPerFrame;
+        const after = t.fa.wasmNsPerFrame / t.base.cppNsPerFrame;
+        const gain = t.base.wasmNsPerFrame / t.fa.wasmNsPerFrame;
+        const g = svg('g', { class: 'row', tabindex: 0, role: 'img', 'aria-label': `${t.base.name}: wasm ${times(gain)} faster with fastmath.lib` });
+        g.append(svg('rect', { class: 'hit', x: 0, y: y - rowH / 2, width, height: rowH, fill: 'transparent', rx: 4 }));
+        g.append(text(labelW - 10, y + 4, t.base.name, { 'text-anchor': 'end', class: 'name' }));
+        const xb = x(before), xa = x(after);
+        g.append(svg('line', { x1: xb, x2: xa, y1: y, y2: y, stroke: 'var(--axis)', 'stroke-width': 2, 'stroke-linecap': 'round' }));
+        for (const [cx, color] of [[xb, 'var(--js)'], [xa, 'var(--pure)']]) {
+          g.append(svg('circle', { cx, cy: y, r: 6, fill: color, stroke: 'var(--surface)', 'stroke-width': 2 }));
+        }
+        g.append(text(Math.max(xb, xa) + 12, y + 4, `${times(gain)} faster`));
+        bindTip(g, () => [
+          el('div', { class: 't-head' }, `${t.base.name} → ${t.fa.name}`),
+          el('div', { class: 't-big' }, `${times(gain)} faster in wasm`),
+          tipRow('wasm, C math', `${ns(t.base.wasmNsPerFrame)} ns`, 'var(--js)'),
+          tipRow('wasm, fastmath.lib', `${ns(t.fa.wasmNsPerFrame)} ns`, 'var(--pure)'),
+          tipRow('C++, C math', `${ns(t.base.cppNsPerFrame)} ns`),
+          tipRow('C++, fastmath.lib', `${ns(t.fa.cppNsPerFrame)} ns`)
+        ]);
+        root.append(g);
+      });
+      container.replaceChildren(root);
+    };
+    draw();
+    new ResizeObserver(draw).observe(container);
+  };
+  if (twins.length) faChart(document.getElementById('chart-fa'));
+  else document.getElementById('h-fa').closest('section').hidden = true;
+
+  // ---------------------------------------------------------------- chart: wrapper
+  const nodeRows = [...plain].sort((a, b) => b.nodeOverWasm - a.nodeOverWasm).map((r) => ({
+    label: r.name,
+    value: r.nodeOverWasm,
+    color: 'var(--pure)',
+    valueLabel: times(r.nodeOverWasm),
+    aria: `${r.name}: wrapper ${times(r.nodeOverWasm)} the wasm time`,
+    tip: () => [
+      el('div', { class: 't-head' }, r.name),
+      el('div', { class: 't-big' }, times(r.nodeOverWasm)),
+      tipRow('wasm alone', `${ns(r.wasmNsPerFrame)} ns`),
+      tipRow('through the node', `${ns(r.nodeNsPerFrame)} ns`),
+      tipRow('channels in/out', `${r.inputs}/${r.outputs}`)
+    ]
+  }));
+  if (nodeRows.length) {
+    const values = nodeRows.map((r) => r.value);
+    barChart(document.getElementById('chart-node'), nodeRows, {
+      log: false,
+      domain: [Math.min(0.9, Math.floor(Math.min(...values) * 20) / 20), Math.max(1.2, Math.ceil(Math.max(...values) * 20) / 20)],
+      baselineLabel: 'wasm alone'
+    });
+  }
+
+  // ---------------------------------------------------------------- table
+  const COLUMNS = [
+    { key: 'name', label: 'Program', text: true, cell: (r) => {
+      const td = el('td', {}, el('span', { class: 'swatch', style: `background:${perSample(r) ? 'var(--js)' : 'var(--pure)'}` }), r.name);
+      return td;
+    } },
+    { key: 'category', label: 'Category', text: true, value: (r) => category(r.name), cell: (r) => el('td', { class: 'text' }, category(r.name)) },
+    { key: 'io', label: 'In/out', value: (r) => r.inputs * 100 + r.outputs, cell: (r) => el('td', {}, `${r.inputs}/${r.outputs}`) },
+    { key: 'cppNsPerFrame', label: 'C++ ns', fmt: ns },
+    { key: 'wasmNsPerFrame', label: 'wasm ns', fmt: ns },
+    { key: 'nodeNsPerFrame', label: 'node ns', fmt: ns },
+    { key: 'wasmOverCpp', label: 'wasm/C++', fmt: times },
+    { key: 'nodeOverWasm', label: 'node/wasm', fmt: times },
+    { key: 'maxRelDiff', label: 'max |Δ|', fmt: (v) => v.toExponential(1) },
+    { key: 'loopMath', label: 'Math per sample', text: true, value: (r) => (r.loopMath || []).join(' '), cell: (r) => el('td', { class: 'text math' }, (r.loopMath || []).join(', ') || '–') }
+  ];
+  const table = document.getElementById('table');
+  let sortKey = 'wasmOverCpp', sortDir = -1;
+  const valueOf = (col, r) => col.value ? col.value(r) : r[col.key];
+  const renderTable = () => {
+    const col = COLUMNS.find((c) => c.key === sortKey);
+    const rows = [...all].sort((a, b) => {
+      const va = valueOf(col, a), vb = valueOf(col, b);
+      return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sortDir;
+    });
+    const head = el('tr', {}, ...COLUMNS.map((c) => {
+      const th = el('th', { scope: 'col', class: c.text ? 'text' : '' });
+      if (c.key === sortKey) th.setAttribute('aria-sort', sortDir > 0 ? 'ascending' : 'descending');
+      const b = el('button', { type: 'button' }, c.label);
+      b.addEventListener('click', () => {
+        sortDir = c.key === sortKey ? -sortDir : (c.text ? 1 : -1);
+        sortKey = c.key;
+        renderTable();
+      });
+      th.append(b);
+      return th;
+    }));
+    const body = rows.map((r) => el('tr', {}, ...COLUMNS.map((c) =>
+      c.cell ? c.cell(r) : el('td', {}, c.fmt(r[c.key])))));
+    table.replaceChildren(el('thead', {}, head), el('tbody', {}, ...body));
+  };
+  renderTable();
+})();
+</script>
+</body>
+</html>
